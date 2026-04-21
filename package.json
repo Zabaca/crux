@@ -2,7 +2,10 @@
   "name": "crux",
   "private": true,
   "type": "module",
-  "workspaces": ["packages/*", "apps/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
     "migrate": "drizzle-kit migrate --config .config/drizzle.config.ts",
     "generate": "drizzle-kit generate --config .config/drizzle.config.ts",
@@ -10,7 +13,8 @@
     "reset": "bun run scripts/reset.ts",
     "lint": "oxlint -c .config/oxlint.json",
     "format": "bunx oxfmt .",
-    "crux": "bun run packages/cli/src/index.ts"
+    "crux": "bun run packages/cli/src/index.ts",
+    "prepare": "husky"
   },
   "devDependencies": {
     "@types/bun": "latest",
