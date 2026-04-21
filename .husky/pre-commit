@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# Lint + format staged files. Bun has no direct lint-staged equivalent yet;
+# run oxlint + oxfmt across the repo on staged changes.
+bun run lint || exit 1
+bun run format || exit 1

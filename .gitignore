@@ -1,0 +1,25 @@
+# Whitelist model: ignore everything noisy, let .claude through explicitly below.
+node_modules/
+dist/
+.DS_Store
+
+# Local libSQL database — migrations are committed, data is not.
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.crux.db*
+
+# Local config
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.vscode/
+.idea/
+*.log
+
+# Claude/agent noise — whitelist what's intentional, ignore the rest.
+.claude/*
+!.claude/skills/

@@ -1,0 +1,3 @@
+[install]
+# use workspaces
+linker = "hoisted"

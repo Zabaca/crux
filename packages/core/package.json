@@ -1,0 +1,15 @@
+{
+  "name": "@crux/core",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./db": "./src/db/client.ts",
+    "./db/schema": "./src/db/schema.ts",
+    "./transitions": "./src/transitions/index.ts",
+    "./validation": "./src/validation/schemas.ts",
+    "./config": "./src/config/user.ts"
+  }
+}

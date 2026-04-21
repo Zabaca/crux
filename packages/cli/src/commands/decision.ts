@@ -1,0 +1,98 @@
+import { defineCommand } from "citty";
+import { getDb } from "@crux/core";
+import { decisions, problems, solutions, workstreams } from "@crux/core/db/schema";
+import { requireUser } from "@crux/core/config";
+import { DecisionInput } from "@crux/core/validation";
+import { NotFoundError, createDecision } from "@crux/core/transitions";
+import { and, eq } from "drizzle-orm";
+import { emit, setJsonMode } from "../output.js";
+
+async function nextDecisionId(): Promise<string> {
+  const all = await getDb().select({ id: decisions.id }).from(decisions);
+  const nums = all.map((r) => Number(r.id.replace(/^DEC-/, ""))).filter((n) => Number.isFinite(n));
+  const next = (nums.length ? Math.max(...nums) : 0) + 1;
+  return `DEC-${String(next).padStart(3, "0")}`;
+}
+
+function asList(v: unknown): string[] {
+  if (Array.isArray(v)) return v as string[];
+  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  return [];
+}
+
+const addCmd = defineCommand({
+  meta: { name: "add", description: "Record a decision — flip chosen Solution to chosen, rejected Solutions to rejected." },
+  args: {
+    workstream: { type: "string", required: true, alias: "w" },
+    problem: { type: "string", required: true },
+    chosen: { type: "string", required: true },
+    rejected: { type: "string", description: "Repeatable or comma-separated." },
+    rationale: { type: "string", required: true },
+    context: { type: "string" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const parsed = DecisionInput.parse({
+      workstream: args.workstream,
+      problemSlug: args.problem,
+      chosen: args.chosen,
+      rejected: asList(args.rejected),
+      rationale: args.rationale,
+      context: args.context,
+    });
+    const user = requireUser();
+    const db = getDb();
+    const ws = await db.select().from(workstreams).where(eq(workstreams.slug, parsed.workstream)).limit(1);
+    if (ws.length === 0) throw new NotFoundError(`workstream not found: ${parsed.workstream}`, { slug: parsed.workstream });
+    const pr = await db
+      .select()
+      .from(problems)
+      .where(and(eq(problems.slug, parsed.problemSlug), eq(problems.workstreamId, ws[0]!.id)))
+      .limit(1);
+    if (pr.length === 0) throw new NotFoundError(`problem not found in workstream: ${parsed.problemSlug}`, { slug: parsed.problemSlug });
+
+    const chosenRow = await db.select().from(solutions).where(eq(solutions.slug, parsed.chosen)).limit(1);
+    if (chosenRow.length === 0) throw new NotFoundError(`solution not found: ${parsed.chosen}`, { slug: parsed.chosen });
+
+    const solsInProblem = parsed.rejected.length
+      ? await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id))
+      : [];
+    const rejectedIdMap = new Map(solsInProblem.map((r) => [r.slug, r.id]));
+    const rejectedIds: string[] = [];
+    for (const slug of parsed.rejected) {
+      const id = rejectedIdMap.get(slug);
+      if (!id) throw new NotFoundError(`solution not found in problem: ${slug}`, { slug });
+      rejectedIds.push(id);
+    }
+
+    const id = await nextDecisionId();
+    await createDecision(
+      {
+        id,
+        problemId: pr[0]!.id,
+        chosenSolutionId: chosenRow[0]!.id,
+        rejectedSolutionIds: rejectedIds,
+        rationale: parsed.rationale,
+        context: parsed.context,
+        decidedById: user.user.id,
+      },
+      db,
+    );
+    emit({ ok: true, id }, `added ${id}`);
+  },
+});
+
+const listCmd = defineCommand({
+  meta: { name: "list", description: "List all decisions." },
+  args: { json: { type: "boolean" } },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    emit(await getDb().select().from(decisions));
+  },
+});
+
+export const decisionCommand = defineCommand({
+  meta: { name: "decision", description: "Decisions." },
+  subCommands: { add: addCmd, list: listCmd },
+});
