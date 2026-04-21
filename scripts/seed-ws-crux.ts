@@ -235,7 +235,6 @@ async function main() {
     .onConflictDoNothing();
 
   for (const obs of OBSERVATIONS) {
-    const tagsWithSource = [`source-type:${obs.sourceType}`, ...obs.tags];
     await db
       .insert(observations)
       .values({
@@ -244,7 +243,8 @@ async function main() {
         reporterId: SEED_USER_ID,
         content: `${obs.title}\n\n${obs.content}`,
         source: obs.source ?? null,
-        tags: JSON.stringify(tagsWithSource),
+        sourceType: obs.sourceType,
+        tags: JSON.stringify([...obs.tags]),
       })
       .onConflictDoNothing();
   }

@@ -11,10 +11,20 @@ export const WorkstreamInput = z.object({
   description: z.string().optional(),
 });
 
+export const SourceType = z.enum([
+  "internal",
+  "competitive",
+  "external",
+  "analysis",
+  "customer_report",
+  "metric_signal",
+]);
+
 export const ObservationInput = z.object({
   workstream: slug,
   content: z.string().min(1),
   source: z.string().optional(),
+  sourceType: SourceType.optional(),
   tags: z.array(z.string()).optional(),
 });
 

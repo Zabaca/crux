@@ -37,6 +37,10 @@ const addCmd = defineCommand({
     workstream: { type: "string", required: true, alias: "w" },
     content: { type: "string", required: true },
     source: { type: "string" },
+    "source-type": {
+      type: "string",
+      description: "internal | competitive | external | analysis | customer_report | metric_signal",
+    },
     tag: { type: "string", description: "Repeatable or comma-separated." },
     json: { type: "boolean" },
   },
@@ -46,6 +50,7 @@ const addCmd = defineCommand({
       workstream: args.workstream,
       content: args.content,
       source: args.source,
+      sourceType: args["source-type"],
       tags: asTags(args.tag),
     });
     const ws = await resolveWorkstream(parsed.workstream);
@@ -59,6 +64,7 @@ const addCmd = defineCommand({
         reporterId: user.user.id,
         content: parsed.content,
         source: parsed.source,
+        sourceType: parsed.sourceType,
         tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
       });
     emit({ ok: true, id }, `added ${id}`);

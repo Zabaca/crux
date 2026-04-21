@@ -45,6 +45,8 @@ export const observations = sqliteTable("observations", {
     .references(() => users.id),
   content: text("content").notNull(),
   source: text("source"),
+  /** internal | competitive | external | analysis | customer_report | metric_signal */
+  sourceType: text("source_type"),
   tags: text("tags"), // JSON array string
   createdAt: integer("created_at")
     .notNull()
