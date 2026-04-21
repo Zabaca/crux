@@ -9,6 +9,16 @@ Crux is a product-thinking residue tool. It captures the output of discovery con
 
 This skill tells you when to reach for `crux`, when not to, and how to use it well.
 
+## How to invoke the CLI
+
+Throughout this skill, `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always invoke the CLI via that explicit path — it's not on `$PATH`, and each Bash invocation in Claude Code spawns a fresh shell so aliases/env vars don't persist between calls.
+
+```sh
+${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --json
+```
+
+The wrapper lazily runs `bun install` in the plugin dir on first use, so you don't need a separate deps check.
+
 ## When to invoke Crux
 
 - The user articulates a claim, observation, or constraint worth remembering → `crux observation add`.
@@ -30,13 +40,12 @@ Low-friction intake is a feature, but so is judgment. A blurry thought filed pre
 
 ## First-run init
 
-Before the first `crux` command in a session, run these three checks in sequence and act only when something's missing:
+Before the first `crux` command in a session, run two checks and act only when something's missing. Deps are handled by the wrapper automatically — no separate check needed.
 
-1. **Deps**: `ls ${CLAUDE_PLUGIN_ROOT}/node_modules/.bin/drizzle-kit 2>/dev/null` — if missing, `cd ${CLAUDE_PLUGIN_ROOT} && bun install`.
-2. **Database**: `test -f ~/.local/share/crux/crux.db` — if missing, `crux init`.
-3. **User config**: `test -f ~/.config/crux/config.toml` — if missing, ask the user for their name and email, then `crux user init --name "..." --email "..."`.
+1. **Database**: `test -f ~/.local/share/crux/crux.db` — if missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
+2. **User config**: `test -f ~/.config/crux/config.toml` — if missing, ask the user for their name and email, then `${CLAUDE_PLUGIN_ROOT}/bin/crux user init --name "..." --email "..."`.
 
-All three pass on steady state → no-op, near-zero latency. First run on a new machine hits all three once.
+Both pass on steady state → no-op, near-zero latency. First run on a new machine hits them once.
 
 ## Load context before contributing
 

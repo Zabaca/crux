@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+# Crux plugin entrypoint. Resolves its own plugin root, lazily installs
+# Bun deps on first use, then forwards to the CLI.
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
+
+if [ ! -d "$PLUGIN_ROOT/node_modules" ]; then
+  (cd "$PLUGIN_ROOT" && bun install --frozen-lockfile >/dev/null 2>&1) \
+    || (cd "$PLUGIN_ROOT" && bun install >/dev/null 2>&1)
+fi
+
+exec bun run "$PLUGIN_ROOT/packages/cli/src/index.ts" "$@"
