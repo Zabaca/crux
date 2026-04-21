@@ -14,16 +14,17 @@ async function loadProblem(problemId: string, db: CruxDb) {
 export async function commitProblem(problemId: string, db: CruxDb) {
   const p = await loadProblem(problemId, db);
   if (p.lifecycleStatus !== "shaping") {
-    throw new TransitionError(
-      `Problem ${problemId} cannot commit from ${p.lifecycleStatus}`,
-      { problemId, from: p.lifecycleStatus, to: "committed" },
-    );
+    throw new TransitionError(`Problem ${problemId} cannot commit from ${p.lifecycleStatus}`, {
+      problemId,
+      from: p.lifecycleStatus,
+      to: "committed",
+    });
   }
   if (!(await hasDecisionFor(problemId, db))) {
-    throw new InvariantError(
-      `Problem ${problemId} has no Decision; cannot commit`,
-      { problemId, predicate: "hasDecisionFor" },
-    );
+    throw new InvariantError(`Problem ${problemId} has no Decision; cannot commit`, {
+      problemId,
+      predicate: "hasDecisionFor",
+    });
   }
   await db
     .update(problems)
@@ -34,16 +35,17 @@ export async function commitProblem(problemId: string, db: CruxDb) {
 export async function shipProblem(problemId: string, db: CruxDb) {
   const p = await loadProblem(problemId, db);
   if (p.lifecycleStatus !== "shipping") {
-    throw new TransitionError(
-      `Problem ${problemId} cannot ship from ${p.lifecycleStatus}`,
-      { problemId, from: p.lifecycleStatus, to: "shipped" },
-    );
+    throw new TransitionError(`Problem ${problemId} cannot ship from ${p.lifecycleStatus}`, {
+      problemId,
+      from: p.lifecycleStatus,
+      to: "shipped",
+    });
   }
   if (!(await chosenSolutionIsShipped(problemId, db))) {
-    throw new InvariantError(
-      `Problem ${problemId} has no shipped Solution`,
-      { problemId, predicate: "chosenSolutionIsShipped" },
-    );
+    throw new InvariantError(`Problem ${problemId} has no shipped Solution`, {
+      problemId,
+      predicate: "chosenSolutionIsShipped",
+    });
   }
   await db
     .update(problems)

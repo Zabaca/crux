@@ -9,7 +9,11 @@ import { emit, setJsonMode } from "../output.js";
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
-  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (typeof v === "string")
+    return v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 
@@ -40,11 +44,21 @@ const addCmd = defineCommand({
       followUpProblems: asList(args["follow-up-problems"]),
     });
     const db = getDb();
-    const sol = await db.select().from(solutions).where(eq(solutions.slug, parsed.solutionSlug)).limit(1);
-    if (sol.length === 0) throw new NotFoundError(`solution not found: ${parsed.solutionSlug}`, { slug: parsed.solutionSlug });
+    const sol = await db
+      .select()
+      .from(solutions)
+      .where(eq(solutions.slug, parsed.solutionSlug))
+      .limit(1);
+    if (sol.length === 0)
+      throw new NotFoundError(`solution not found: ${parsed.solutionSlug}`, {
+        slug: parsed.solutionSlug,
+      });
     let followUpProblemIds: string[] = [];
     if (parsed.followUpProblems && parsed.followUpProblems.length > 0) {
-      const rows = await db.select().from(problems).where(inArray(problems.slug, parsed.followUpProblems));
+      const rows = await db
+        .select()
+        .from(problems)
+        .where(inArray(problems.slug, parsed.followUpProblems));
       const bySlug = new Map(rows.map((r) => [r.slug, r.id]));
       for (const s of parsed.followUpProblems) {
         const id = bySlug.get(s);
@@ -86,7 +100,8 @@ const showCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     const rows = await db.select().from(outcomes).where(eq(outcomes.id, args.id)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`outcome not found: ${args.id}`, { id: args.id });
+    if (rows.length === 0)
+      throw new NotFoundError(`outcome not found: ${args.id}`, { id: args.id });
     const followUps = await db
       .select({ problemId: outcomeFollowUpProblems.problemId })
       .from(outcomeFollowUpProblems)

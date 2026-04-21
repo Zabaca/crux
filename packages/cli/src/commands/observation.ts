@@ -23,7 +23,11 @@ async function nextObsId(): Promise<string> {
 
 function asTags(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
-  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (typeof v === "string")
+    return v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 
@@ -47,14 +51,16 @@ const addCmd = defineCommand({
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
     const id = await nextObsId();
-    await getDb().insert(observations).values({
-      id,
-      workstreamId: ws.id,
-      reporterId: user.user.id,
-      content: parsed.content,
-      source: parsed.source,
-      tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
-    });
+    await getDb()
+      .insert(observations)
+      .values({
+        id,
+        workstreamId: ws.id,
+        reporterId: user.user.id,
+        content: parsed.content,
+        source: parsed.source,
+        tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
+      });
     emit({ ok: true, id }, `added ${id}`);
   },
 });
@@ -68,7 +74,10 @@ const listCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const ws = await resolveWorkstream(args.workstream);
-    const rows = await getDb().select().from(observations).where(eq(observations.workstreamId, ws.id));
+    const rows = await getDb()
+      .select()
+      .from(observations)
+      .where(eq(observations.workstreamId, ws.id));
     emit(rows, rows.map((r) => `${r.id}\t${r.content.slice(0, 60)}`).join("\n") || "(none)");
   },
 });
@@ -81,8 +90,13 @@ const showCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb().select().from(observations).where(eq(observations.id, args.id)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`observation not found: ${args.id}`, { id: args.id });
+    const rows = await getDb()
+      .select()
+      .from(observations)
+      .where(eq(observations.id, args.id))
+      .limit(1);
+    if (rows.length === 0)
+      throw new NotFoundError(`observation not found: ${args.id}`, { id: args.id });
     emit(rows[0]!);
   },
 });

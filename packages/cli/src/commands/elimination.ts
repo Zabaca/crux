@@ -9,7 +9,11 @@ import { emit, setJsonMode } from "../output.js";
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
-  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (typeof v === "string")
+    return v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 
@@ -38,9 +42,19 @@ const addCmd = defineCommand({
       context: args.context,
     });
     const db = getDb();
-    const pr = await db.select().from(problems).where(eq(problems.slug, parsed.problemSlug)).limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, { slug: parsed.problemSlug });
-    const solRows = await db.select().from(solutions).where(inArray(solutions.slug, parsed.solutions));
+    const pr = await db
+      .select()
+      .from(problems)
+      .where(eq(problems.slug, parsed.problemSlug))
+      .limit(1);
+    if (pr.length === 0)
+      throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
+        slug: parsed.problemSlug,
+      });
+    const solRows = await db
+      .select()
+      .from(solutions)
+      .where(inArray(solutions.slug, parsed.solutions));
     const bySlug = new Map(solRows.map((r) => [r.slug, r]));
     const solutionIds: string[] = [];
     for (const s of parsed.solutions) {
@@ -76,7 +90,8 @@ const listCmd = defineCommand({
     const db = getDb();
     if (args.problem) {
       const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
-      if (pr.length === 0) throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+      if (pr.length === 0)
+        throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
       emit(await db.select().from(eliminations).where(eq(eliminations.problemId, pr[0]!.id)));
       return;
     }
@@ -91,7 +106,8 @@ const showCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     const rows = await db.select().from(eliminations).where(eq(eliminations.id, args.id)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`elimination not found: ${args.id}`, { id: args.id });
+    if (rows.length === 0)
+      throw new NotFoundError(`elimination not found: ${args.id}`, { id: args.id });
     const joins = await db
       .select({ solutionId: eliminationSolutions.solutionId })
       .from(eliminationSolutions)

@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-const slug = z.string().min(1).regex(/^[a-z0-9][a-z0-9-]*$/, "slug must be kebab-case lowercase");
+const slug = z
+  .string()
+  .min(1)
+  .regex(/^[a-z0-9][a-z0-9-]*$/, "slug must be kebab-case lowercase");
 
 export const WorkstreamInput = z.object({
   slug,

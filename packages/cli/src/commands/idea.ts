@@ -9,7 +9,11 @@ import { emit, setJsonMode } from "../output.js";
 
 function asTags(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
-  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (typeof v === "string")
+    return v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 
@@ -44,22 +48,27 @@ const addCmd = defineCommand({
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
     const id = `IDEA-${parsed.slug}`;
-    await getDb().insert(ideas).values({
-      id,
-      slug: parsed.slug,
-      workstreamId: ws.id,
-      reporterId: user.user.id,
-      title: parsed.title,
-      description: parsed.description,
-      hypothesizedProblemArea: parsed.hypothesizedProblemArea,
-      tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
-    });
+    await getDb()
+      .insert(ideas)
+      .values({
+        id,
+        slug: parsed.slug,
+        workstreamId: ws.id,
+        reporterId: user.user.id,
+        title: parsed.title,
+        description: parsed.description,
+        hypothesizedProblemArea: parsed.hypothesizedProblemArea,
+        tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
+      });
     emit({ ok: true, id }, `added ${id}`);
   },
 });
 
 const listCmd = defineCommand({
-  meta: { name: "list", description: "List ideas in a workstream (unpromoted + archived separated)." },
+  meta: {
+    name: "list",
+    description: "List ideas in a workstream (unpromoted + archived separated).",
+  },
   args: {
     workstream: { type: "string", required: true, alias: "w" },
     json: { type: "boolean" },
@@ -70,11 +79,7 @@ const listCmd = defineCommand({
     const db = getDb();
     const rows = await db.select().from(ideas).where(eq(ideas.workstreamId, ws.id));
     const promotedIds = new Set(
-      (
-        await db
-          .select({ ideaId: solutions.originatingIdeaId })
-          .from(solutions)
-      )
+      (await db.select({ ideaId: solutions.originatingIdeaId }).from(solutions))
         .map((r) => r.ideaId)
         .filter((x): x is string => Boolean(x)),
     );
@@ -91,7 +96,8 @@ const showCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const rows = await getDb().select().from(ideas).where(eq(ideas.slug, args.slug)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`idea not found: ${args.slug}`, { slug: args.slug });
+    if (rows.length === 0)
+      throw new NotFoundError(`idea not found: ${args.slug}`, { slug: args.slug });
     emit(rows[0]!);
   },
 });
@@ -119,9 +125,17 @@ const promoteCmd = defineCommand({
     });
     const db = getDb();
     const ideaRows = await db.select().from(ideas).where(eq(ideas.slug, parsed.ideaSlug)).limit(1);
-    if (ideaRows.length === 0) throw new NotFoundError(`idea not found: ${parsed.ideaSlug}`, { slug: parsed.ideaSlug });
-    const pr = await db.select().from(problems).where(eq(problems.slug, parsed.problemSlug)).limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, { slug: parsed.problemSlug });
+    if (ideaRows.length === 0)
+      throw new NotFoundError(`idea not found: ${parsed.ideaSlug}`, { slug: parsed.ideaSlug });
+    const pr = await db
+      .select()
+      .from(problems)
+      .where(eq(problems.slug, parsed.problemSlug))
+      .limit(1);
+    if (pr.length === 0)
+      throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
+        slug: parsed.problemSlug,
+      });
     const user = requireUser();
     const id = `SOL-${parsed.solutionSlug}`;
     await db.insert(solutions).values({
@@ -134,7 +148,10 @@ const promoteCmd = defineCommand({
       originatingIdeaId: ideaRows[0]!.id,
       createdById: user.user.id,
     });
-    emit({ ok: true, id, originatingIdeaId: ideaRows[0]!.id }, `promoted ${ideaRows[0]!.id} → ${id}`);
+    emit(
+      { ok: true, id, originatingIdeaId: ideaRows[0]!.id },
+      `promoted ${ideaRows[0]!.id} → ${id}`,
+    );
     void isNull;
   },
 });

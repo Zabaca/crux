@@ -26,7 +26,13 @@ const SEED_USER_SLUG = "james";
 type ObsSeed = {
   n: string;
   title: string;
-  sourceType: "internal" | "competitive" | "external" | "analysis" | "customer_report" | "metric_signal";
+  sourceType:
+    | "internal"
+    | "competitive"
+    | "external"
+    | "analysis"
+    | "customer_report"
+    | "metric_signal";
   content: string;
   tags: ReadonlyArray<string>;
   source?: string;
@@ -72,7 +78,8 @@ const OBSERVATIONS: ReadonlyArray<ObsSeed> = [
     content:
       "Notion ships a hosted MCP server explicitly designed for Claude Code, Cursor, ChatGPT, etc. OAuth authentication, full workspace read/write, tailored tools rather than 1:1 API mapping. Notion databases give typed structure if schemas are enforced. Multi-workspace supported. Free tier covers solo use; paid starts ~$10/user/mo. Strongest off-the-shelf candidate by the three-filter test.",
     tags: ["research", "notion", "mcp", "viable"],
-    source: "developers.notion.com/docs/mcp; notion.com/blog/notions-hosted-mcp-server-an-inside-look",
+    source:
+      "developers.notion.com/docs/mcp; notion.com/blog/notions-hosted-mcp-server-an-inside-look",
   },
   {
     n: "006",
@@ -97,7 +104,7 @@ const OBSERVATIONS: ReadonlyArray<ObsSeed> = [
     title: "Obsidian + MCP works but returns to markdown-with-convention",
     sourceType: "competitive",
     content:
-      "Multiple Obsidian MCP plugins exist (iansinnott/obsidian-claude-code-mcp, StevenStavrakis/obsidian-mcp). Claude Code auto-discovers vaults. Dataview plugin enables structured queries over frontmatter. But fundamentally this is markdown-with-frontmatter — the exact \"loose structure\" path rejected earlier in design. Choosing this would be backtracking.",
+      'Multiple Obsidian MCP plugins exist (iansinnott/obsidian-claude-code-mcp, StevenStavrakis/obsidian-mcp). Claude Code auto-discovers vaults. Dataview plugin enables structured queries over frontmatter. But fundamentally this is markdown-with-frontmatter — the exact "loose structure" path rejected earlier in design. Choosing this would be backtracking.',
     tags: ["research", "obsidian", "mcp", "rejected-earlier"],
   },
   {
@@ -130,14 +137,16 @@ const EVIDENCE_NOTES: Record<string, string> = {
   "001": "Direct naming of the core gap — conversation thinking doesn't persist.",
   "002": "Establishes urgency and stakes — the gap is constraining business growth.",
   "003": "Concrete forcing instance making the gap immediate, not abstract.",
-  "004": "Establishes the multi-project dimension — inconsistency across engagements is part of the gap.",
+  "004":
+    "Establishes the multi-project dimension — inconsistency across engagements is part of the gap.",
   "005": "Names a viable off-the-shelf path (Notion backend) — informs the build-vs-buy Decision.",
   "006": "Eliminates Linear as a storage candidate — shape mismatch with entity model.",
   "007": "Eliminates Productboard for solo use — economics.",
   "008": "Eliminates Obsidian — returns to rejected markdown-with-convention approach.",
   "009": "Eliminates Dovetail — wrong domain shape.",
   "010": "Eliminates Aha! — closest shape but economics unjustified for solo; no native MCP.",
-  "011": "Eliminates Roadmunk — cheaper tier but roadmap-visualization shape, not product-thinking primitives.",
+  "011":
+    "Eliminates Roadmunk — cheaper tier but roadmap-visualization shape, not product-thinking primitives.",
 };
 
 const PROBLEM_DESCRIPTION = [

@@ -15,7 +15,9 @@ export const EXIT_CODES: Record<string, number> = {
 
 export function handleError(err: unknown): never {
   if (err instanceof ZodError) {
-    const message = err.issues.map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`).join("; ");
+    const message = err.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
     emitError(
       { error: { code: "VALIDATION_ERROR", message, details: { issues: err.issues } } },
       `[VALIDATION_ERROR] ${message}`,

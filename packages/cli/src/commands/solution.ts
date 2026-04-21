@@ -26,8 +26,15 @@ const addCmd = defineCommand({
     });
     const user = requireUser();
     const db = getDb();
-    const pr = await db.select().from(problems).where(eq(problems.slug, parsed.problemSlug)).limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, { slug: parsed.problemSlug });
+    const pr = await db
+      .select()
+      .from(problems)
+      .where(eq(problems.slug, parsed.problemSlug))
+      .limit(1);
+    if (pr.length === 0)
+      throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
+        slug: parsed.problemSlug,
+      });
     const id = `SOL-${parsed.slug}`;
     await db.insert(solutions).values({
       id,
@@ -52,7 +59,8 @@ const listCmd = defineCommand({
     const db = getDb();
     if (args.problem) {
       const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
-      if (pr.length === 0) throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+      if (pr.length === 0)
+        throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
       const rows = await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id));
       emit(rows, rows.map((r) => `${r.id}\t${r.status}\t${r.title}`).join("\n") || "(none)");
       return;
@@ -66,8 +74,13 @@ const showCmd = defineCommand({
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb().select().from(solutions).where(eq(solutions.slug, args.slug)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
+    const rows = await getDb()
+      .select()
+      .from(solutions)
+      .where(eq(solutions.slug, args.slug))
+      .limit(1);
+    if (rows.length === 0)
+      throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
     emit(rows[0]!);
   },
 });
@@ -79,7 +92,8 @@ const shipCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     const rows = await db.select().from(solutions).where(eq(solutions.slug, args.slug)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
+    if (rows.length === 0)
+      throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
     await shipSolution(rows[0]!.id, db);
     emit({ ok: true, id: rows[0]!.id, status: "shipped" }, `shipped ${rows[0]!.id}`);
   },

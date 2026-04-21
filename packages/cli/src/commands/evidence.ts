@@ -25,10 +25,18 @@ const linkCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const user = requireUser();
     const db = getDb();
-    const obs = await db.select().from(observations).where(eq(observations.id, args.observation)).limit(1);
-    if (obs.length === 0) throw new NotFoundError(`observation not found: ${args.observation}`, { id: args.observation });
+    const obs = await db
+      .select()
+      .from(observations)
+      .where(eq(observations.id, args.observation))
+      .limit(1);
+    if (obs.length === 0)
+      throw new NotFoundError(`observation not found: ${args.observation}`, {
+        id: args.observation,
+      });
     const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+    if (pr.length === 0)
+      throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
     const id = await nextEvidenceId();
     await db.insert(evidence).values({
       id,
@@ -52,7 +60,8 @@ const listCmd = defineCommand({
     const db = getDb();
     if (args.problem) {
       const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
-      if (pr.length === 0) throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+      if (pr.length === 0)
+        throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
       emit(await db.select().from(evidence).where(eq(evidence.problemId, pr[0]!.id)));
       return;
     }

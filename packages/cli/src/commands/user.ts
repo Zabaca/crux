@@ -24,10 +24,17 @@ const initCmd = defineCommand({
     if (existing.length === 0) {
       await db.insert(users).values({ id, slug, name: parsed.name, email: parsed.email });
     } else {
-      await db.update(users).set({ name: parsed.name, email: parsed.email }).where(eq(users.id, id));
+      await db
+        .update(users)
+        .set({ name: parsed.name, email: parsed.email })
+        .where(eq(users.id, id));
     }
     emit(
-      { ok: true, user: { id, slug, name: parsed.name, email: parsed.email }, configPath: configPath() },
+      {
+        ok: true,
+        user: { id, slug, name: parsed.name, email: parsed.email },
+        configPath: configPath(),
+      },
       `user ${id} written to ${configPath()}`,
     );
   },

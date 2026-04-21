@@ -17,7 +17,10 @@ export interface CreateEliminationInput {
  * that every solution belongs to the problem and is in `proposed|evaluated`
  * (can't eliminate a chosen or shipped Solution).
  */
-export async function createElimination(input: CreateEliminationInput, db: CruxDb): Promise<string> {
+export async function createElimination(
+  input: CreateEliminationInput,
+  db: CruxDb,
+): Promise<string> {
   if (input.eliminatedSolutionIds.length === 0) {
     throw new InvariantError("Elimination must target at least one Solution", {});
   }

@@ -31,10 +31,9 @@ export async function createDecision(input: CreateDecisionInput, db: CruxDb): Pr
   } = input;
 
   if (rejectedSolutionIds.includes(chosenSolutionId)) {
-    throw new InvariantError(
-      `Chosen Solution ${chosenSolutionId} also appears in rejected list`,
-      { chosenSolutionId },
-    );
+    throw new InvariantError(`Chosen Solution ${chosenSolutionId} also appears in rejected list`, {
+      chosenSolutionId,
+    });
   }
 
   const allIds = [chosenSolutionId, ...rejectedSolutionIds];

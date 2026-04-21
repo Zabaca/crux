@@ -66,7 +66,8 @@ const showCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     const rows = await db.select().from(themes).where(eq(themes.slug, args.slug)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`theme not found: ${args.slug}`, { slug: args.slug });
+    if (rows.length === 0)
+      throw new NotFoundError(`theme not found: ${args.slug}`, { slug: args.slug });
     const attached = await db
       .select({ solutionId: themeSolutions.solutionId })
       .from(themeSolutions)
@@ -87,14 +88,25 @@ const attachCmd = defineCommand({
     const parsed = ThemeAttachInput.parse({ themeSlug: args.slug, solutionSlug: args.solution });
     const db = getDb();
     const theme = await db.select().from(themes).where(eq(themes.slug, parsed.themeSlug)).limit(1);
-    if (theme.length === 0) throw new NotFoundError(`theme not found: ${parsed.themeSlug}`, { slug: parsed.themeSlug });
-    const sol = await db.select().from(solutions).where(eq(solutions.slug, parsed.solutionSlug)).limit(1);
-    if (sol.length === 0) throw new NotFoundError(`solution not found: ${parsed.solutionSlug}`, { slug: parsed.solutionSlug });
+    if (theme.length === 0)
+      throw new NotFoundError(`theme not found: ${parsed.themeSlug}`, { slug: parsed.themeSlug });
+    const sol = await db
+      .select()
+      .from(solutions)
+      .where(eq(solutions.slug, parsed.solutionSlug))
+      .limit(1);
+    if (sol.length === 0)
+      throw new NotFoundError(`solution not found: ${parsed.solutionSlug}`, {
+        slug: parsed.solutionSlug,
+      });
     await db
       .insert(themeSolutions)
       .values({ themeId: theme[0]!.id, solutionId: sol[0]!.id })
       .onConflictDoNothing();
-    emit({ ok: true, themeId: theme[0]!.id, solutionId: sol[0]!.id }, `attached ${sol[0]!.id} → ${theme[0]!.id}`);
+    emit(
+      { ok: true, themeId: theme[0]!.id, solutionId: sol[0]!.id },
+      `attached ${sol[0]!.id} → ${theme[0]!.id}`,
+    );
   },
 });
 

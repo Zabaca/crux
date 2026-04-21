@@ -25,7 +25,10 @@ export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Prom
     .where(eq(solutions.id, input.solutionId))
     .limit(1);
   const sol = solRows[0];
-  if (!sol) throw new NotFoundError(`Solution not found: ${input.solutionId}`, { solutionId: input.solutionId });
+  if (!sol)
+    throw new NotFoundError(`Solution not found: ${input.solutionId}`, {
+      solutionId: input.solutionId,
+    });
   if (sol.status !== "shipped") {
     throw new InvariantError(
       `Cannot record Outcome: Solution ${input.solutionId} is ${sol.status}, must be shipped`,

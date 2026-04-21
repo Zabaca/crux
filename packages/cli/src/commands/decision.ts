@@ -16,12 +16,20 @@ async function nextDecisionId(): Promise<string> {
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
-  if (typeof v === "string") return v.split(",").map((s) => s.trim()).filter(Boolean);
+  if (typeof v === "string")
+    return v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
   return [];
 }
 
 const addCmd = defineCommand({
-  meta: { name: "add", description: "Record a decision — flip chosen Solution to chosen, rejected Solutions to rejected." },
+  meta: {
+    name: "add",
+    description:
+      "Record a decision — flip chosen Solution to chosen, rejected Solutions to rejected.",
+  },
   args: {
     workstream: { type: "string", required: true, alias: "w" },
     problem: { type: "string", required: true },
@@ -43,17 +51,32 @@ const addCmd = defineCommand({
     });
     const user = requireUser();
     const db = getDb();
-    const ws = await db.select().from(workstreams).where(eq(workstreams.slug, parsed.workstream)).limit(1);
-    if (ws.length === 0) throw new NotFoundError(`workstream not found: ${parsed.workstream}`, { slug: parsed.workstream });
+    const ws = await db
+      .select()
+      .from(workstreams)
+      .where(eq(workstreams.slug, parsed.workstream))
+      .limit(1);
+    if (ws.length === 0)
+      throw new NotFoundError(`workstream not found: ${parsed.workstream}`, {
+        slug: parsed.workstream,
+      });
     const pr = await db
       .select()
       .from(problems)
       .where(and(eq(problems.slug, parsed.problemSlug), eq(problems.workstreamId, ws[0]!.id)))
       .limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found in workstream: ${parsed.problemSlug}`, { slug: parsed.problemSlug });
+    if (pr.length === 0)
+      throw new NotFoundError(`problem not found in workstream: ${parsed.problemSlug}`, {
+        slug: parsed.problemSlug,
+      });
 
-    const chosenRow = await db.select().from(solutions).where(eq(solutions.slug, parsed.chosen)).limit(1);
-    if (chosenRow.length === 0) throw new NotFoundError(`solution not found: ${parsed.chosen}`, { slug: parsed.chosen });
+    const chosenRow = await db
+      .select()
+      .from(solutions)
+      .where(eq(solutions.slug, parsed.chosen))
+      .limit(1);
+    if (chosenRow.length === 0)
+      throw new NotFoundError(`solution not found: ${parsed.chosen}`, { slug: parsed.chosen });
 
     const solsInProblem = parsed.rejected.length
       ? await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id))

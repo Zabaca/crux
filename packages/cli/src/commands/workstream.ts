@@ -17,7 +17,11 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const parsed = WorkstreamInput.parse({ slug: args.slug, title: args.title, description: args.description });
+    const parsed = WorkstreamInput.parse({
+      slug: args.slug,
+      title: args.title,
+      description: args.description,
+    });
     const user = requireUser();
     const id = `WS-${parsed.slug}`;
     await getDb().insert(workstreams).values({
@@ -54,7 +58,10 @@ const showCmd = defineCommand({
       .from(workstreams)
       .where(eq(workstreams.slug, args.workstream))
       .limit(1);
-    if (rows.length === 0) throw new NotFoundError(`workstream not found: ${args.workstream}`, { slug: args.workstream });
+    if (rows.length === 0)
+      throw new NotFoundError(`workstream not found: ${args.workstream}`, {
+        slug: args.workstream,
+      });
     emit(rows[0]!, `${rows[0]!.id}\t${rows[0]!.title}`);
   },
 });

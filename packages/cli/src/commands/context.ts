@@ -37,7 +37,10 @@ function legalNextTransitions(lifecycleStatus: string): string[] {
 }
 
 export const contextCommand = defineCommand({
-  meta: { name: "context", description: "Emit a JSON digest of the workstream for session reload." },
+  meta: {
+    name: "context",
+    description: "Emit a JSON digest of the workstream for session reload.",
+  },
   args: {
     workstream: { type: "string", required: true, alias: "w" },
     json: { type: "boolean" },
@@ -48,16 +51,27 @@ export const contextCommand = defineCommand({
     const wsRow = (
       await db.select().from(workstreams).where(eq(workstreams.slug, args.workstream)).limit(1)
     )[0];
-    if (!wsRow) throw new NotFoundError(`workstream not found: ${args.workstream}`, { slug: args.workstream });
+    if (!wsRow)
+      throw new NotFoundError(`workstream not found: ${args.workstream}`, {
+        slug: args.workstream,
+      });
 
-    const openProblemsRaw = await db.select().from(problems).where(eq(problems.workstreamId, wsRow.id));
+    const openProblemsRaw = await db
+      .select()
+      .from(problems)
+      .where(eq(problems.workstreamId, wsRow.id));
     const priorityRank = (tier: string | null): number => {
       switch (tier) {
-        case "P0": return 0;
-        case "P1": return 1;
-        case "P2": return 2;
-        case "P3": return 3;
-        default: return 99;
+        case "P0":
+          return 0;
+        case "P1":
+          return 1;
+        case "P2":
+          return 2;
+        case "P3":
+          return 3;
+        default:
+          return 99;
       }
     };
     const openProblems = [...openProblemsRaw].sort((a, b) => {
@@ -75,7 +89,10 @@ export const contextCommand = defineCommand({
           ? await db.select().from(observations).where(inArray(observations.id, obsIds))
           : [];
         const obsById = new Map(obsRows.map((o) => [o.id, o]));
-        const evidenceInlined = ev.map((e) => ({ ...e, observation: obsById.get(e.observationId) ?? null }));
+        const evidenceInlined = ev.map((e) => ({
+          ...e,
+          observation: obsById.get(e.observationId) ?? null,
+        }));
 
         // Solutions + per-solution outcome.
         const sols = await db.select().from(solutions).where(eq(solutions.problemId, p.id));
@@ -130,7 +147,10 @@ export const contextCommand = defineCommand({
         }
 
         // Eliminations for this problem + their targeted solutions.
-        const elimRows = await db.select().from(eliminations).where(eq(eliminations.problemId, p.id));
+        const elimRows = await db
+          .select()
+          .from(eliminations)
+          .where(eq(eliminations.problemId, p.id));
         const elimIds = elimRows.map((e) => e.id);
         const elimJoins = elimIds.length
           ? await db

@@ -44,13 +44,21 @@ const showCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb().select().from(abandonments).where(eq(abandonments.id, args.id)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`abandonment not found: ${args.id}`, { id: args.id });
+    const rows = await getDb()
+      .select()
+      .from(abandonments)
+      .where(eq(abandonments.id, args.id))
+      .limit(1);
+    if (rows.length === 0)
+      throw new NotFoundError(`abandonment not found: ${args.id}`, { id: args.id });
     emit(rows[0]!);
   },
 });
 
 export const abandonmentCommand = defineCommand({
-  meta: { name: "abandonment", description: "Problem abandonments (created via `crux problem abandon`)." },
+  meta: {
+    name: "abandonment",
+    description: "Problem abandonments (created via `crux problem abandon`).",
+  },
   subCommands: { list: listCmd, show: showCmd },
 });

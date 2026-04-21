@@ -119,5 +119,12 @@ const abandonCmd = defineCommand({
 
 export const problemCommand = defineCommand({
   meta: { name: "problem", description: "Problems." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, commit: commitCmd, ship: shipCmd, abandon: abandonCmd },
+  subCommands: {
+    add: addCmd,
+    list: listCmd,
+    show: showCmd,
+    commit: commitCmd,
+    ship: shipCmd,
+    abandon: abandonCmd,
+  },
 });
