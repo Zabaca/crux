@@ -40,13 +40,14 @@ All three pass on steady state → no-op, near-zero latency. First run on a new 
 
 ## Load context before contributing
 
-When the user names a workstream, run this *before* adding new state:
+When the user names a workstream, run this _before_ adding new state:
 
 ```sh
 crux context -w <slug> --json
 ```
 
 Anchor on:
+
 - `open_problems[]` — what's shaping vs committed, how much evidence each has.
 - `open_problems[].latest_decision` — what's already been decided and why.
 - `open_problems[].eliminations[]` — what's been ruled out; don't re-propose those.
@@ -82,8 +83,8 @@ When an Observation supports an existing Problem, file `crux evidence link` rath
 
 ### Elimination vs Decision
 
-- **Elimination** rejects one or more Solutions *without* picking a winner. Use for progressive narrowing: "we've ruled out SaaS tools, still choosing between X and Y."
-- **Decision** commits to a chosen Solution *and* names rejected ones. Use when you're actually choosing.
+- **Elimination** rejects one or more Solutions _without_ picking a winner. Use for progressive narrowing: "we've ruled out SaaS tools, still choosing between X and Y."
+- **Decision** commits to a chosen Solution _and_ names rejected ones. Use when you're actually choosing.
 
 A Decision where rejected Solutions aren't rows in the db is dishonest — it claims to have compared options that were never filed. Before filing a Decision, ensure every rejected alternative exists as a `proposed` Solution. If the user is about to commit to option A and options B, C haven't been recorded as Solutions, file them first.
 
@@ -106,7 +107,7 @@ A Decision where rejected Solutions aren't rows in the db is dishonest — it cl
 
 `reporter_id` / `decided_by_id` / `eliminated_by_id` come from `~/.config/crux/config.toml`. If a command fails with "no user configured," run `crux user init`.
 
-**You (Claude) are not a User.** Everything you file is attributed to the human whose machine ran the CLI. Preserve the distinction between "Claude found this" and "user observed this" in the *content* of the entry — tags, phrasing — not in the reporter field.
+**You (Claude) are not a User.** Everything you file is attributed to the human whose machine ran the CLI. Preserve the distinction between "Claude found this" and "user observed this" in the _content_ of the entry — tags, phrasing — not in the reporter field.
 
 ## Reload mid-session
 
