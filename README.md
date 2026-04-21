@@ -8,24 +8,24 @@ Product discovery inside a chat session is high-quality in the moment and lost b
 
 Run a few engagements through Claude Code and the problem compounds. The mental overhead of re-deriving context starts eating more time than the work, and "file another scattered doc" becomes the path of least resistance. That's a self-imposed cap on how many projects you can actually hold.
 
-Crux is a structured residue layer: capture the output of a discovery conversation *as it happens*, reload it into future sessions as model-shaped context rather than prose to re-parse, and make parallel workstreams comparable so drift becomes visible.
+Crux is a structured residue layer: capture the output of a discovery conversation _as it happens_, reload it into future sessions as model-shaped context rather than prose to re-parse, and make parallel workstreams comparable so drift becomes visible.
 
 ## What it is
 
 A typed entity model with workflow invariants enforced in code, fronted by a CLI designed for Claude Code to operate.
 
-| Entity | Role |
-|---|---|
-| **Workstream** | A coherent area of focus (per client, per product). |
-| **Observation** / **Idea** | Atomic intake. Cheap to create, never deleted. |
-| **Problem** | Synthesized "there's a thing worth solving." |
-| **Evidence** | Links an Observation to a Problem with a why-note. |
-| **Solution** | An option for a specific Problem. |
-| **Elimination** | Rejects Solutions without committing to an alternative (progressive narrowing). |
-| **Decision** | Commits to a chosen Solution, records the losers. |
-| **Abandonment** | Graveyard for Problems we gave up on, with reason. |
-| **Outcome** | What shipping produced; closes the loop. |
-| **Theme** | Narrative grouping for roadmap views. |
+| Entity                     | Role                                                                            |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| **Workstream**             | A coherent area of focus (per client, per product).                             |
+| **Observation** / **Idea** | Atomic intake. Cheap to create, never deleted.                                  |
+| **Problem**                | Synthesized "there's a thing worth solving."                                    |
+| **Evidence**               | Links an Observation to a Problem with a why-note.                              |
+| **Solution**               | An option for a specific Problem.                                               |
+| **Elimination**            | Rejects Solutions without committing to an alternative (progressive narrowing). |
+| **Decision**               | Commits to a chosen Solution, records the losers.                               |
+| **Abandonment**            | Graveyard for Problems we gave up on, with reason.                              |
+| **Outcome**                | What shipping produced; closes the loop.                                        |
+| **Theme**                  | Narrative grouping for roadmap views.                                           |
 
 The entity model is the product. Workflow transitions — commit a Problem, create a Decision, eliminate a Solution, record an Outcome — are plain functions with invariant checks. You can't file a Decision against a chosen Solution. You can't eliminate a shipped one. You can't record an Outcome without a shipped Solution. The rules are code, not documentation.
 
@@ -43,22 +43,45 @@ That emits a model-shaped digest: open Problems (sorted by priority), their Evid
 
 For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt.
 
-## Quickstart
+## Install (Claude Code plugin)
+
+The intended way to adopt Crux is as a Claude Code plugin. One command adds the skill, slash commands, and CLI to every session:
+
+```
+/plugin marketplace add Zabaca/crux
+/plugin install crux
+```
+
+First time you use it in a conversation, Claude will check three things and only act on what's missing:
+
+1. Plugin deps — runs `bun install` in the plugin dir if `node_modules` is absent.
+2. Database — runs `crux init` if `~/.local/share/crux/crux.db` doesn't exist (XDG-compliant user-level db).
+3. User identity — prompts for your name/email, runs `crux user init`.
+
+After that first run, all three checks are no-ops and the CLI is ready.
+
+## Develop from source
+
+For contributors working on Crux itself:
 
 ```sh
 bun install
-bun run generate      # if migrations/ is empty
-bun run migrate       # creates .crux.db
-bun run seed          # seeds WS-crux as a starter corpus
+cp .env.example .env   # repo-local .crux.db so dev work doesn't touch your user-level db
+bun run generate       # if migrations/ is empty
+bun run migrate        # creates .crux.db (per .env)
+bun run seed           # seeds WS-crux as a starter corpus
 bun run crux user init --name "Your Name" --email "you@example.com"
 bun run crux context -w crux --json
 ```
 
+Bun auto-loads `.env` for `bun run …`, so the `CRUX_DB_URL=file:.crux.db` override takes effect transparently. Without `.env`, Crux defaults to `file:$XDG_DATA_HOME/crux/crux.db`.
+
 ## Layout
 
+- `.claude-plugin/` — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
+- `skills/crux/` — the Crux skill that teaches Claude when and how to operate the CLI.
 - `packages/core` — schema, transitions, validation, config loader.
 - `packages/cli` — `crux` binary, command dispatch via citty.
-- `packages/skill` — SKILL.md for Claude sessions.
 - `scripts/` — seeding and reset.
 - `apps/` — reserved for a future web UI.
 

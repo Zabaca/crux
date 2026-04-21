@@ -14,6 +14,7 @@ import { eliminationCommand } from "./commands/elimination.js";
 import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
 import { themeCommand } from "./commands/theme.js";
+import { initCommand } from "./commands/init.js";
 
 const main = defineCommand({
   meta: {
@@ -22,6 +23,7 @@ const main = defineCommand({
     description: "Discovery residue CLI — capture observations, shape problems, record decisions.",
   },
   subCommands: {
+    init: initCommand,
     user: userCommand,
     workstream: workstreamCommand,
     observation: observationCommand,

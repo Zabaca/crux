@@ -47,9 +47,7 @@
       "indexes": {
         "abandonments_problem_id_unique": {
           "name": "abandonments_problem_id_unique",
-          "columns": [
-            "problem_id"
-          ],
+          "columns": ["problem_id"],
           "isUnique": true
         }
       },
@@ -58,12 +56,8 @@
           "name": "abandonments_problem_id_problems_id_fk",
           "tableFrom": "abandonments",
           "tableTo": "problems",
-          "columnsFrom": [
-            "problem_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["problem_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -71,12 +65,8 @@
           "name": "abandonments_abandoned_by_id_users_id_fk",
           "tableFrom": "abandonments",
           "tableTo": "users",
-          "columnsFrom": [
-            "abandoned_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["abandoned_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -109,12 +99,8 @@
           "name": "decision_rejected_solutions_decision_id_decisions_id_fk",
           "tableFrom": "decision_rejected_solutions",
           "tableTo": "decisions",
-          "columnsFrom": [
-            "decision_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["decision_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -122,22 +108,15 @@
           "name": "decision_rejected_solutions_solution_id_solutions_id_fk",
           "tableFrom": "decision_rejected_solutions",
           "tableTo": "solutions",
-          "columnsFrom": [
-            "solution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["solution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "decision_rejected_solutions_decision_id_solution_id_pk": {
-          "columns": [
-            "decision_id",
-            "solution_id"
-          ],
+          "columns": ["decision_id", "solution_id"],
           "name": "decision_rejected_solutions_decision_id_solution_id_pk"
         }
       },
@@ -211,12 +190,8 @@
           "name": "decisions_problem_id_problems_id_fk",
           "tableFrom": "decisions",
           "tableTo": "problems",
-          "columnsFrom": [
-            "problem_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["problem_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -224,12 +199,8 @@
           "name": "decisions_chosen_solution_id_solutions_id_fk",
           "tableFrom": "decisions",
           "tableTo": "solutions",
-          "columnsFrom": [
-            "chosen_solution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["chosen_solution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -237,12 +208,8 @@
           "name": "decisions_decided_by_id_users_id_fk",
           "tableFrom": "decisions",
           "tableTo": "users",
-          "columnsFrom": [
-            "decided_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["decided_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -275,12 +242,8 @@
           "name": "elimination_solutions_elimination_id_eliminations_id_fk",
           "tableFrom": "elimination_solutions",
           "tableTo": "eliminations",
-          "columnsFrom": [
-            "elimination_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["elimination_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -288,22 +251,15 @@
           "name": "elimination_solutions_solution_id_solutions_id_fk",
           "tableFrom": "elimination_solutions",
           "tableTo": "solutions",
-          "columnsFrom": [
-            "solution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["solution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "elimination_solutions_elimination_id_solution_id_pk": {
-          "columns": [
-            "elimination_id",
-            "solution_id"
-          ],
+          "columns": ["elimination_id", "solution_id"],
           "name": "elimination_solutions_elimination_id_solution_id_pk"
         }
       },
@@ -363,12 +319,8 @@
           "name": "eliminations_problem_id_problems_id_fk",
           "tableFrom": "eliminations",
           "tableTo": "problems",
-          "columnsFrom": [
-            "problem_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["problem_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -376,12 +328,8 @@
           "name": "eliminations_created_by_id_users_id_fk",
           "tableFrom": "eliminations",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -440,10 +388,7 @@
       "indexes": {
         "evidence_obs_problem_unique": {
           "name": "evidence_obs_problem_unique",
-          "columns": [
-            "observation_id",
-            "problem_id"
-          ],
+          "columns": ["observation_id", "problem_id"],
           "isUnique": true
         }
       },
@@ -452,12 +397,8 @@
           "name": "evidence_observation_id_observations_id_fk",
           "tableFrom": "evidence",
           "tableTo": "observations",
-          "columnsFrom": [
-            "observation_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["observation_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -465,12 +406,8 @@
           "name": "evidence_problem_id_problems_id_fk",
           "tableFrom": "evidence",
           "tableTo": "problems",
-          "columnsFrom": [
-            "problem_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["problem_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -478,12 +415,8 @@
           "name": "evidence_created_by_id_users_id_fk",
           "tableFrom": "evidence",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -578,9 +511,7 @@
       "indexes": {
         "ideas_slug_unique": {
           "name": "ideas_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -589,12 +520,8 @@
           "name": "ideas_workstream_id_workstreams_id_fk",
           "tableFrom": "ideas",
           "tableTo": "workstreams",
-          "columnsFrom": [
-            "workstream_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workstream_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -602,12 +529,8 @@
           "name": "ideas_reporter_id_users_id_fk",
           "tableFrom": "ideas",
           "tableTo": "users",
-          "columnsFrom": [
-            "reporter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reporter_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -698,12 +621,8 @@
           "name": "observations_workstream_id_workstreams_id_fk",
           "tableFrom": "observations",
           "tableTo": "workstreams",
-          "columnsFrom": [
-            "workstream_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workstream_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -711,12 +630,8 @@
           "name": "observations_reporter_id_users_id_fk",
           "tableFrom": "observations",
           "tableTo": "users",
-          "columnsFrom": [
-            "reporter_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["reporter_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -749,12 +664,8 @@
           "name": "outcome_follow_up_problems_outcome_id_outcomes_id_fk",
           "tableFrom": "outcome_follow_up_problems",
           "tableTo": "outcomes",
-          "columnsFrom": [
-            "outcome_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["outcome_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -762,22 +673,15 @@
           "name": "outcome_follow_up_problems_problem_id_problems_id_fk",
           "tableFrom": "outcome_follow_up_problems",
           "tableTo": "problems",
-          "columnsFrom": [
-            "problem_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["problem_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "outcome_follow_up_problems_outcome_id_problem_id_pk": {
-          "columns": [
-            "outcome_id",
-            "problem_id"
-          ],
+          "columns": ["outcome_id", "problem_id"],
           "name": "outcome_follow_up_problems_outcome_id_problem_id_pk"
         }
       },
@@ -841,9 +745,7 @@
       "indexes": {
         "outcomes_solution_id_unique": {
           "name": "outcomes_solution_id_unique",
-          "columns": [
-            "solution_id"
-          ],
+          "columns": ["solution_id"],
           "isUnique": true
         }
       },
@@ -852,12 +754,8 @@
           "name": "outcomes_solution_id_solutions_id_fk",
           "tableFrom": "outcomes",
           "tableTo": "solutions",
-          "columnsFrom": [
-            "solution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["solution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -865,12 +763,8 @@
           "name": "outcomes_recorded_by_id_users_id_fk",
           "tableFrom": "outcomes",
           "tableTo": "users",
-          "columnsFrom": [
-            "recorded_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recorded_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -959,9 +853,7 @@
       "indexes": {
         "problems_slug_unique": {
           "name": "problems_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -970,12 +862,8 @@
           "name": "problems_workstream_id_workstreams_id_fk",
           "tableFrom": "problems",
           "tableTo": "workstreams",
-          "columnsFrom": [
-            "workstream_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workstream_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -983,12 +871,8 @@
           "name": "problems_created_by_id_users_id_fk",
           "tableFrom": "problems",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1084,9 +968,7 @@
       "indexes": {
         "solutions_slug_unique": {
           "name": "solutions_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -1095,12 +977,8 @@
           "name": "solutions_problem_id_problems_id_fk",
           "tableFrom": "solutions",
           "tableTo": "problems",
-          "columnsFrom": [
-            "problem_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["problem_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1108,12 +986,8 @@
           "name": "solutions_originating_idea_id_ideas_id_fk",
           "tableFrom": "solutions",
           "tableTo": "ideas",
-          "columnsFrom": [
-            "originating_idea_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["originating_idea_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1121,12 +995,8 @@
           "name": "solutions_created_by_id_users_id_fk",
           "tableFrom": "solutions",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1159,12 +1029,8 @@
           "name": "theme_solutions_theme_id_themes_id_fk",
           "tableFrom": "theme_solutions",
           "tableTo": "themes",
-          "columnsFrom": [
-            "theme_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["theme_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1172,22 +1038,15 @@
           "name": "theme_solutions_solution_id_solutions_id_fk",
           "tableFrom": "theme_solutions",
           "tableTo": "solutions",
-          "columnsFrom": [
-            "solution_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["solution_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {
         "theme_solutions_theme_id_solution_id_pk": {
-          "columns": [
-            "theme_id",
-            "solution_id"
-          ],
+          "columns": ["theme_id", "solution_id"],
           "name": "theme_solutions_theme_id_solution_id_pk"
         }
       },
@@ -1251,9 +1110,7 @@
       "indexes": {
         "themes_slug_unique": {
           "name": "themes_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -1262,12 +1119,8 @@
           "name": "themes_workstream_id_workstreams_id_fk",
           "tableFrom": "themes",
           "tableTo": "workstreams",
-          "columnsFrom": [
-            "workstream_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workstream_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1319,9 +1172,7 @@
       "indexes": {
         "users_slug_unique": {
           "name": "users_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -1395,9 +1246,7 @@
       "indexes": {
         "workstreams_slug_unique": {
           "name": "workstreams_slug_unique",
-          "columns": [
-            "slug"
-          ],
+          "columns": ["slug"],
           "isUnique": true
         }
       },
@@ -1406,12 +1255,8 @@
           "name": "workstreams_owner_id_users_id_fk",
           "tableFrom": "workstreams",
           "tableTo": "users",
-          "columnsFrom": [
-            "owner_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }

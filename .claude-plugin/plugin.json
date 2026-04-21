@@ -1,0 +1,8 @@
+{
+  "name": "crux",
+  "version": "0.1.0",
+  "description": "Crux — structured residue for product discovery in Claude Code conversations.",
+  "author": { "name": "Zabaca" },
+  "keywords": ["product-thinking", "discovery", "residue", "cli", "skill"],
+  "skills": "./skills/"
+}
