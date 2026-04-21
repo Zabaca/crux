@@ -64,16 +64,13 @@ Anchor on:
 
 If no workstream is in context and you can't infer one from the cwd, ask the user before inventing one.
 
-## Inline-propose, don't silently file
+## Propose-then-file, don't silently file
 
-When you determine something should be filed, propose the exact command inline as a code block the user can review. Don't execute silently.
+When you determine something should be filed, propose it in **prose** first — name the entity type, summarize the content, and call out the key fields (workstream, source-type, tags, priority, links to other entities). What the user reviews is the substance, not the shell syntax. Example:
 
-```sh
-crux observation add -w <slug> \
-  --content "..." \
-  --source-type internal \
-  --tags "..."
-```
+> I'd file an **Observation** (external, tagged `dogfood,intake`) — *"GitHub issue #1: observations have no correction path..."* — and link it as **Evidence** to `observation-correction-gap` with note *"Direct reporter articulation of the gap."*
+
+Do not lead with the CLI invocation. Flag-and-argument form buries the content under ceremony, especially when proposing multiple entities in one turn. Invoke the CLI yourself once the user approves.
 
 Execute directly without pre-showing only when the user has explicitly authorized batch capture ("just file the observations from this conversation") or when you're resuming work the user already approved.
 
