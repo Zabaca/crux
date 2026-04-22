@@ -2,8 +2,8 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { observations, workstreams } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { ObservationInput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
+import { ObservationInput, ObservationArchiveInput } from "@crux/core/validation";
+import { NotFoundError, archiveObservation } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -107,7 +107,29 @@ const showCmd = defineCommand({
   },
 });
 
+const archiveCmd = defineCommand({
+  meta: {
+    name: "archive",
+    description: "Archive an observation with a rationale (terminal, no un-archive).",
+  },
+  args: {
+    id: { type: "positional", required: true },
+    rationale: { type: "string", required: true },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const parsed = ObservationArchiveInput.parse({
+      observationId: args.id,
+      rationale: args.rationale,
+    });
+    const user = requireUser();
+    await archiveObservation(parsed.observationId, parsed.rationale, user.user.id, getDb());
+    emit({ ok: true, id: parsed.observationId }, `archived ${parsed.observationId}`);
+  },
+});
+
 export const observationCommand = defineCommand({
   meta: { name: "observation", description: "Observations." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd },
+  subCommands: { add: addCmd, list: listCmd, show: showCmd, archive: archiveCmd },
 });

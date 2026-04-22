@@ -5,3 +5,5 @@ export * from "./decision.js";
 export * from "./solution.js";
 export * from "./elimination.js";
 export * from "./outcome.js";
+export * from "./observation.js";
+export * from "./idea.js";

@@ -2,8 +2,8 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { ideas, problems, solutions, workstreams } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { IdeaInput, IdeaPromoteInput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
+import { IdeaInput, IdeaPromoteInput, IdeaArchiveInput } from "@crux/core/validation";
+import { NotFoundError, archiveIdea } from "@crux/core/transitions";
 import { eq, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -156,7 +156,38 @@ const promoteCmd = defineCommand({
   },
 });
 
+const archiveCmd = defineCommand({
+  meta: {
+    name: "archive",
+    description: "Archive an idea with a rationale (terminal, no un-archive).",
+  },
+  args: {
+    slug: { type: "positional", required: true },
+    workstream: { type: "string", required: true, alias: "w" },
+    rationale: { type: "string", required: true },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const parsed = IdeaArchiveInput.parse({
+      workstream: args.workstream,
+      slug: args.slug,
+      rationale: args.rationale,
+    });
+    const ws = await resolveWorkstream(parsed.workstream);
+    const user = requireUser();
+    await archiveIdea(ws.id, parsed.slug, parsed.rationale, user.user.id, getDb());
+    emit({ ok: true, slug: parsed.slug }, `archived IDEA-${parsed.slug}`);
+  },
+});
+
 export const ideaCommand = defineCommand({
   meta: { name: "idea", description: "Ideas — raw, uncommitted notes." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, promote: promoteCmd },
+  subCommands: {
+    add: addCmd,
+    list: listCmd,
+    show: showCmd,
+    promote: promoteCmd,
+    archive: archiveCmd,
+  },
 });

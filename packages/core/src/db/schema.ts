@@ -55,6 +55,8 @@ export const observations = sqliteTable("observations", {
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
   archivedAt: integer("archived_at"),
+  archivedById: text("archived_by_id").references(() => users.id),
+  archiveRationale: text("archive_rationale"),
 });
 
 export const ideas = sqliteTable("ideas", {
@@ -77,6 +79,8 @@ export const ideas = sqliteTable("ideas", {
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
   archivedAt: integer("archived_at"),
+  archivedById: text("archived_by_id").references(() => users.id),
+  archiveRationale: text("archive_rationale"),
 });
 
 export const problems = sqliteTable("problems", {

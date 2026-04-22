@@ -110,3 +110,14 @@ export const ThemeAttachInput = z.object({
   themeSlug: slug,
   solutionSlug: slug,
 });
+
+export const ObservationArchiveInput = z.object({
+  observationId: z.string().min(1),
+  rationale: z.string().min(1),
+});
+
+export const IdeaArchiveInput = z.object({
+  workstream: slug,
+  slug,
+  rationale: z.string().min(1),
+});

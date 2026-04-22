@@ -43,10 +43,16 @@ export const contextCommand = defineCommand({
   },
   args: {
     workstream: { type: "string", required: true, alias: "w" },
+    "show-archived": {
+      type: "boolean",
+      description:
+        "Include archived Observations and Ideas in the unlinked-observations and unpromoted-ideas sections.",
+    },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    const showArchived = Boolean(args["show-archived"]);
     const db = getDb();
     const wsRow = (
       await db.select().from(workstreams).where(eq(workstreams.slug, args.workstream)).limit(1)
@@ -89,10 +95,18 @@ export const contextCommand = defineCommand({
           ? await db.select().from(observations).where(inArray(observations.id, obsIds))
           : [];
         const obsById = new Map(obsRows.map((o) => [o.id, o]));
-        const evidenceInlined = ev.map((e) => ({
-          ...e,
-          observation: obsById.get(e.observationId) ?? null,
-        }));
+        const evidenceInlined = ev.map((e) => {
+          const obs = obsById.get(e.observationId) ?? null;
+          if (!obs) return { ...e, observation: null };
+          const archive = obs.archivedAt
+            ? {
+                rationale: obs.archiveRationale,
+                archivedById: obs.archivedById,
+                archivedAt: obs.archivedAt,
+              }
+            : null;
+          return { ...e, observation: { ...obs, archive } };
+        });
 
         // Solutions + per-solution outcome.
         const sols = await db.select().from(solutions).where(eq(solutions.problemId, p.id));
@@ -188,27 +202,59 @@ export const contextCommand = defineCommand({
       }),
     );
 
-    // Unlinked observations (no evidence row referencing them, not archived).
+    // Unlinked observations (no evidence row referencing them). Archived are
+    // hidden by default; --show-archived reveals them with archive metadata inlined.
     const allWsObs = await db
       .select()
       .from(observations)
-      .where(and(eq(observations.workstreamId, wsRow.id), isNull(observations.archivedAt)));
+      .where(
+        showArchived
+          ? eq(observations.workstreamId, wsRow.id)
+          : and(eq(observations.workstreamId, wsRow.id), isNull(observations.archivedAt)),
+      );
     const linkedObsIds = new Set(
       (await db.select({ id: evidence.observationId }).from(evidence)).map((r) => r.id),
     );
-    const unlinked = allWsObs.filter((o) => !linkedObsIds.has(o.id));
+    const unlinked = allWsObs
+      .filter((o) => !linkedObsIds.has(o.id))
+      .map((o) => {
+        const archive = o.archivedAt
+          ? {
+              rationale: o.archiveRationale,
+              archivedById: o.archivedById,
+              archivedAt: o.archivedAt,
+            }
+          : null;
+        return { ...o, archive };
+      });
 
-    // Unpromoted ideas: ideas in this workstream, not archived, with no Solution referencing them.
+    // Unpromoted ideas: ideas in this workstream with no Solution referencing them.
+    // Archived are hidden by default; --show-archived reveals them.
     const wsIdeas = await db
       .select()
       .from(ideas)
-      .where(and(eq(ideas.workstreamId, wsRow.id), isNull(ideas.archivedAt)));
+      .where(
+        showArchived
+          ? eq(ideas.workstreamId, wsRow.id)
+          : and(eq(ideas.workstreamId, wsRow.id), isNull(ideas.archivedAt)),
+      );
     const promotedIdeaIds = new Set(
       (await db.select({ ideaId: solutions.originatingIdeaId }).from(solutions))
         .map((r) => r.ideaId)
         .filter((x): x is string => Boolean(x)),
     );
-    const unpromotedIdeas = wsIdeas.filter((i) => !promotedIdeaIds.has(i.id));
+    const unpromotedIdeas = wsIdeas
+      .filter((i) => !promotedIdeaIds.has(i.id))
+      .map((i) => {
+        const archive = i.archivedAt
+          ? {
+              rationale: i.archiveRationale,
+              archivedById: i.archivedById,
+              archivedAt: i.archivedAt,
+            }
+          : null;
+        return { ...i, archive };
+      });
 
     // Themes with attached solutions.
     const wsThemes = await db.select().from(themes).where(eq(themes.workstreamId, wsRow.id));

@@ -27,6 +27,7 @@ The wrapper lazily runs `bun install` in the plugin dir on first use, so you don
 - A direction is ruled out even though no winner is picked → `crux elimination add`. Progressive narrowing is a real move.
 - A direction is committed to → `crux decision add`. Rejected alternatives are named explicitly.
 - A Problem stops being worth solving → `crux problem abandon --rationale "..."`.
+- An Observation or Idea was misfiled, turned out wrong, or became irrelevant → `crux observation archive <obs-id> --rationale "..."` / `crux idea archive <slug> -w <ws> --rationale "..."`. Terminal. Archived rows stay in the db with a rationale but are hidden from default context queues.
 - A shipped Solution's impact is known → `crux outcome add`.
 
 ## When NOT to invoke Crux
@@ -68,7 +69,7 @@ If no workstream is in context and you can't infer one from the cwd, ask the use
 
 When you determine something should be filed, propose it in **prose** first — name the entity type, summarize the content, and call out the key fields (workstream, source-type, tags, priority, links to other entities). What the user reviews is the substance, not the shell syntax. Example:
 
-> I'd file an **Observation** (external, tagged `dogfood,intake`) — *"GitHub issue #1: observations have no correction path..."* — and link it as **Evidence** to `observation-correction-gap` with note *"Direct reporter articulation of the gap."*
+> I'd file an **Observation** (external, tagged `dogfood,intake`) — _"GitHub issue #1: observations have no correction path..."_ — and link it as **Evidence** to `observation-correction-gap` with note _"Direct reporter articulation of the gap."_
 
 Do not lead with the CLI invocation. Flag-and-argument form buries the content under ceremony, especially when proposing multiple entities in one turn. Invoke the CLI yourself once the user approves.
 
@@ -97,6 +98,10 @@ A Decision where rejected Solutions aren't rows in the db is dishonest — it cl
 ### Abandonment is first-class
 
 `crux problem abandon <slug> --rationale "..."` is a real event, not deletion. The rationale travels forward so future sessions don't re-derive the same dead end.
+
+### Archive is first-class, parallel to Abandonment
+
+Observations and Ideas are never deleted — the origin trail is permanent — but misfiles and dead-end intake happen. `crux observation archive <obs-id> --rationale "..."` and `crux idea archive <slug> -w <ws> --rationale "..."` mark an intake row as noted-but-wrong without removing it. Archived rows disappear from default context queues (`recent_observations_unlinked`, `unpromoted_ideas`) so they don't generate reload noise, but they stay visible under any Problem's Evidence with their rationale inlined — the synthesis trail stays honest. Use archive for typos, test rows, wrong-workstream filings, and Observations/Ideas whose relevance evaporated. Terminal: there is no un-archive, same shape as Abandonment.
 
 ### Priority only when genuinely felt
 
