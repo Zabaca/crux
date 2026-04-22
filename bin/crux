@@ -11,4 +11,11 @@ if [ ! -d "$PLUGIN_ROOT/node_modules" ]; then
     || (cd "$PLUGIN_ROOT" && bun install >/dev/null 2>&1)
 fi
 
+# Dev-mode guard: when this wrapper lives inside a git checkout of the Crux
+# repo itself, force CRUX_DB_URL at the repo-local `.crux.db` so dev work never
+# touches the user-level db, regardless of cwd or .env loading rules.
+if [ -d "$PLUGIN_ROOT/.git" ] && [ -z "${CRUX_DB_URL:-}" ]; then
+  export CRUX_DB_URL="file:$PLUGIN_ROOT/.crux.db"
+fi
+
 exec bun run "$PLUGIN_ROOT/packages/cli/src/index.ts" "$@"

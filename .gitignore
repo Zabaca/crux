@@ -10,10 +10,10 @@ dist/
 *.db-wal
 .crux.db*
 
-# Local config
-.env
-.env.*
-!.env.example
+# Local config — .env is committed on purpose (pins dev db to repo-local
+# .crux.db; see the file for context). Only .env.local variants are private.
+.env.local
+.env.*.local
 
 # Editor / OS noise
 .vscode/

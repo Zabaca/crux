@@ -10,7 +10,6 @@
     "migrate": "drizzle-kit migrate --config .config/drizzle.config.ts",
     "generate": "drizzle-kit generate --config .config/drizzle.config.ts",
     "seed": "bun run scripts/seed-ws-crux.ts",
-    "reset": "bun run scripts/reset.ts",
     "lint": "oxlint -c .config/oxlint.json",
     "format": "bunx oxfmt .",
     "crux": "bun run packages/cli/src/index.ts",

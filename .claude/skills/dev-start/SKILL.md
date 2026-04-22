@@ -15,17 +15,9 @@ bun install
 
 Requires Bun ≥ 1.1.
 
-## 2. Point dev at a repo-local db
+## 2. Create + migrate the local database
 
-By default Crux writes to `file:$XDG_DATA_HOME/crux/crux.db` (user-level, so plugin installs Just Work). For in-repo development you want a repo-local db instead so dev experiments don't pollute your user db:
-
-```sh
-cp .env.example .env   # sets CRUX_DB_URL=file:.crux.db
-```
-
-Bun auto-loads `.env` for `bun run …`, so every subsequent script picks it up.
-
-## 3. Create + migrate the local database
+Dev work is already pinned to a repo-local `.crux.db` — the committed `.env` sets `CRUX_DB_URL=file:.crux.db` so `bun run …` scripts never touch your user-level db, and `bin/crux` forces the same URL whenever it detects a `.git` checkout. Nothing to configure.
 
 The libSQL file is gitignored; migrations are committed under `packages/core/src/db/migrations/`.
 
@@ -34,7 +26,7 @@ bun run generate   # only if migrations/ is empty or schema has changed
 bun run migrate
 ```
 
-This creates `.crux.db` at the repo root (per `.env`).
+This creates `.crux.db` at the repo root.
 
 ## 3. Seed WS-crux
 
@@ -42,7 +34,7 @@ This creates `.crux.db` at the repo root (per `.env`).
 bun run seed
 ```
 
-Inserts the real WS-crux corpus (Workstream, Observations, Problem, Evidence, Solutions, Elimination, Decision). Structural integrity only — prose is placeholder; the source doc is authoritative.
+Inserts the real WS-crux corpus (Workstream, Observations, Problem, Evidence, Solutions, Elimination, Decision). Idempotent — re-running against a seeded db is a no-op; it won't wipe your filings.
 
 ## 4. Write your user config
 
@@ -63,5 +55,5 @@ Expect PRB-thinking-residue-gap with its evidence, solutions, and DEC-001 inline
 ## Troubleshooting
 
 - `CRUX_DB_URL` env var overrides the database location.
-- `bun run reset` drops the local db and re-runs migrate + seed.
+- There is no reset script on purpose — destroying dogfooded state is a real failure mode we've hit. If you genuinely want a fresh db, delete `.crux.db` by hand, then `bun run migrate && bun run seed`.
 - Transition errors carry a stable `code` string — grep `packages/core/src/transitions/errors.ts`.

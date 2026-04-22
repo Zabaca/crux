@@ -212,6 +212,18 @@ const DEC_001_CONTEXT =
 async function main() {
   const db = getDb();
 
+  const existing = await db
+    .select({ id: workstreams.id })
+    .from(workstreams)
+    .where(eq(workstreams.id, "WS-crux"))
+    .limit(1);
+  if (existing[0]) {
+    console.log(
+      "WS-crux already seeded — no-op. Delete the db manually if you want a fresh start.",
+    );
+    return;
+  }
+
   await db
     .insert(users)
     .values({

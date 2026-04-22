@@ -66,15 +66,16 @@ For contributors working on Crux itself:
 
 ```sh
 bun install
-cp .env.example .env   # repo-local .crux.db so dev work doesn't touch your user-level db
 bun run generate       # if migrations/ is empty
-bun run migrate        # creates .crux.db (per .env)
-bun run seed           # seeds WS-crux as a starter corpus
+bun run migrate        # creates .crux.db in the repo root
+bun run seed           # seeds WS-crux as a starter corpus (no-op if already seeded)
 bun run crux user init --name "Your Name" --email "you@example.com"
 bun run crux context -w crux --json
 ```
 
-Bun auto-loads `.env` for `bun run …`, so the `CRUX_DB_URL=file:.crux.db` override takes effect transparently. Without `.env`, Crux defaults to `file:$XDG_DATA_HOME/crux/crux.db`.
+Dev work is pinned to the repo-local `.crux.db` two ways so your real user-level db is never touched: a committed `.env` sets `CRUX_DB_URL=file:.crux.db` for `bun run …` scripts, and `bin/crux` detects a `.git` checkout and sets the same URL absolutely before forwarding to the CLI. Plugin consumers are unaffected — Bun only loads `.env` from their project's cwd, not from the plugin source.
+
+There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux already exists). If you genuinely want a fresh db, delete `.crux.db` by hand — the friction is deliberate, because destroying dogfooded state is a real failure mode.
 
 ## Layout
 
@@ -82,7 +83,7 @@ Bun auto-loads `.env` for `bun run …`, so the `CRUX_DB_URL=file:.crux.db` over
 - `skills/crux/` — the Crux skill that teaches Claude when and how to operate the CLI.
 - `packages/core` — schema, transitions, validation, config loader.
 - `packages/cli` — `crux` binary, command dispatch via citty.
-- `scripts/` — seeding and reset.
+- `scripts/` — seeding.
 - `apps/` — reserved for a future web UI.
 
 ## Principles
