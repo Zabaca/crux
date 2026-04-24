@@ -15,6 +15,7 @@ import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
 import { themeCommand } from "./commands/theme.js";
 import { initCommand } from "./commands/init.js";
+import { browseCommand } from "./commands/browse.js";
 
 const main = defineCommand({
   meta: {
@@ -37,6 +38,7 @@ const main = defineCommand({
     outcome: outcomeCommand,
     theme: themeCommand,
     context: contextCommand,
+    browse: browseCommand,
   },
 });
 

@@ -1,0 +1,836 @@
+import React, { useEffect, useState } from "react";
+import { Box, Text } from "ink";
+import SelectInput from "ink-select-input";
+import {
+  getProblemDetail,
+  getSolutionDetail,
+  getObservationDetail,
+  listOpenProblems,
+  listUnlinkedObservations,
+  listUnpromotedIdeas,
+  listWorkstreams,
+  type Idea,
+  type Observation,
+  type ObservationDetail,
+  type ProblemDetail,
+  type ProblemSummary,
+  type SolutionDetail,
+  type Workstream,
+} from "./queries.js";
+import {
+  ArchivedTag,
+  Empty,
+  Footer,
+  LifecycleBadge,
+  PriorityBadge,
+  SectionTitle,
+  SolutionStatusBadge,
+} from "./components.js";
+
+type WorkstreamRow = Workstream & { openProblemCount: number };
+
+// ---------- Workstream picker ----------
+
+export function WorkstreamPicker({
+  onSelect,
+}: {
+  onSelect: (ws: Workstream) => void;
+}): React.ReactElement {
+  const [rows, setRows] = useState<WorkstreamRow[] | null>(null);
+
+  useEffect(() => {
+    listWorkstreams().then(setRows);
+  }, []);
+
+  if (!rows) return <Text color="gray">loading workstreams…</Text>;
+
+  if (rows.length === 0) {
+    return (
+      <Box flexDirection="column">
+        <Text bold>Workstreams</Text>
+        <Empty label="no workstreams" />
+        <Footer hints={[["q", "quit"]]} />
+      </Box>
+    );
+  }
+
+  const items = rows.map((r) => ({
+    key: r.id,
+    label: `${r.slug.padEnd(30)} ${r.title}  (${r.openProblemCount} open)`,
+    value: r.id,
+  }));
+
+  const handle = (item: { value: string }) => {
+    const row = rows.find((r) => r.id === item.value);
+    if (row) onSelect(row);
+  };
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>Workstreams</Text>
+      <SelectInput items={items} onSelect={handle} />
+      <Footer
+        hints={[
+          ["↑↓", "nav"],
+          ["↵", "open"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}
+
+// ---------- Workstream dashboard ----------
+
+type DashboardEntry =
+  | { kind: "problem"; problem: ProblemSummary }
+  | { kind: "intake" }
+  | { kind: "ideas" };
+
+export function WorkstreamDashboard({
+  workstream,
+  showArchived,
+  onOpenProblem,
+  onOpenIntake,
+  onOpenIdeas,
+}: {
+  workstream: Workstream;
+  showArchived: boolean;
+  onOpenProblem: (problemId: string) => void;
+  onOpenIntake: () => void;
+  onOpenIdeas: () => void;
+}): React.ReactElement {
+  const [rows, setRows] = useState<ProblemSummary[] | null>(null);
+  const [intakeCount, setIntakeCount] = useState<number | null>(null);
+  const [ideasCount, setIdeasCount] = useState<number | null>(null);
+  const [highlighted, setHighlighted] = useState<DashboardEntry | null>(null);
+
+  useEffect(() => {
+    listOpenProblems(workstream.id).then((all) => {
+      const open = all.filter(
+        (p) =>
+          p.lifecycleStatus === "shaping" ||
+          p.lifecycleStatus === "committed" ||
+          p.lifecycleStatus === "shipping",
+      );
+      setRows(open);
+      if (!highlighted && open[0]) setHighlighted({ kind: "problem", problem: open[0] });
+    });
+    listUnlinkedObservations(workstream.id, showArchived).then((os) => setIntakeCount(os.length));
+    listUnpromotedIdeas(workstream.id, showArchived).then((is) => setIdeasCount(is.length));
+  }, [workstream.id, showArchived]);
+
+  if (!rows || intakeCount === null || ideasCount === null) {
+    return <Text color="gray">loading dashboard…</Text>;
+  }
+
+  const entries: DashboardEntry[] = [
+    ...rows.map((p): DashboardEntry => ({ kind: "problem", problem: p })),
+    { kind: "intake" },
+    { kind: "ideas" },
+  ];
+
+  const items = entries.map((e) => {
+    if (e.kind === "problem") {
+      const p = e.problem;
+      return {
+        key: p.id,
+        label: `${tierLabel(p.priorityTier)} ${p.slug.padEnd(42)} ${p.title}  (ev:${p.evidenceCount} sol:${p.solutionCount})`,
+        value: `p:${p.id}`,
+      };
+    }
+    if (e.kind === "intake") {
+      return {
+        key: "__intake__",
+        label: `Intake queue (${intakeCount} unlinked)`,
+        value: "intake",
+      };
+    }
+    return { key: "__ideas__", label: `Ideas queue (${ideasCount} unpromoted)`, value: "ideas" };
+  });
+
+  const onHighlight = (item: { value: string }) => {
+    const e = entryForValue(entries, item.value);
+    if (e) setHighlighted(e);
+  };
+  const onSelect = (item: { value: string }) => {
+    if (item.value === "intake") onOpenIntake();
+    else if (item.value === "ideas") onOpenIdeas();
+    else if (item.value.startsWith("p:")) onOpenProblem(item.value.slice(2));
+  };
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <Text bold>
+          {workstream.slug} — {workstream.title}
+        </Text>
+        {showArchived ? <Text color="gray"> (show-archived)</Text> : null}
+      </Box>
+
+      <Box>
+        <Box flexDirection="column" width="50%" paddingRight={1}>
+          {rows.length === 0 ? <Empty label="no open problems" /> : null}
+          <SelectInput items={items} onSelect={onSelect} onHighlight={onHighlight} limit={20} />
+        </Box>
+        <Box
+          flexDirection="column"
+          width="50%"
+          borderStyle="single"
+          borderColor="gray"
+          paddingX={1}
+        >
+          <DashboardDetail entry={highlighted} />
+        </Box>
+      </Box>
+      <Footer
+        hints={[
+          ["↑↓", "nav"],
+          ["↵", "open"],
+          ["esc", "back"],
+          ["a", showArchived ? "hide archived" : "show archived"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}
+
+function tierLabel(tier: string | null): string {
+  return (tier ?? "--").padEnd(3);
+}
+
+function entryForValue(entries: DashboardEntry[], value: string): DashboardEntry | null {
+  if (value === "intake") return entries.find((e) => e.kind === "intake") ?? null;
+  if (value === "ideas") return entries.find((e) => e.kind === "ideas") ?? null;
+  if (value.startsWith("p:")) {
+    const id = value.slice(2);
+    return (
+      entries.find(
+        (e): e is Extract<DashboardEntry, { kind: "problem" }> =>
+          e.kind === "problem" && e.problem.id === id,
+      ) ?? null
+    );
+  }
+  return null;
+}
+
+function DashboardDetail({ entry }: { entry: DashboardEntry | null }): React.ReactElement {
+  if (!entry) return <Text color="gray">(nothing selected)</Text>;
+  if (entry.kind === "intake") {
+    return (
+      <Box flexDirection="column">
+        <Text bold>Intake queue</Text>
+        <Text color="gray">Observations not yet linked to any Problem.</Text>
+      </Box>
+    );
+  }
+  if (entry.kind === "ideas") {
+    return (
+      <Box flexDirection="column">
+        <Text bold>Ideas queue</Text>
+        <Text color="gray">Ideas not yet promoted to a Solution.</Text>
+      </Box>
+    );
+  }
+  const p = entry.problem;
+  return (
+    <Box flexDirection="column">
+      <Box>
+        <PriorityBadge tier={p.priorityTier} />
+        <Text> </Text>
+        <LifecycleBadge status={p.lifecycleStatus} />
+      </Box>
+      <Box marginTop={1}>
+        <Text bold>{p.slug}</Text>
+      </Box>
+      <Text>{p.title}</Text>
+      <Box marginTop={1}>
+        <Text color="gray">
+          ev:{p.evidenceCount} sol:{p.solutionCount}
+        </Text>
+      </Box>
+      {p.description ? (
+        <Box marginTop={1}>
+          <Text>{truncate(p.description, 400)}</Text>
+        </Box>
+      ) : null}
+    </Box>
+  );
+}
+
+function truncate(s: string, n: number): string {
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + "…";
+}
+
+// ---------- Problem detail ----------
+
+type ProblemTarget =
+  | { kind: "evidence"; evidenceId: string }
+  | { kind: "solution"; solutionId: string }
+  | { kind: "decision" }
+  | { kind: "elimination"; eliminationId: string }
+  | { kind: "abandonment" }
+  | { kind: "outcome"; solutionId: string };
+
+export function ProblemDetailView({
+  problemId,
+  onOpenSolution,
+  onOpenObservation,
+}: {
+  problemId: string;
+  onOpenSolution: (solutionId: string) => void;
+  onOpenObservation: (observationId: string) => void;
+}): React.ReactElement {
+  const [data, setData] = useState<ProblemDetail | null>(null);
+  const [highlighted, setHighlighted] = useState<ProblemTarget | null>(null);
+
+  useEffect(() => {
+    getProblemDetail(problemId).then((d) => {
+      setData(d);
+    });
+  }, [problemId]);
+
+  if (!data) return <Text color="gray">loading problem…</Text>;
+
+  const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = data;
+
+  const items: Array<{ key: string; label: string; value: string; target: ProblemTarget | null }> =
+    [];
+
+  // Header pseudo-entries are in the detail pane. List contains drill targets only.
+  items.push(
+    ...evidence.map((e) => ({
+      key: e.id,
+      label: `evidence  ${e.observation ? e.observation.id : "?"}  ${e.observation ? truncate(e.observation.content, 50) : ""}${e.observation?.archive ? " (archived)" : ""}`,
+      value: `ev:${e.id}:${e.observationId}`,
+      target: { kind: "evidence" as const, evidenceId: e.id },
+    })),
+  );
+  items.push(
+    ...solutions.map((s) => ({
+      key: s.id,
+      label: `solution  [${s.status.padEnd(9)}] ${s.slug.padEnd(40)} ${s.title}`,
+      value: `sol:${s.id}`,
+      target: { kind: "solution" as const, solutionId: s.id },
+    })),
+  );
+  if (latestDecision) {
+    items.push({
+      key: "decision",
+      label: `decision  ${latestDecision.id}  chose ${latestDecision.chosenSolutionId}`,
+      value: "decision",
+      target: { kind: "decision" },
+    });
+  }
+  items.push(
+    ...eliminations.map((e) => ({
+      key: e.id,
+      label: `elimination  ${e.id}  (${e.eliminatedSolutionIds.length} targets)`,
+      value: `elim:${e.id}`,
+      target: { kind: "elimination" as const, eliminationId: e.id },
+    })),
+  );
+  if (abandonment) {
+    items.push({
+      key: "abandonment",
+      label: `abandonment  ${abandonment.id}`,
+      value: "abandonment",
+      target: { kind: "abandonment" },
+    });
+  }
+  items.push(
+    ...solutions
+      .filter((s) => s.outcome)
+      .map((s) => ({
+        key: `out-${s.id}`,
+        label: `outcome  ${s.outcome!.id}  (sol ${s.slug})`,
+        value: `out:${s.id}`,
+        target: { kind: "outcome" as const, solutionId: s.id },
+      })),
+  );
+
+  const onHighlight = (item: { value: string }) => {
+    const found = items.find((i) => i.value === item.value);
+    if (found) setHighlighted(found.target);
+  };
+  const onSelect = (item: { value: string }) => {
+    if (item.value.startsWith("ev:")) {
+      const obsId = item.value.split(":")[2];
+      if (obsId) onOpenObservation(obsId);
+    } else if (item.value.startsWith("sol:")) {
+      onOpenSolution(item.value.slice(4));
+    } else if (item.value.startsWith("out:")) {
+      onOpenSolution(item.value.slice(4));
+    }
+  };
+
+  // Default highlight
+  if (!highlighted && items[0]) {
+    // schedule to next tick to avoid state update during render
+    queueMicrotask(() => setHighlighted(items[0]!.target));
+  }
+
+  return (
+    <Box flexDirection="column">
+      <Box marginBottom={1}>
+        <PriorityBadge tier={problem.priorityTier} />
+        <Text> </Text>
+        <LifecycleBadge status={problem.lifecycleStatus} />
+        <Text bold> {problem.slug}</Text>
+        <Text> — {problem.title}</Text>
+      </Box>
+
+      <Box>
+        <Box flexDirection="column" width="50%" paddingRight={1}>
+          {items.length === 0 ? <Empty label="no evidence, solutions, or decisions" /> : null}
+          <SelectInput items={items} onSelect={onSelect} onHighlight={onHighlight} limit={30} />
+        </Box>
+        <Box
+          flexDirection="column"
+          width="50%"
+          borderStyle="single"
+          borderColor="gray"
+          paddingX={1}
+        >
+          <ProblemDetailPane target={highlighted} data={data} />
+        </Box>
+      </Box>
+
+      <Footer
+        hints={[
+          ["↑↓", "nav"],
+          ["↵", "open"],
+          ["esc", "back"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}
+
+function ProblemDetailPane({
+  target,
+  data,
+}: {
+  target: ProblemTarget | null;
+  data: ProblemDetail;
+}): React.ReactElement {
+  const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = data;
+  if (!target) {
+    return (
+      <Box flexDirection="column">
+        <Text bold>Description</Text>
+        <Text>{problem.description}</Text>
+        {problem.description ? null : <Empty label="no description" />}
+      </Box>
+    );
+  }
+  if (target.kind === "evidence") {
+    const e = evidence.find((x) => x.id === target.evidenceId);
+    if (!e) return <Empty label="evidence missing" />;
+    return (
+      <Box flexDirection="column">
+        <Text bold>Evidence {e.id}</Text>
+        {e.note ? <Text>note: {e.note}</Text> : null}
+        <SectionTitle>Observation</SectionTitle>
+        {e.observation ? (
+          <>
+            <Box>
+              <Text bold>{e.observation.id}</Text>
+              <ArchivedTag archive={e.observation.archive} />
+            </Box>
+            <Text>{e.observation.content}</Text>
+            {e.observation.source ? <Text color="gray">source: {e.observation.source}</Text> : null}
+            {e.observation.sourceType ? (
+              <Text color="gray">source_type: {e.observation.sourceType}</Text>
+            ) : null}
+            {e.observation.tags ? <Text color="gray">tags: {e.observation.tags}</Text> : null}
+          </>
+        ) : (
+          <Empty label="observation missing" />
+        )}
+      </Box>
+    );
+  }
+  if (target.kind === "solution") {
+    const s = solutions.find((x) => x.id === target.solutionId);
+    if (!s) return <Empty label="solution missing" />;
+    return (
+      <Box flexDirection="column">
+        <Box>
+          <SolutionStatusBadge status={s.status} />
+          <Text bold> {s.slug}</Text>
+        </Box>
+        <Text>{s.title}</Text>
+        {s.description ? (
+          <Box marginTop={1}>
+            <Text>{s.description}</Text>
+          </Box>
+        ) : null}
+        {s.effort ? <Text color="gray">effort: {s.effort}</Text> : null}
+        {s.originatingIdeaId ? <Text color="gray">from idea: {s.originatingIdeaId}</Text> : null}
+      </Box>
+    );
+  }
+  if (target.kind === "decision") {
+    if (!latestDecision) return <Empty label="no decision" />;
+    return (
+      <Box flexDirection="column">
+        <Text bold>Decision {latestDecision.id}</Text>
+        <Text>
+          chosen: <Text color="green">{latestDecision.chosenSolutionId}</Text>
+        </Text>
+        {latestDecision.rejectedSolutionIds.length > 0 ? (
+          <Text>
+            rejected: <Text color="red">{latestDecision.rejectedSolutionIds.join(", ")}</Text>
+          </Text>
+        ) : null}
+        <SectionTitle>Rationale</SectionTitle>
+        <Text>{latestDecision.rationale}</Text>
+        {latestDecision.context ? (
+          <>
+            <SectionTitle>Context</SectionTitle>
+            <Text>{latestDecision.context}</Text>
+          </>
+        ) : null}
+      </Box>
+    );
+  }
+  if (target.kind === "elimination") {
+    const e = eliminations.find((x) => x.id === target.eliminationId);
+    if (!e) return <Empty label="elimination missing" />;
+    return (
+      <Box flexDirection="column">
+        <Text bold>Elimination {e.id}</Text>
+        <Text>ruled out: {e.eliminatedSolutionIds.join(", ") || "(none)"}</Text>
+        <SectionTitle>Rationale</SectionTitle>
+        <Text>{e.rationale}</Text>
+        {e.context ? (
+          <>
+            <SectionTitle>Context</SectionTitle>
+            <Text>{e.context}</Text>
+          </>
+        ) : null}
+      </Box>
+    );
+  }
+  if (target.kind === "abandonment") {
+    if (!abandonment) return <Empty label="no abandonment" />;
+    return (
+      <Box flexDirection="column">
+        <Text bold>Abandonment {abandonment.id}</Text>
+        <SectionTitle>Rationale</SectionTitle>
+        <Text>{abandonment.rationale}</Text>
+      </Box>
+    );
+  }
+  if (target.kind === "outcome") {
+    const s = solutions.find((x) => x.id === target.solutionId);
+    const o = s?.outcome;
+    if (!o) return <Empty label="no outcome" />;
+    return (
+      <Box flexDirection="column">
+        <Text bold>Outcome {o.id}</Text>
+        <Text color="gray">for solution: {s!.slug}</Text>
+        <SectionTitle>Observed impact</SectionTitle>
+        <Text>{o.observedImpact}</Text>
+        {o.expectedImpact ? (
+          <>
+            <SectionTitle>Expected impact</SectionTitle>
+            <Text>{o.expectedImpact}</Text>
+          </>
+        ) : null}
+        {o.learnings ? (
+          <>
+            <SectionTitle>Learnings</SectionTitle>
+            <Text>{o.learnings}</Text>
+          </>
+        ) : null}
+        {o.followUpProblemIds.length > 0 ? (
+          <>
+            <SectionTitle>Follow-up problems</SectionTitle>
+            <Text>{o.followUpProblemIds.join(", ")}</Text>
+          </>
+        ) : null}
+      </Box>
+    );
+  }
+  return <Empty label="unknown target" />;
+}
+
+// ---------- Solution detail ----------
+
+export function SolutionDetailView({ solutionId }: { solutionId: string }): React.ReactElement {
+  const [data, setData] = useState<SolutionDetail | null>(null);
+
+  useEffect(() => {
+    getSolutionDetail(solutionId).then(setData);
+  }, [solutionId]);
+
+  if (!data) return <Text color="gray">loading solution…</Text>;
+
+  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy, outcome } = data;
+
+  return (
+    <Box flexDirection="column">
+      <Box>
+        <SolutionStatusBadge status={solution.status} />
+        <Text bold> {solution.slug}</Text>
+        <Text> — {solution.title}</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color="gray">
+          problem: {problem.slug} ({problem.lifecycleStatus})
+        </Text>
+      </Box>
+      {solution.description ? (
+        <Box marginTop={1}>
+          <Text>{solution.description}</Text>
+        </Box>
+      ) : null}
+      {solution.effort ? <Text color="gray">effort: {solution.effort}</Text> : null}
+      {solution.originatingIdeaId ? (
+        <Text color="gray">from idea: {solution.originatingIdeaId}</Text>
+      ) : null}
+
+      {choosingDecision ? (
+        <>
+          <SectionTitle>Chosen by {choosingDecision.id}</SectionTitle>
+          <Text>{choosingDecision.rationale}</Text>
+          {choosingDecision.context ? <Text color="gray">{choosingDecision.context}</Text> : null}
+          {choosingDecision.rejectedSolutionIds.length > 0 ? (
+            <Text color="gray">
+              also rejected: {choosingDecision.rejectedSolutionIds.join(", ")}
+            </Text>
+          ) : null}
+        </>
+      ) : null}
+
+      {rejectingDecision && rejectingDecision.id !== choosingDecision?.id ? (
+        <>
+          <SectionTitle>Rejected by {rejectingDecision.id}</SectionTitle>
+          <Text>{rejectingDecision.rationale}</Text>
+          {rejectingDecision.context ? <Text color="gray">{rejectingDecision.context}</Text> : null}
+          <Text color="gray">chose: {rejectingDecision.chosenSolutionId}</Text>
+        </>
+      ) : null}
+
+      {eliminatedBy.length > 0 ? (
+        <>
+          <SectionTitle>Eliminated</SectionTitle>
+          {eliminatedBy.map((e) => (
+            <Box key={e.id} flexDirection="column" marginBottom={1}>
+              <Text color="red" bold>
+                {e.id}
+              </Text>
+              <Text>{e.rationale}</Text>
+              {e.context ? <Text color="gray">{e.context}</Text> : null}
+            </Box>
+          ))}
+        </>
+      ) : null}
+
+      {outcome ? (
+        <>
+          <SectionTitle>Outcome {outcome.id}</SectionTitle>
+          <Text>observed: {outcome.observedImpact}</Text>
+          {outcome.expectedImpact ? <Text>expected: {outcome.expectedImpact}</Text> : null}
+          {outcome.learnings ? <Text>learnings: {outcome.learnings}</Text> : null}
+          {outcome.followUpProblemIds.length > 0 ? (
+            <Text color="gray">follow-ups: {outcome.followUpProblemIds.join(", ")}</Text>
+          ) : null}
+        </>
+      ) : null}
+
+      {!choosingDecision && !rejectingDecision && eliminatedBy.length === 0 && !outcome ? (
+        <Box marginTop={1}>
+          <Empty label="no decision, elimination, or outcome yet" />
+        </Box>
+      ) : null}
+
+      <Footer
+        hints={[
+          ["esc", "back"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}
+
+// ---------- Observation detail ----------
+
+export function ObservationDetailView({
+  observationId,
+}: {
+  observationId: string;
+}): React.ReactElement {
+  const [data, setData] = useState<ObservationDetail | null>(null);
+
+  useEffect(() => {
+    getObservationDetail(observationId).then(setData);
+  }, [observationId]);
+
+  if (!data) return <Text color="gray">loading observation…</Text>;
+
+  const { observation, evidenceLinks } = data;
+
+  return (
+    <Box flexDirection="column">
+      <Box>
+        <Text bold>{observation.id}</Text>
+        <ArchivedTag archive={observation.archive} />
+      </Box>
+      <Box marginTop={1}>
+        <Text>{observation.content}</Text>
+      </Box>
+      {observation.source ? <Text color="gray">source: {observation.source}</Text> : null}
+      {observation.sourceType ? (
+        <Text color="gray">source_type: {observation.sourceType}</Text>
+      ) : null}
+      {observation.tags ? <Text color="gray">tags: {observation.tags}</Text> : null}
+
+      <SectionTitle>Linked problems ({evidenceLinks.length})</SectionTitle>
+      {evidenceLinks.length === 0 ? (
+        <Empty label="not linked to any Problem as Evidence" />
+      ) : (
+        evidenceLinks.map((e) => (
+          <Box key={e.id} flexDirection="column" marginBottom={1}>
+            <Box>
+              <LifecycleBadge status={e.problem.lifecycleStatus} />
+              <Text bold> {e.problem.slug}</Text>
+              <Text> {e.problem.title}</Text>
+            </Box>
+            {e.note ? <Text color="gray">note: {e.note}</Text> : null}
+          </Box>
+        ))
+      )}
+
+      <Footer
+        hints={[
+          ["esc", "back"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}
+
+// ---------- Intake queue ----------
+
+export function IntakeQueueView({
+  workstream,
+  showArchived,
+  onOpenObservation,
+}: {
+  workstream: Workstream;
+  showArchived: boolean;
+  onOpenObservation: (observationId: string) => void;
+}): React.ReactElement {
+  const [rows, setRows] = useState<Observation[] | null>(null);
+
+  useEffect(() => {
+    listUnlinkedObservations(workstream.id, showArchived).then(setRows);
+  }, [workstream.id, showArchived]);
+
+  if (!rows) return <Text color="gray">loading intake…</Text>;
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>
+        Intake queue — {workstream.slug}
+        {showArchived ? "  (show-archived)" : ""}
+      </Text>
+      {rows.length === 0 ? (
+        <Box marginTop={1}>
+          <Empty label="no unlinked observations" />
+        </Box>
+      ) : (
+        <SelectInput
+          items={rows.map((o) => ({
+            key: o.id,
+            label: `${o.id.padEnd(10)} ${o.archive ? "[archived] " : ""}${truncate(o.content, 80)}`,
+            value: o.id,
+          }))}
+          onSelect={(item) => onOpenObservation(item.value)}
+          limit={25}
+        />
+      )}
+      {showArchived ? (
+        <Box flexDirection="column" marginTop={1}>
+          {rows
+            .filter((o) => o.archive)
+            .map((o) => (
+              <Text key={o.id} color="gray">
+                {o.id} archived: {o.archive?.rationale ?? "(no rationale)"}
+              </Text>
+            ))}
+        </Box>
+      ) : null}
+      <Footer
+        hints={[
+          ["↑↓", "nav"],
+          ["↵", "open"],
+          ["esc", "back"],
+          ["a", showArchived ? "hide archived" : "show archived"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}
+
+// ---------- Ideas queue ----------
+
+export function IdeasQueueView({
+  workstream,
+  showArchived,
+}: {
+  workstream: Workstream;
+  showArchived: boolean;
+}): React.ReactElement {
+  const [rows, setRows] = useState<Idea[] | null>(null);
+
+  useEffect(() => {
+    listUnpromotedIdeas(workstream.id, showArchived).then(setRows);
+  }, [workstream.id, showArchived]);
+
+  if (!rows) return <Text color="gray">loading ideas…</Text>;
+
+  return (
+    <Box flexDirection="column">
+      <Text bold>
+        Ideas queue — {workstream.slug}
+        {showArchived ? "  (show-archived)" : ""}
+      </Text>
+      {rows.length === 0 ? (
+        <Box marginTop={1}>
+          <Empty label="no unpromoted ideas" />
+        </Box>
+      ) : (
+        rows.map((i) => (
+          <Box key={i.id} flexDirection="column" marginTop={1}>
+            <Box>
+              <Text bold>{i.slug}</Text>
+              <ArchivedTag archive={i.archive} />
+            </Box>
+            <Text>{i.title}</Text>
+            {i.description ? <Text color="gray">{truncate(i.description, 160)}</Text> : null}
+            {i.hypothesizedProblemArea ? (
+              <Text color="gray">problem area: {i.hypothesizedProblemArea}</Text>
+            ) : null}
+          </Box>
+        ))
+      )}
+      <Footer
+        hints={[
+          ["esc", "back"],
+          ["a", showArchived ? "hide archived" : "show archived"],
+          ["q", "quit"],
+        ]}
+      />
+    </Box>
+  );
+}

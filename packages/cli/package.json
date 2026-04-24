@@ -8,6 +8,12 @@
   "type": "module",
   "dependencies": {
     "@crux/core": "workspace:*",
-    "citty": "^0.2.2"
+    "citty": "^0.2.2",
+    "ink": "^7.0.1",
+    "ink-select-input": "^6.2.0",
+    "react": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14"
   }
 }
