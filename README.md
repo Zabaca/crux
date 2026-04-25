@@ -68,7 +68,7 @@ For contributors working on Crux itself:
 bun install
 bun run generate       # if migrations/ is empty
 bun run migrate        # creates .crux.db in the repo root
-bun run seed           # seeds WS-crux as a starter corpus (no-op if already seeded)
+bun run seed           # no-op by default; populate scripts/seed-ws-crux.ts to seed your own corpus
 bun run crux user init --name "Your Name" --email "you@example.com"
 bun run crux context -w crux --json
 ```

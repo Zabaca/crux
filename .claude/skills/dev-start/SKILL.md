@@ -28,13 +28,13 @@ bun run migrate
 
 This creates `.crux.db` at the repo root.
 
-## 3. Seed WS-crux
+## 3. Seed (optional)
 
 ```sh
 bun run seed
 ```
 
-Inserts the real WS-crux corpus (Workstream, Observations, Problem, Evidence, Solutions, Elimination, Decision). Idempotent — re-running against a seeded db is a no-op; it won't wipe your filings.
+`scripts/seed-ws-crux.ts` is empty in the public repo. The script is a no-op by default. Populate it with your own starter corpus if you want a non-empty db on a fresh checkout — see the schema at `packages/core/src/db/schema.ts` and the transitions at `packages/core/src/transitions/` for shape and invariants.
 
 ## 4. Write your user config
 
