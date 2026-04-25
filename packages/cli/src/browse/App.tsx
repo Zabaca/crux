@@ -1,6 +1,11 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
-import { getWorkstreamBySlug, type Workstream } from "./queries.js";
+import {
+  getProblemById,
+  getProblemBySlug,
+  getWorkstreamBySlug,
+  type Workstream,
+} from "./queries.js";
 import {
   IdeasQueueView,
   IntakeQueueView,
@@ -10,6 +15,7 @@ import {
   WorkstreamDashboard,
   WorkstreamPicker,
 } from "./views.js";
+import { useViewStateFile } from "./useViewState.js";
 
 type View =
   | { kind: "picker" }
@@ -38,6 +44,11 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   const [showArchived, setShowArchived] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(!initialSlug);
+  const { machineView, send } = useViewStateFile();
+
+  // Track the last machineView we applied, so we don't re-apply identical state
+  // and don't clobber local non-machine views (e.g. solution/observation).
+  const lastAppliedMachineView = useRef<string>("");
 
   useEffect(() => {
     if (!initialSlug) return;
@@ -46,10 +57,50 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         setBootError(`workstream not found: ${initialSlug}`);
       } else {
         setView({ kind: "dashboard", workstream: ws });
+        send({ type: "SELECT_WORKSTREAM", slug: initialSlug }).catch(() => {
+          // guard may refuse if initialSlug is exotic; local view still works
+        });
       }
       setBooted(true);
     });
   }, [initialSlug]);
+
+  // Reconcile incoming machine state → local view. Only applies when we're on
+  // a machine-covered screen (picker/dashboard/problem) or the incoming machine
+  // view disagrees with where we are.
+  useEffect(() => {
+    const key = JSON.stringify(machineView);
+    if (key === lastAppliedMachineView.current) return;
+    lastAppliedMachineView.current = key;
+
+    let cancelled = false;
+    (async () => {
+      if (machineView.kind === "workstream_list") {
+        if (cancelled) return;
+        setView((v) => {
+          // If caller booted with initialSlug, don't demote below dashboard.
+          if (initialSlug && v.kind === "dashboard") return v;
+          return { kind: "picker" };
+        });
+        return;
+      }
+      if (machineView.kind === "workstream_dashboard") {
+        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
+        if (cancelled || !ws) return;
+        setView({ kind: "dashboard", workstream: ws });
+        return;
+      }
+      if (machineView.kind === "problem_detail") {
+        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
+        const p = await getProblemBySlug(machineView.problemSlug);
+        if (cancelled || !ws || !p) return;
+        setView({ kind: "problem", workstream: ws, problemId: p.id });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [machineView, initialSlug]);
 
   useInput((input, key) => {
     if (input === "q") {
@@ -66,28 +117,51 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   });
 
   const goBack = () => {
-    setView((v) => {
-      switch (v.kind) {
-        case "picker":
-          return v;
-        case "dashboard":
-          return initialSlug ? v : { kind: "picker" };
-        case "problem":
-          return { kind: "dashboard", workstream: v.workstream };
-        case "solution":
-          if (v.parent === "problem" && v.problemId) {
-            return { kind: "problem", workstream: v.workstream, problemId: v.problemId };
-          }
-          return { kind: "dashboard", workstream: v.workstream };
-        case "observation":
-          if (v.parent === "problem" && v.problemId) {
-            return { kind: "problem", workstream: v.workstream, problemId: v.problemId };
-          }
-          return { kind: "intake", workstream: v.workstream };
-        case "intake":
-        case "ideas":
-          return { kind: "dashboard", workstream: v.workstream };
-      }
+    const v = view;
+    switch (v.kind) {
+      case "picker":
+        return;
+      case "dashboard":
+        if (!initialSlug) {
+          // Machine-covered transition: dashboard → list.
+          send({ type: "BACK" }).catch(() => {});
+        }
+        return;
+      case "problem":
+        // Machine-covered transition: problem_detail → dashboard.
+        send({ type: "BACK" }).catch(() => {});
+        return;
+      case "solution":
+        if (v.parent === "problem" && v.problemId) {
+          setView({ kind: "problem", workstream: v.workstream, problemId: v.problemId });
+        } else {
+          setView({ kind: "dashboard", workstream: v.workstream });
+        }
+        return;
+      case "observation":
+        if (v.parent === "problem" && v.problemId) {
+          setView({ kind: "problem", workstream: v.workstream, problemId: v.problemId });
+        } else {
+          setView({ kind: "intake", workstream: v.workstream });
+        }
+        return;
+      case "intake":
+      case "ideas":
+        setView({ kind: "dashboard", workstream: v.workstream });
+        return;
+    }
+  };
+
+  const openProblem = async (problemId: string) => {
+    const p = await getProblemById(problemId);
+    if (!p) return;
+    await send({ type: "OPEN_PROBLEM", slug: p.slug }).catch(() => {});
+  };
+
+  const openWorkstream = async (ws: Workstream) => {
+    await send({ type: "SELECT_WORKSTREAM", slug: ws.slug }).catch(() => {
+      // If guard refuses, fall back to local nav so the UI stays usable.
+      setView({ kind: "dashboard", workstream: ws });
     });
   };
 
@@ -104,15 +178,13 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
 
   switch (view.kind) {
     case "picker":
-      return <WorkstreamPicker onSelect={(ws) => setView({ kind: "dashboard", workstream: ws })} />;
+      return <WorkstreamPicker onSelect={(ws) => void openWorkstream(ws)} />;
     case "dashboard":
       return (
         <WorkstreamDashboard
           workstream={view.workstream}
           showArchived={showArchived}
-          onOpenProblem={(problemId) =>
-            setView({ kind: "problem", workstream: view.workstream, problemId })
-          }
+          onOpenProblem={(problemId) => void openProblem(problemId)}
           onOpenIntake={() => setView({ kind: "intake", workstream: view.workstream })}
           onOpenIdeas={() => setView({ kind: "ideas", workstream: view.workstream })}
         />

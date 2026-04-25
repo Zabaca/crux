@@ -10,6 +10,11 @@
     "./db/schema": "./src/db/schema.ts",
     "./transitions": "./src/transitions/index.ts",
     "./validation": "./src/validation/schemas.ts",
-    "./config": "./src/config/user.ts"
+    "./config": "./src/config/user.ts",
+    "./view-state": "./src/view-state/index.ts"
+  },
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "xstate": "^5.30.0"
   }
 }

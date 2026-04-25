@@ -13,6 +13,7 @@
     "lint": "oxlint -c .config/oxlint.json",
     "format": "bunx oxfmt .",
     "crux": "bun run packages/cli/src/index.ts",
+    "test": "bun test packages && cd apps/web && bun test",
     "prepare": "husky"
   },
   "dependencies": {

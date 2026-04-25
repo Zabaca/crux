@@ -16,6 +16,7 @@ import { outcomeCommand } from "./commands/outcome.js";
 import { themeCommand } from "./commands/theme.js";
 import { initCommand } from "./commands/init.js";
 import { browseCommand } from "./commands/browse.js";
+import { viewCommand } from "./commands/view.js";
 
 const main = defineCommand({
   meta: {
@@ -39,6 +40,7 @@ const main = defineCommand({
     theme: themeCommand,
     context: contextCommand,
     browse: browseCommand,
+    view: viewCommand,
   },
 });
 
