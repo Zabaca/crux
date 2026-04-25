@@ -1,5 +1,14 @@
 #!/usr/bin/env sh
-# Lint + format staged files. Bun has no direct lint-staged equivalent yet;
-# run oxlint + oxfmt across the repo on staged changes.
+# Lint the whole repo (catches cross-file issues). Format only the staged
+# files (avoids touching unrelated work in the tree) and re-stage them so
+# the commit captures the formatted versions.
+#
+# Bun has no direct lint-staged equivalent yet; this is the minimal shape.
+
 bun run lint || exit 1
-bun run format || exit 1
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|json)$' || true)
+if [ -n "$STAGED" ]; then
+  echo "$STAGED" | xargs bunx oxfmt || exit 1
+  echo "$STAGED" | xargs git add
+fi
