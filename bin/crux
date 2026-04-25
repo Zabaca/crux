@@ -6,6 +6,21 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(dirname "$SCRIPT_DIR")"
 
+if ! command -v bun >/dev/null 2>&1; then
+  cat >&2 <<'MSG'
+crux: bun is required and not on PATH.
+
+Install bun:
+  macOS/Linux:  curl -fsSL https://bun.sh/install | bash
+  macOS (brew): brew install oven-sh/bun/bun
+  Windows:      powershell -c "irm bun.sh/install.ps1|iex"
+
+After install, restart your shell (or source the bun config) and re-run.
+Docs: https://bun.sh
+MSG
+  exit 127
+fi
+
 if [ ! -d "$PLUGIN_ROOT/node_modules" ]; then
   (cd "$PLUGIN_ROOT" && bun install --frozen-lockfile >/dev/null 2>&1) \
     || (cd "$PLUGIN_ROOT" && bun install >/dev/null 2>&1)

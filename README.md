@@ -52,13 +52,14 @@ The intended way to adopt Crux is as a Claude Code plugin. One command adds the 
 /plugin install crux
 ```
 
-First time you use it in a conversation, Claude will check three things and only act on what's missing:
+First time you use it in a conversation, Claude walks you through four checks and only acts on what's missing:
 
-1. Plugin deps — runs `bun install` in the plugin dir if `node_modules` is absent.
-2. Database — runs `crux init` if `~/.local/share/crux/crux.db` doesn't exist (XDG-compliant user-level db).
-3. User identity — prompts for your name/email, runs `crux user init`.
+1. Bun runtime — `command -v bun`. Crux runs on Bun. If it's not installed, Claude surfaces the install command for your platform (`curl -fsSL https://bun.sh/install | bash` works on macOS and Linux; `brew install oven-sh/bun/bun` on Homebrew; PowerShell one-liner on Windows). After install, restart your shell so the new PATH takes effect.
+2. Plugin deps — runs `bun install` in the plugin dir if `node_modules` is absent.
+3. Database — runs `crux init` if `~/.local/share/crux/crux.db` doesn't exist (XDG-compliant user-level db).
+4. User identity — prompts for your name/email, runs `crux user init`.
 
-After that first run, all three checks are no-ops and the CLI is ready.
+After that first run, all four checks are no-ops and the CLI is ready.
 
 ## Develop from source
 

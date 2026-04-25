@@ -21,7 +21,10 @@ export async function GET() {
         const snap = loadState(path);
         send({ value: snap.value, context: snap.context });
       } catch {
-        send({ value: { viewing: "workstream_list" }, context: { workstreamSlug: null, problemSlug: null } });
+        send({
+          value: { viewing: "workstream_list" },
+          context: { workstreamSlug: null, problemSlug: null },
+        });
       }
 
       const handle = watchViewStateFile(path, () => {

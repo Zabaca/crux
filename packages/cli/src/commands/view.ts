@@ -50,11 +50,14 @@ const resetCmd = defineCommand({
 const sendCmd = defineCommand({
   meta: {
     name: "send",
-    description:
-      "Send an event into the view machine. Fails with non-zero exit if refused.",
+    description: "Send an event into the view machine. Fails with non-zero exit if refused.",
   },
   args: {
-    event: { type: "positional", required: true, description: "Event type (e.g. SELECT_WORKSTREAM)" },
+    event: {
+      type: "positional",
+      required: true,
+      description: "Event type (e.g. SELECT_WORKSTREAM)",
+    },
     payload: { type: "string", description: "JSON payload for the event" },
     json: { type: "boolean" },
   },

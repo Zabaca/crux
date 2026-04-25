@@ -34,8 +34,7 @@ export const viewMachine = setup({
   },
   actions: {
     setWorkstream: assign({
-      workstreamSlug: ({ event }) =>
-        event.type === "SELECT_WORKSTREAM" ? event.slug : null,
+      workstreamSlug: ({ event }) => (event.type === "SELECT_WORKSTREAM" ? event.slug : null),
       problemSlug: () => null,
     }),
     setProblem: assign({

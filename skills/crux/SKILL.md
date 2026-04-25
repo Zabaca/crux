@@ -41,12 +41,16 @@ Low-friction intake is a feature, but so is judgment. A blurry thought filed pre
 
 ## First-run init
 
-Before the first `crux` command in a session, run two checks and act only when something's missing. Deps are handled by the wrapper automatically — no separate check needed.
+Before the first `crux` command in a session, run these checks in order and act only when something's missing. All pass on steady state → no-op, near-zero latency. First run on a new machine hits them once.
 
-1. **Database**: `test -f ~/.local/share/crux/crux.db` — if missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
-2. **User config**: `test -f ~/.config/crux/config.toml` — if missing, ask the user for their name and email, then `${CLAUDE_PLUGIN_ROOT}/bin/crux user init --name "..." --email "..."`.
-
-Both pass on steady state → no-op, near-zero latency. First run on a new machine hits them once.
+1. **Bun runtime**: `command -v bun`. If missing, surface install instructions to the user — the wrapper exits with a clear message but you should pre-empt that. Cross-platform install:
+   - macOS/Linux: `curl -fsSL https://bun.sh/install | bash`
+   - macOS via Homebrew: `brew install oven-sh/bun/bun`
+   - Windows: `powershell -c "irm bun.sh/install.ps1|iex"`
+   - After install the user must restart their shell (or source the bun config) before continuing.
+2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. If missing, the wrapper lazily installs via `bun install` on first invocation. You can pre-warm by running `${CLAUDE_PLUGIN_ROOT}/bin/crux --help` once. First install takes a few seconds; subsequent invocations are instant.
+3. **Database**: `test -f ~/.local/share/crux/crux.db`. If missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
+4. **User config**: `test -f ~/.config/crux/config.toml`. If missing, ask the user for their name and email, then `${CLAUDE_PLUGIN_ROOT}/bin/crux user init --name "..." --email "..."`.
 
 ## Load context before contributing
 

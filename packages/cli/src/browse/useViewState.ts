@@ -40,9 +40,7 @@ export function useViewStateFile(): {
   machineView: MachineView;
   send: (event: ViewEvent) => Promise<void>;
 } {
-  const [machineView, setMachineView] = useState<MachineView>(() =>
-    snapshotToView(loadState()),
-  );
+  const [machineView, setMachineView] = useState<MachineView>(() => snapshotToView(loadState()));
 
   useEffect(() => {
     const refresh = () => {

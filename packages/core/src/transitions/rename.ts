@@ -248,9 +248,5 @@ export const renameSolution = (
 export const renameIdea = (oldSlug: string, newSlug: string, updates: RenameUpdates, db: CruxDb) =>
   renameEntity("idea", oldSlug, newSlug, updates, db);
 
-export const renameTheme = (
-  oldSlug: string,
-  newSlug: string,
-  updates: RenameUpdates,
-  db: CruxDb,
-) => renameEntity("theme", oldSlug, newSlug, updates, db);
+export const renameTheme = (oldSlug: string, newSlug: string, updates: RenameUpdates, db: CruxDb) =>
+  renameEntity("theme", oldSlug, newSlug, updates, db);

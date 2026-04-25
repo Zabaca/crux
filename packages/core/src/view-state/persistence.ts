@@ -146,10 +146,7 @@ export async function sendViewEvent(
   // If nothing changed and the event had a guard, we refused.
   if (sameState(current, next)) {
     if (event.type === "SELECT_WORKSTREAM" && !workstreamExists) {
-      throw new ViewEventRefusedError(
-        "GUARD_REJECTED",
-        `workstream not found: ${event.slug}`,
-      );
+      throw new ViewEventRefusedError("GUARD_REJECTED", `workstream not found: ${event.slug}`);
     }
     if (event.type === "OPEN_PROBLEM" && !problemExistsInWorkstream) {
       const ws = current.context.workstreamSlug ?? "<none>";
