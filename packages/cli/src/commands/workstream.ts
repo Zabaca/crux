@@ -3,7 +3,7 @@ import { getDb } from "@crux/core";
 import { workstreams } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
 import { WorkstreamInput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
+import { NotFoundError, renameWorkstream } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -66,7 +66,31 @@ const showCmd = defineCommand({
   },
 });
 
+const renameCmd = defineCommand({
+  meta: {
+    name: "rename",
+    description: "Rename a workstream slug (cascades to all FK referrers).",
+  },
+  args: {
+    oldSlug: { type: "positional", required: true, description: "Current slug" },
+    newSlug: { type: "positional", required: true, description: "New slug" },
+    title: { type: "string" },
+    description: { type: "string" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const r = await renameWorkstream(
+      args.oldSlug,
+      args.newSlug,
+      { title: args.title, description: args.description },
+      getDb(),
+    );
+    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+  },
+});
+
 export const workstreamCommand = defineCommand({
   meta: { name: "workstream", description: "Workstreams." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd },
+  subCommands: { add: addCmd, list: listCmd, show: showCmd, rename: renameCmd },
 });

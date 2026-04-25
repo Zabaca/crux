@@ -3,7 +3,7 @@ import { getDb } from "@crux/core";
 import { ideas, problems, solutions, workstreams } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
 import { IdeaInput, IdeaPromoteInput, IdeaArchiveInput } from "@crux/core/validation";
-import { NotFoundError, archiveIdea } from "@crux/core/transitions";
+import { NotFoundError, archiveIdea, renameIdea } from "@crux/core/transitions";
 import { eq, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -181,6 +181,30 @@ const archiveCmd = defineCommand({
   },
 });
 
+const renameCmd = defineCommand({
+  meta: {
+    name: "rename",
+    description: "Rename an idea slug (cascades to all FK referrers).",
+  },
+  args: {
+    oldSlug: { type: "positional", required: true, description: "Current slug" },
+    newSlug: { type: "positional", required: true, description: "New slug" },
+    title: { type: "string" },
+    description: { type: "string" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const r = await renameIdea(
+      args.oldSlug,
+      args.newSlug,
+      { title: args.title, description: args.description },
+      getDb(),
+    );
+    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+  },
+});
+
 export const ideaCommand = defineCommand({
   meta: { name: "idea", description: "Ideas — raw, uncommitted notes." },
   subCommands: {
@@ -189,5 +213,6 @@ export const ideaCommand = defineCommand({
     show: showCmd,
     promote: promoteCmd,
     archive: archiveCmd,
+    rename: renameCmd,
   },
 });

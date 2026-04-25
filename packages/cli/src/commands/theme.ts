@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { solutions, themes, themeSolutions, workstreams } from "@crux/core/db/schema";
 import { ThemeAttachInput, ThemeInput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
+import { NotFoundError, renameTheme } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -110,7 +110,37 @@ const attachCmd = defineCommand({
   },
 });
 
+const renameCmd = defineCommand({
+  meta: {
+    name: "rename",
+    description: "Rename a theme slug (cascades to all FK referrers).",
+  },
+  args: {
+    oldSlug: { type: "positional", required: true, description: "Current slug" },
+    newSlug: { type: "positional", required: true, description: "New slug" },
+    title: { type: "string" },
+    description: { type: "string" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const r = await renameTheme(
+      args.oldSlug,
+      args.newSlug,
+      { title: args.title, description: args.description },
+      getDb(),
+    );
+    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+  },
+});
+
 export const themeCommand = defineCommand({
   meta: { name: "theme", description: "Themes — cross-Problem groupings of Solutions." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, attach: attachCmd },
+  subCommands: {
+    add: addCmd,
+    list: listCmd,
+    show: showCmd,
+    attach: attachCmd,
+    rename: renameCmd,
+  },
 });

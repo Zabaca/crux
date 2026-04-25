@@ -3,7 +3,7 @@ import { getDb } from "@crux/core";
 import { problems, solutions } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
 import { SolutionInput } from "@crux/core/validation";
-import { NotFoundError, shipSolution } from "@crux/core/transitions";
+import { NotFoundError, renameSolution, shipSolution } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -99,7 +99,31 @@ const shipCmd = defineCommand({
   },
 });
 
+const renameCmd = defineCommand({
+  meta: {
+    name: "rename",
+    description: "Rename a solution slug (cascades to all FK referrers).",
+  },
+  args: {
+    oldSlug: { type: "positional", required: true, description: "Current slug" },
+    newSlug: { type: "positional", required: true, description: "New slug" },
+    title: { type: "string" },
+    description: { type: "string" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const r = await renameSolution(
+      args.oldSlug,
+      args.newSlug,
+      { title: args.title, description: args.description },
+      getDb(),
+    );
+    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+  },
+});
+
 export const solutionCommand = defineCommand({
   meta: { name: "solution", description: "Solutions." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, ship: shipCmd },
+  subCommands: { add: addCmd, list: listCmd, show: showCmd, ship: shipCmd, rename: renameCmd },
 });
