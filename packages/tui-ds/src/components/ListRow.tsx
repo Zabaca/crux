@@ -34,7 +34,7 @@ export function ListRow({
           <Text> </Text>
         </>
       ) : null}
-      <Box flexShrink={1} flexGrow={1}>
+      <Box flexShrink={1} flexGrow={1} minWidth={0}>
         <Text bold={focused} wrap="truncate-end">
           {title}
         </Text>
