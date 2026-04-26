@@ -1,26 +1,30 @@
+import { z } from "zod";
 import { setup, assign } from "xstate";
 
-/**
- * Machine-based view control bus.
- *
- * The machine is the single source of view truth for both surfaces (TUI + web).
- * It's pure (no IO). Transitions are gated by guards that validate against the
- * live db; the guards are provided at the call site (see persistence.ts) so the
- * machine stays side-effect-free.
- *
- * Defaults for guards are fail-closed (`() => false`), so if someone forgets
- * to wire db-backed guards they'll see refusals rather than silent corruption.
- */
+const SelectWorkstreamEvent = z.object({ type: z.literal("SELECT_WORKSTREAM"), slug: z.string() });
+const OpenProblemEvent = z.object({ type: z.literal("OPEN_PROBLEM"), slug: z.string() });
+const BackEvent = z.object({ type: z.literal("BACK") });
+
+export const ViewEventSchema = z.discriminatedUnion("type", [
+  SelectWorkstreamEvent,
+  OpenProblemEvent,
+  BackEvent,
+]);
+
+export type ViewEvent = z.infer<typeof ViewEventSchema>;
 
 export type ViewContext = {
   workstreamSlug: string | null;
   problemSlug: string | null;
 };
 
-export type ViewEvent =
-  | { type: "SELECT_WORKSTREAM"; slug: string }
-  | { type: "OPEN_PROBLEM"; slug: string }
-  | { type: "BACK" };
+// Keyed by ViewEvent["type"] so TypeScript errors if a new event is added
+// to the schema above without updating this map.
+export const VIEW_EVENT_PAYLOAD_HINTS: Record<ViewEvent["type"], Record<string, string> | null> = {
+  SELECT_WORKSTREAM: { slug: "string" },
+  OPEN_PROBLEM: { slug: "string" },
+  BACK: null,
+};
 
 export const viewMachine = setup({
   types: {

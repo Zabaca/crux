@@ -51,6 +51,14 @@ Before the first `crux` command in a session, run these checks in order and act 
 2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. If missing, the wrapper lazily installs via `bun install` on first invocation. You can pre-warm by running `${CLAUDE_PLUGIN_ROOT}/bin/crux --help` once. First install takes a few seconds; subsequent invocations are instant.
 3. **Database**: `test -f ~/.local/share/crux/crux.db`. If missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
 4. **User config**: `test -f ~/.config/crux/config.toml`. If missing, ask the user for their name and email, then `${CLAUDE_PLUGIN_ROOT}/bin/crux user init --name "..." --email "..."`.
+5. **Agent bus (team + inbox)**: Ensure the `crux-mvp` team exists and your inbox is seeded so the web/TUI notify button can wake you:
+   - Check: `test -f ~/.claude/teams/crux-mvp/config.json`
+   - If missing: use the `TeamCreate` tool with `team_name: "crux-mvp"`, then seed the inbox:
+     ```sh
+     mkdir -p ~/.claude/teams/crux-mvp/inboxes
+     echo '[]' > ~/.claude/teams/crux-mvp/inboxes/team-lead.json
+     ```
+   - If already exists: no-op.
 
 ## Load context before contributing
 

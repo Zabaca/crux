@@ -7,6 +7,7 @@ import {
   resolveViewStatePath,
   sendViewEvent,
   ViewEventRefusedError,
+  VIEW_EVENT_PAYLOAD_HINTS,
   type ViewEvent,
 } from "@crux/core/view-state";
 import { emit, emitError, setJsonMode } from "../output.js";
@@ -32,7 +33,16 @@ const nextCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const snap = loadState();
     const events = nextEvents(snap);
-    emit({ value: snap.value, events }, events.join("\n") || "(none)");
+    const withHints = events.map((type) => ({
+      type,
+      payload: VIEW_EVENT_PAYLOAD_HINTS[type as ViewEvent["type"]] ?? null,
+    }));
+    const text = withHints.length
+      ? withHints
+          .map((e) => `${e.type}${e.payload ? `  ${JSON.stringify(e.payload)}` : "  (no payload)"}`)
+          .join("\n")
+      : "(none)";
+    emit({ value: snap.value, events: withHints }, text);
   },
 });
 

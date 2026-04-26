@@ -5,7 +5,7 @@ import { createActor, type Snapshot } from "xstate";
 import { getDb } from "../db/client.js";
 import { problems, workstreams } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
-import { viewMachine, type ViewEvent } from "./machine.js";
+import { viewMachine, ViewEventSchema, type ViewEvent } from "./machine.js";
 
 type ViewSnapshot = ReturnType<ReturnType<typeof createActor<typeof viewMachine>>["getSnapshot"]>;
 type PersistedViewSnapshot = ReturnType<
@@ -92,8 +92,8 @@ function getPersistedSnapshotFrom(snapshot: ViewSnapshot): PersistedViewSnapshot
 
 /** Error thrown when a view event is refused by a guard or illegal in the current state. */
 export class ViewEventRefusedError extends Error {
-  code: "GUARD_REJECTED" | "ILLEGAL_EVENT";
-  constructor(code: "GUARD_REJECTED" | "ILLEGAL_EVENT", message: string) {
+  code: "INVALID_PAYLOAD" | "GUARD_REJECTED" | "ILLEGAL_EVENT";
+  constructor(code: "INVALID_PAYLOAD" | "GUARD_REJECTED" | "ILLEGAL_EVENT", message: string) {
     super(message);
     this.name = "ViewEventRefusedError";
     this.code = code;
@@ -110,6 +110,14 @@ export async function sendViewEvent(
   event: ViewEvent,
   options: { path?: string } = {},
 ): Promise<ViewSnapshot> {
+  const parsed = ViewEventSchema.safeParse(event);
+  if (!parsed.success) {
+    const msg = parsed.error.issues
+      .map((i) => `${i.path.join(".") || "event"}: ${i.message}`)
+      .join("; ");
+    throw new ViewEventRefusedError("INVALID_PAYLOAD", msg);
+  }
+
   const path = options.path ?? resolveViewStatePath();
   const current = loadState(path);
 

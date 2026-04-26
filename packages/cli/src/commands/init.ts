@@ -4,7 +4,8 @@ import { drizzle } from "drizzle-orm/libsql";
 import { migrate } from "drizzle-orm/libsql/migrator";
 import { mkdirSync, existsSync, readdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { MIGRATIONS_DIR, resolveDbUrl } from "@crux/core/db";
+import { resolveDbUrl } from "@crux/core/db";
+import { MIGRATIONS_DIR } from "@crux/core/db/migrations-path";
 import { emit, setJsonMode } from "../output.js";
 
 function dbFilePath(url: string): string | null {

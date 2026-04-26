@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./db": "./src/db/client.ts",
+    "./db/migrations-path": "./src/db/migrations-path.ts",
     "./db/schema": "./src/db/schema.ts",
     "./transitions": "./src/transitions/index.ts",
     "./validation": "./src/validation/schemas.ts",
@@ -15,6 +16,7 @@
   },
   "dependencies": {
     "chokidar": "^5.0.0",
-    "xstate": "^5.30.0"
+    "xstate": "^5.30.0",
+    "zod": "^4.3.6"
   }
 }

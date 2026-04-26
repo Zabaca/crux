@@ -2,11 +2,7 @@ import { createClient } from "@libsql/client";
 import { drizzle } from "drizzle-orm/libsql";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import * as schema from "./schema.js";
-
-/** Absolute path to the shipped Drizzle migrations folder. */
-export const MIGRATIONS_DIR = fileURLToPath(new URL("./migrations", import.meta.url));
 
 export type CruxDb = ReturnType<typeof drizzle<typeof schema>>;
 
