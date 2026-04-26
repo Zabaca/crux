@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Text, useApp, useInput } from "ink";
+import { Box, Text, useApp, useInput } from "ink";
 import { KeyBar, Screen, type KeyHint } from "@crux/tui-ds/components";
 import {
   getProblemById,
