@@ -1,4 +1,9 @@
-import { loadState, resolveViewStatePath, watchViewStateFile } from "@crux/core/view-state";
+import {
+  loadState,
+  resolveViewStatePath,
+  sendViewEvent,
+  watchViewStateFile,
+} from "@crux/core/view-state";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +21,14 @@ export async function GET() {
         }
       };
 
-      // Emit initial state immediately so clients don't wait for the first write.
+      // Emit initial state so the client knows the current machine state,
+      // but tagged "init" so the listener doesn't navigate on connect.
       try {
         const snap = loadState(path);
-        send({ value: snap.value, context: snap.context });
+        send({ type: "init", value: snap.value, context: snap.context });
       } catch {
         send({
+          type: "init",
           value: { viewing: "workstream_list" },
           context: { workstreamSlug: null, problemSlug: null },
         });
@@ -30,7 +37,7 @@ export async function GET() {
       const handle = watchViewStateFile(path, () => {
         try {
           const snap = loadState(path);
-          send({ value: snap.value, context: snap.context });
+          send({ type: "change", value: snap.value, context: snap.context });
         } catch {
           // ignore transient errors
         }
@@ -64,4 +71,54 @@ export async function GET() {
       Connection: "keep-alive",
     },
   });
+}
+
+/**
+ * Write-back: accept a target {workstreamSlug, problemSlug} from the web UI
+ * and apply the right event sequence so the view-state file stays in sync with
+ * where the user actually is. Errors are swallowed — sync is best-effort.
+ */
+export async function POST(req: Request) {
+  try {
+    const { workstreamSlug, problemSlug, queue } = (await req.json()) as {
+      workstreamSlug: string | null;
+      problemSlug: string | null;
+      queue?: "intake" | "ideas" | null;
+    };
+
+    const current = loadState();
+    const leaf = JSON.stringify(current.value);
+
+    // Helper: ensure we're at workstream_dashboard for the given slug.
+    const ensureAtDashboard = async (slug: string) => {
+      if (current.context.workstreamSlug !== slug) {
+        if (!leaf.includes("workstream_list")) await sendViewEvent({ type: "BACK" });
+        await sendViewEvent({ type: "SELECT_WORKSTREAM", slug });
+      } else if (
+        leaf.includes("problem_detail") ||
+        leaf.includes("intake_queue") ||
+        leaf.includes("ideas_queue")
+      ) {
+        await sendViewEvent({ type: "BACK" });
+      }
+    };
+
+    if (problemSlug && workstreamSlug) {
+      if (current.context.workstreamSlug !== workstreamSlug) {
+        await sendViewEvent({ type: "SELECT_WORKSTREAM", slug: workstreamSlug });
+      }
+      await sendViewEvent({ type: "OPEN_PROBLEM", slug: problemSlug });
+    } else if (queue && workstreamSlug) {
+      await ensureAtDashboard(workstreamSlug);
+      await sendViewEvent({ type: queue === "intake" ? "SELECT_INTAKE" : "SELECT_IDEAS" });
+    } else if (workstreamSlug) {
+      await ensureAtDashboard(workstreamSlug);
+    } else {
+      if (!leaf.includes("workstream_list")) await sendViewEvent({ type: "BACK" });
+    }
+
+    return Response.json({ ok: true });
+  } catch {
+    return Response.json({ ok: false });
+  }
 }

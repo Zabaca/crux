@@ -4,11 +4,14 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { stateToPath, type ViewSnapshotJson } from "@/lib/state-to-path";
 
+type ViewStateMessage = ViewSnapshotJson & { type: "init" | "change" };
+
 /**
  * Client-side bridge: opens an EventSource to /api/view-state and routes
- * the browser to the path derived from each incoming machine snapshot.
+ * the browser to the path derived from agent-driven state changes.
  *
- * Mounted in root layout so every page participates in the bus.
+ * Only navigates on "change" events — "init" events (emitted on connect/reconnect)
+ * are ignored so manual browser navigation isn't overridden.
  */
 export function ViewStateListener() {
   const router = useRouter();
@@ -18,9 +21,9 @@ export function ViewStateListener() {
     const es = new EventSource("/api/view-state");
     es.onmessage = (ev) => {
       try {
-        const snap = JSON.parse(ev.data) as ViewSnapshotJson;
-        const target = stateToPath(snap);
-        // Use replace when we're already at the target to avoid polluting history.
+        const msg = JSON.parse(ev.data) as ViewStateMessage;
+        if (msg.type !== "change") return;
+        const target = stateToPath(msg);
         if (target !== pathname) {
           router.push(target);
         } else {

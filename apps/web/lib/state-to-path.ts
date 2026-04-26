@@ -17,6 +17,12 @@ export function stateToPath(snapshot: ViewSnapshotJson): string {
   if (leaf.endsWith("problem_detail") && ctx.workstreamSlug && ctx.problemSlug) {
     return `/w/${ctx.workstreamSlug}/problems/${ctx.problemSlug}`;
   }
+  if (leaf.endsWith("intake_queue") && ctx.workstreamSlug) {
+    return `/w/${ctx.workstreamSlug}/queues/intake`;
+  }
+  if (leaf.endsWith("ideas_queue") && ctx.workstreamSlug) {
+    return `/w/${ctx.workstreamSlug}/queues/ideas`;
+  }
   if (leaf.endsWith("workstream_dashboard") && ctx.workstreamSlug) {
     return `/w/${ctx.workstreamSlug}`;
   }

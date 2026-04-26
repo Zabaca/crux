@@ -95,6 +95,18 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         const p = await getProblemBySlug(machineView.problemSlug);
         if (cancelled || !ws || !p) return;
         setView({ kind: "problem", workstream: ws, problemId: p.id });
+        return;
+      }
+      if (machineView.kind === "intake_queue") {
+        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
+        if (cancelled || !ws) return;
+        setView({ kind: "intake", workstream: ws });
+        return;
+      }
+      if (machineView.kind === "ideas_queue") {
+        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
+        if (cancelled || !ws) return;
+        setView({ kind: "ideas", workstream: ws });
       }
     })();
     return () => {
