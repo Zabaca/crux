@@ -9,6 +9,7 @@ import { EmptyState } from "./components/EmptyState.js";
 import { ScrollableList } from "./components/ScrollableList.js";
 import { WorkstreamDashboard } from "./screens/WorkstreamDashboard.js";
 import { ProblemDetail } from "./screens/ProblemDetail.js";
+import { useTerminalSize } from "./hooks/index.js";
 import { color } from "./tokens.js";
 
 type SectionDef = { title: string; content: React.ReactElement };
@@ -162,6 +163,7 @@ function Viewer(): React.ReactElement {
   const [idx, setIdx] = useState(0);
   const [picking, setPicking] = useState(false);
   const [pickIdx, setPickIdx] = useState(0);
+  const { rows } = useTerminalSize();
   const section = sections[idx]!;
 
   useInput((input, key) => {
@@ -199,7 +201,7 @@ function Viewer(): React.ReactElement {
   });
 
   return (
-    <Box flexDirection="column" height={process.stdout.rows} paddingX={1}>
+    <Box flexDirection="column" height={rows} paddingX={1}>
       <Box marginBottom={1}>
         <Text bold color={color.accent}>
           {picking ? "pick a section" : section.title}
