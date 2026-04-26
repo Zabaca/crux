@@ -2,6 +2,8 @@ import React from "react";
 import { Box, Text, render, useApp, useInput } from "ink";
 import { StatusBadge } from "./components/StatusBadge.js";
 import { KeyBar } from "./components/KeyBar.js";
+import { ListRow } from "./components/ListRow.js";
+import { DetailPane, DetailSection } from "./components/DetailPane.js";
 import { color } from "./tokens.js";
 
 function Divider(): React.ReactElement {
@@ -71,6 +73,56 @@ function Viewer(): React.ReactElement {
             { key: "/", label: "search" },
           ]}
         />
+      </Section>
+
+      <Section title="ListRow — variants">
+        <Box flexDirection="column" width="100%">
+          <ListRow
+            focused
+            slug="thinking-residue-gap"
+            title="Product thinking evaporates between sessions"
+            badges={<StatusBadge variant="lifecycle" status="shaping" />}
+            meta="3 evidence"
+          />
+          <ListRow
+            slug="thinking-residue-gap"
+            title="Product thinking evaporates between sessions"
+            badges={<StatusBadge variant="lifecycle" status="shaping" />}
+            meta="3 evidence"
+          />
+          <ListRow
+            slug="onboarding-dropoff"
+            title="Users churn before first value moment"
+            badges={<StatusBadge variant="priority" tier="P0" />}
+            meta="7 evidence"
+          />
+          <ListRow slug="obs-042" title="GitHub issue: no correction path after wrong filing" />
+        </Box>
+      </Section>
+
+      <Section title="DetailPane">
+        <DetailPane
+          title="Product thinking evaporates between sessions"
+          subtitle="thinking-residue-gap"
+          badges={
+            <>
+              <StatusBadge variant="lifecycle" status="shaping" />
+              <Text> </Text>
+              <StatusBadge variant="priority" tier="P1" />
+            </>
+          }
+        >
+          <DetailSection label="Description">
+            <Text>
+              Each Claude Code session starts cold. Decisions, rationale, and direction from prior
+              sessions aren't reloadable — they exist only in scrollback or memory.
+            </Text>
+          </DetailSection>
+          <DetailSection label="Evidence (2)">
+            <Text>· obs-017 — restart cost dominates short engagements</Text>
+            <Text>· obs-031 — parallel workstreams drift undetected</Text>
+          </DetailSection>
+        </DetailPane>
       </Section>
 
       <Divider />
