@@ -83,17 +83,14 @@ export function WorkstreamPicker({
 
 // ---------- Workstream dashboard ----------
 
-type DashboardEntry =
-  | { kind: "problem"; problem: ProblemSummary }
-  | { kind: "intake" }
-  | { kind: "ideas" };
+type DashboardEntry = { kind: "problem"; problem: ProblemSummary };
 
 export function WorkstreamDashboard({
   workstream,
   showArchived,
   onOpenProblem,
-  onOpenIntake,
-  onOpenIdeas,
+  onOpenIntake: _onOpenIntake,
+  onOpenIdeas: _onOpenIdeas,
 }: {
   workstream: Workstream;
   showArchived: boolean;
@@ -185,43 +182,8 @@ export function WorkstreamDashboard({
   );
 }
 
-function tierLabel(tier: string | null): string {
-  return (tier ?? "--").padEnd(3);
-}
-
-function entryForValue(entries: DashboardEntry[], value: string): DashboardEntry | null {
-  if (value === "intake") return entries.find((e) => e.kind === "intake") ?? null;
-  if (value === "ideas") return entries.find((e) => e.kind === "ideas") ?? null;
-  if (value.startsWith("p:")) {
-    const id = value.slice(2);
-    return (
-      entries.find(
-        (e): e is Extract<DashboardEntry, { kind: "problem" }> =>
-          e.kind === "problem" && e.problem.id === id,
-      ) ?? null
-    );
-  }
-  return null;
-}
-
 function DashboardDetail({ entry }: { entry: DashboardEntry | null }): React.ReactElement {
   if (!entry) return <Text color="gray">(nothing selected)</Text>;
-  if (entry.kind === "intake") {
-    return (
-      <Box flexDirection="column">
-        <Text bold>Intake queue</Text>
-        <Text color="gray">Observations not yet linked to any Problem.</Text>
-      </Box>
-    );
-  }
-  if (entry.kind === "ideas") {
-    return (
-      <Box flexDirection="column">
-        <Text bold>Ideas queue</Text>
-        <Text color="gray">Ideas not yet promoted to a Solution.</Text>
-      </Box>
-    );
-  }
   const p = entry.problem;
   return (
     <Box flexDirection="column">
