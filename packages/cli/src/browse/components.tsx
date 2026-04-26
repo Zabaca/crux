@@ -1,5 +1,6 @@
 import React from "react";
 import { Box, Text } from "ink";
+import { KeyBar } from "@crux/tui-ds/components";
 import type { ArchiveBlock } from "./queries.js";
 
 type Color = "black" | "red" | "green" | "yellow" | "blue" | "magenta" | "cyan" | "white" | "gray";
@@ -76,8 +77,8 @@ export function Empty({ label }: { label: string }): React.ReactElement {
 
 export function Footer({ hints }: { hints: Array<[string, string]> }): React.ReactElement {
   return (
-    <Box marginTop={1} borderStyle="single" borderColor="gray" paddingX={1}>
-      <Text color="gray">{hints.map(([k, v]) => `${k}:${v}`).join("  ")}</Text>
+    <Box marginTop={1}>
+      <KeyBar hints={hints.map(([key, label]) => ({ key, label }))} />
     </Box>
   );
 }
