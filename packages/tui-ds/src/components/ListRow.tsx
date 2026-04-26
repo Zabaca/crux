@@ -22,9 +22,11 @@ export function ListRow({
       <Text color={focused ? color.accent : undefined} bold={focused}>
         {focused ? "▶ " : "  "}
       </Text>
-      <Text color={color.dim} wrap="truncate-end">
-        {slug}
-      </Text>
+      <Box width={Math.min(slug.length, 24)} flexShrink={0}>
+        <Text color={color.dim} wrap="truncate-end">
+          {slug}
+        </Text>
+      </Box>
       <Text> </Text>
       {badges ? (
         <>
