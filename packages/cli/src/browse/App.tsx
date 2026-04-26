@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
+import { useTerminalSize } from "@crux/tui-ds/hooks";
 import {
   getProblemById,
   getProblemBySlug,
@@ -45,6 +46,7 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(!initialSlug);
   const { machineView, send } = useViewStateFile();
+  const { rows } = useTerminalSize();
 
   // Track the last machineView we applied, so we don't re-apply identical state
   // and don't clobber local non-machine views (e.g. solution/observation).
@@ -180,7 +182,7 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   const body = renderBody();
 
   return (
-    <Box flexDirection="column" height={process.stdout.rows}>
+    <Box flexDirection="column" height={rows}>
       {body}
     </Box>
   );
