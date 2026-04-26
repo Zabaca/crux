@@ -20,7 +20,6 @@ import {
 import {
   ArchivedTag,
   Empty,
-  Footer,
   LifecycleBadge,
   PriorityBadge,
   SectionTitle,
@@ -50,7 +49,6 @@ export function WorkstreamPicker({
       <Box flexDirection="column">
         <Text bold>Workstreams</Text>
         <Empty label="no workstreams" />
-        <Footer hints={[["q", "quit"]]} />
       </Box>
     );
   }
@@ -70,13 +68,6 @@ export function WorkstreamPicker({
     <Box flexDirection="column">
       <Text bold>Workstreams</Text>
       <SelectInput items={items} onSelect={handle} />
-      <Footer
-        hints={[
-          ["↑↓", "nav"],
-          ["↵", "open"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }
@@ -169,15 +160,6 @@ export function WorkstreamDashboard({
           <DashboardDetail entry={highlighted} />
         </Box>
       </Box>
-      <Footer
-        hints={[
-          ["↑↓", "nav"],
-          ["↵", "open"],
-          ["esc", "back"],
-          ["a", showArchived ? "hide archived" : "show archived"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }
@@ -350,15 +332,6 @@ export function ProblemDetailView({
           <ProblemDetailPane target={highlighted} data={data} />
         </Box>
       </Box>
-
-      <Footer
-        hints={[
-          ["↑↓", "nav"],
-          ["↵", "open"],
-          ["esc", "back"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }
@@ -602,13 +575,6 @@ export function SolutionDetailView({ solutionId }: { solutionId: string }): Reac
           <Empty label="no decision, elimination, or outcome yet" />
         </Box>
       ) : null}
-
-      <Footer
-        hints={[
-          ["esc", "back"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }
@@ -660,13 +626,6 @@ export function ObservationDetailView({
           </Box>
         ))
       )}
-
-      <Footer
-        hints={[
-          ["esc", "back"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }
@@ -722,15 +681,6 @@ export function IntakeQueueView({
             ))}
         </Box>
       ) : null}
-      <Footer
-        hints={[
-          ["↑↓", "nav"],
-          ["↵", "open"],
-          ["esc", "back"],
-          ["a", showArchived ? "hide archived" : "show archived"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }
@@ -777,13 +727,6 @@ export function IdeasQueueView({
           </Box>
         ))
       )}
-      <Footer
-        hints={[
-          ["esc", "back"],
-          ["a", showArchived ? "hide archived" : "show archived"],
-          ["q", "quit"],
-        ]}
-      />
     </Box>
   );
 }

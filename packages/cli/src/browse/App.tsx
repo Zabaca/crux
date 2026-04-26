@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Box, Text, useApp, useInput } from "ink";
-import { useTerminalSize } from "@crux/tui-ds/hooks";
+import { Text, useApp, useInput } from "ink";
+import { KeyBar, Screen, type KeyHint } from "@crux/tui-ds/components";
 import {
   getProblemById,
   getProblemBySlug,
@@ -46,7 +46,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(!initialSlug);
   const { machineView, send } = useViewStateFile();
-  const { rows } = useTerminalSize();
 
   // Track the last machineView we applied, so we don't re-apply identical state
   // and don't clobber local non-machine views (e.g. solution/observation).
@@ -180,12 +179,58 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   };
 
   const body = renderBody();
+  const hints = hintsForView(view, showArchived);
 
-  return (
-    <Box flexDirection="column" height={rows}>
-      {body}
-    </Box>
-  );
+  function hintsForView(v: View, archived: boolean): KeyHint[] {
+    const archivedHint: KeyHint = { key: "a", label: archived ? "hide archived" : "show archived" };
+    switch (v.kind) {
+      case "picker":
+        return [
+          { key: "↑↓", label: "nav" },
+          { key: "↵", label: "open" },
+          { key: "q", label: "quit" },
+        ];
+      case "dashboard":
+        return [
+          { key: "↑↓", label: "nav" },
+          { key: "↵", label: "open" },
+          { key: "esc", label: "back" },
+          archivedHint,
+          { key: "i", label: "intake" },
+          { key: "d", label: "ideas" },
+          { key: "q", label: "quit" },
+        ];
+      case "problem":
+        return [
+          { key: "↑↓", label: "nav" },
+          { key: "↵", label: "open" },
+          { key: "esc", label: "back" },
+          { key: "q", label: "quit" },
+        ];
+      case "solution":
+        return [
+          { key: "esc", label: "back" },
+          { key: "q", label: "quit" },
+        ];
+      case "observation":
+        return [
+          { key: "esc", label: "back" },
+          { key: "q", label: "quit" },
+        ];
+      case "intake":
+        return [
+          { key: "↑↓", label: "nav" },
+          { key: "↵", label: "open" },
+          { key: "esc", label: "back" },
+          archivedHint,
+          { key: "q", label: "quit" },
+        ];
+      case "ideas":
+        return [{ key: "esc", label: "back" }, archivedHint, { key: "q", label: "quit" }];
+    }
+  }
+
+  return <Screen footer={<KeyBar hints={hints} />}>{body}</Screen>;
 
   function renderBody(): React.ReactElement {
     if (!booted) return <Text color="gray">loading…</Text>;
