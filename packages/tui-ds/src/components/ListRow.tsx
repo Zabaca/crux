@@ -18,29 +18,31 @@ export function ListRow({
   meta,
 }: ListRowProps): React.ReactElement {
   return (
-    <Box width="100%">
-      {focused ? (
-        <Text color={color.accent} bold>
-          {"▶ "}
-        </Text>
-      ) : (
-        <Text>{"  "}</Text>
-      )}
-      <Text color={color.dim}>{slug}</Text>
+    <Box>
+      <Text color={focused ? color.accent : undefined} bold={focused}>
+        {focused ? "▶ " : "  "}
+      </Text>
+      <Text color={color.dim} wrap="truncate-end">
+        {slug}
+      </Text>
       <Text> </Text>
       {badges ? (
         <>
-          <Box>{badges}</Box>
+          {badges}
           <Text> </Text>
         </>
       ) : null}
-      <Box flexShrink={1}>
+      <Box flexShrink={1} flexGrow={1}>
         <Text bold={focused} wrap="truncate-end">
           {title}
         </Text>
       </Box>
-      <Box flexGrow={1} />
-      {meta ? <Text color={color.dim}>{meta}</Text> : null}
+      {meta ? (
+        <>
+          <Text> </Text>
+          <Text color={color.dim}>{meta}</Text>
+        </>
+      ) : null}
     </Box>
   );
 }
