@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "viewer": "bun run src/viewer.tsx"
+    "viewer": "bun run src/viewer.tsx",
+    "dev": "bun --watch src/viewer.tsx"
   },
   "dependencies": {
     "ink": "^7.0.1",
