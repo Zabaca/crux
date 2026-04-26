@@ -32,7 +32,7 @@ function Viewer(): React.ReactElement {
   });
 
   return (
-    <Box flexDirection="column" paddingX={1}>
+    <Box flexDirection="column" height={process.stdout.rows} paddingX={1}>
       <Text bold>crux · tui design system</Text>
       <Divider />
 
@@ -79,5 +79,5 @@ function Viewer(): React.ReactElement {
   );
 }
 
-const instance = render(<Viewer />);
+const instance = render(<Viewer />, { alternateScreen: true });
 await instance.waitUntilExit();
