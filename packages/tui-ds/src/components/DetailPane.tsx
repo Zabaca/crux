@@ -16,10 +16,12 @@ export function DetailPane({
   children,
 }: DetailPaneProps): React.ReactElement {
   return (
-    <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1}>
-      <Text bold>{title}</Text>
+    <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1} width="100%">
+      <Text bold wrap="wrap">
+        {title}
+      </Text>
       {subtitle ? <Text color={color.dim}>{subtitle}</Text> : null}
-      {badges ? <Box marginTop={subtitle ? 0 : 0}>{badges}</Box> : null}
+      {badges ? <Box>{badges}</Box> : null}
       <Box flexDirection="column" marginTop={1}>
         {children}
       </Box>
@@ -39,7 +41,7 @@ export function DetailSection({ label, children }: DetailSectionProps): React.Re
         {label.toUpperCase()}
       </Text>
       <Text color={color.dim}>{"─".repeat(Math.max(label.length, 8))}</Text>
-      <Box flexDirection="column" marginTop={0}>
+      <Box flexDirection="column" marginTop={0} width="100%">
         {children}
       </Box>
     </Box>

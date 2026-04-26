@@ -116,7 +116,7 @@ function Viewer(): React.ReactElement {
           }
         >
           <DetailSection label="Description">
-            <Text>
+            <Text wrap="wrap">
               Each Claude Code session starts cold. Decisions, rationale, and direction from prior
               sessions aren't reloadable — they exist only in scrollback or memory.
             </Text>
