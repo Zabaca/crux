@@ -177,74 +177,84 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
     });
   };
 
-  if (!booted) return <Text color="gray">loading…</Text>;
+  const body = renderBody();
 
-  if (bootError) {
-    return (
-      <Box flexDirection="column">
-        <Text color="red">{bootError}</Text>
-        <Text color="gray">press q to quit</Text>
-      </Box>
-    );
-  }
+  return (
+    <Box flexDirection="column" height={process.stdout.rows}>
+      {body}
+    </Box>
+  );
 
-  switch (view.kind) {
-    case "picker":
-      return <WorkstreamPicker onSelect={(ws) => void openWorkstream(ws)} />;
-    case "dashboard":
+  function renderBody(): React.ReactElement {
+    if (!booted) return <Text color="gray">loading…</Text>;
+
+    if (bootError) {
       return (
-        <WorkstreamDashboard
-          workstream={view.workstream}
-          showArchived={showArchived}
-          onOpenProblem={(problemId) => void openProblem(problemId)}
-          onOpenIntake={() => setView({ kind: "intake", workstream: view.workstream })}
-          onOpenIdeas={() => setView({ kind: "ideas", workstream: view.workstream })}
-        />
+        <Box flexDirection="column">
+          <Text color="red">{bootError}</Text>
+          <Text color="gray">press q to quit</Text>
+        </Box>
       );
-    case "problem":
-      return (
-        <ProblemDetailView
-          problemId={view.problemId}
-          onOpenSolution={(solutionId) =>
-            setView({
-              kind: "solution",
-              workstream: view.workstream,
-              solutionId,
-              parent: "problem",
-              problemId: view.problemId,
-            })
-          }
-          onOpenObservation={(observationId) =>
-            setView({
-              kind: "observation",
-              workstream: view.workstream,
-              observationId,
-              parent: "problem",
-              problemId: view.problemId,
-            })
-          }
-        />
-      );
-    case "solution":
-      return <SolutionDetailView solutionId={view.solutionId} />;
-    case "observation":
-      return <ObservationDetailView observationId={view.observationId} />;
-    case "intake":
-      return (
-        <IntakeQueueView
-          workstream={view.workstream}
-          showArchived={showArchived}
-          onOpenObservation={(observationId) =>
-            setView({
-              kind: "observation",
-              workstream: view.workstream,
-              observationId,
-              parent: "intake",
-            })
-          }
-        />
-      );
-    case "ideas":
-      return <IdeasQueueView workstream={view.workstream} showArchived={showArchived} />;
+    }
+
+    switch (view.kind) {
+      case "picker":
+        return <WorkstreamPicker onSelect={(ws) => void openWorkstream(ws)} />;
+      case "dashboard":
+        return (
+          <WorkstreamDashboard
+            workstream={view.workstream}
+            showArchived={showArchived}
+            onOpenProblem={(problemId) => void openProblem(problemId)}
+            onOpenIntake={() => setView({ kind: "intake", workstream: view.workstream })}
+            onOpenIdeas={() => setView({ kind: "ideas", workstream: view.workstream })}
+          />
+        );
+      case "problem":
+        return (
+          <ProblemDetailView
+            problemId={view.problemId}
+            onOpenSolution={(solutionId) =>
+              setView({
+                kind: "solution",
+                workstream: view.workstream,
+                solutionId,
+                parent: "problem",
+                problemId: view.problemId,
+              })
+            }
+            onOpenObservation={(observationId) =>
+              setView({
+                kind: "observation",
+                workstream: view.workstream,
+                observationId,
+                parent: "problem",
+                problemId: view.problemId,
+              })
+            }
+          />
+        );
+      case "solution":
+        return <SolutionDetailView solutionId={view.solutionId} />;
+      case "observation":
+        return <ObservationDetailView observationId={view.observationId} />;
+      case "intake":
+        return (
+          <IntakeQueueView
+            workstream={view.workstream}
+            showArchived={showArchived}
+            onOpenObservation={(observationId) =>
+              setView({
+                kind: "observation",
+                workstream: view.workstream,
+                observationId,
+                parent: "intake",
+              })
+            }
+          />
+        );
+      case "ideas":
+        return <IdeasQueueView workstream={view.workstream} showArchived={showArchived} />;
+    }
   }
 }

@@ -17,7 +17,9 @@ export const browseCommand = defineCommand({
   },
   async run({ args }) {
     const slug = typeof args.workstream === "string" ? args.workstream : undefined;
-    const instance = render(<App initialSlug={slug} />);
+    const instance = render(<App initialSlug={slug} />, {
+      alternateScreen: true,
+    });
     await instance.waitUntilExit();
   },
 });

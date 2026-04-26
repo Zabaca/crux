@@ -59,6 +59,14 @@ Before the first `crux` command in a session, run these checks in order and act 
      echo '[]' > ~/.claude/teams/crux-mvp/inboxes/team-lead.json
      ```
    - If already exists: no-op.
+6. **Web UI**: Check if the Crux web UI is running on port 3210:
+   - Check: `lsof -i :3210 | grep LISTEN`
+   - If running: no-op.
+   - If not running: start it in the background from the plugin/repo root:
+     ```sh
+     cd <repo-root> && bun run --filter @crux/web dev &> /tmp/crux-web-dev.log &
+     ```
+     Wait ~3 seconds, then verify with `curl -s -o /dev/null -w "%{http_code}" http://localhost:3210/`. Once up, open `http://localhost:3210` in the browser for the user.
 
 ## Load context before contributing
 

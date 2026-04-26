@@ -24,3 +24,4 @@ dist/
 # Claude/agent noise — whitelist what's intentional, ignore the rest.
 .claude/*
 !.claude/skills/
+.view-state.json
