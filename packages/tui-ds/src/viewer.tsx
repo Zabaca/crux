@@ -25,7 +25,9 @@ function Section({
       <Text color={color.accent} bold>
         {title}
       </Text>
-      <Box marginTop={1}>{children}</Box>
+      <Box marginTop={1} flexDirection="column">
+        {children}
+      </Box>
     </Box>
   );
 }

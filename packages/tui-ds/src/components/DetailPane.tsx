@@ -16,7 +16,7 @@ export function DetailPane({
   children,
 }: DetailPaneProps): React.ReactElement {
   return (
-    <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1} flexGrow={1}>
+    <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1}>
       <Box flexDirection="column" flexShrink={1}>
         <Text bold wrap="wrap">
           {title}
