@@ -75,6 +75,22 @@
         "zod": "^4.3.6",
       },
     },
+    "packages/tui-ds": {
+      "name": "@crux/tui-ds",
+      "version": "0.0.1",
+      "dependencies": {
+        "ink": "^7.0.1",
+        "react": "^19.2.5",
+      },
+      "devDependencies": {
+        "@types/react": "^19.2.14",
+        "typescript": "^5.6.0",
+      },
+      "peerDependencies": {
+        "ink": ">=4",
+        "react": ">=18",
+      },
+    },
   },
   "packages": {
     "@alcalzone/ansi-tokenize": ["@alcalzone/ansi-tokenize@0.3.0", "", { "dependencies": { "ansi-styles": "^6.2.1", "is-fullwidth-code-point": "^5.0.0" } }, "sha512-p+CMKJ93HFmLkjXKlXiVGlMQEuRb6H0MokBSwUsX+S6BRX8eV5naFZpQJFfJHjRZY0Hmnqy1/r6UWl3x+19zYA=="],
@@ -90,6 +106,8 @@
     "@crux/cli": ["@crux/cli@workspace:packages/cli"],
 
     "@crux/core": ["@crux/core@workspace:packages/core"],
+
+    "@crux/tui-ds": ["@crux/tui-ds@workspace:packages/tui-ds"],
 
     "@crux/web": ["@crux/web@workspace:apps/web"],
 

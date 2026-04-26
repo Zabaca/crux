@@ -1,0 +1,21 @@
+{
+  "name": "@crux/tui-ds",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "viewer": "bun run src/viewer.tsx"
+  },
+  "dependencies": {
+    "ink": "^7.0.1",
+    "react": "^19.2.5"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "typescript": "^5.6.0"
+  },
+  "peerDependencies": {
+    "ink": ">=4",
+    "react": ">=18"
+  }
+}
