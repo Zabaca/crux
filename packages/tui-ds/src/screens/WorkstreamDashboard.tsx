@@ -9,21 +9,51 @@ import { color } from "../tokens.js";
 const problems = [
   {
     slug: "thinking-residue-gap",
-    title: "Product thinking evaporates between sessions",
+    title: "Discovery thinking has no structured residue across conversations or projects",
     status: "shaping",
-    evidence: 3,
+    priority: "P0",
+    evidence: 11,
+    solutions: 4,
   },
   {
-    slug: "onboarding-dropoff",
-    title: "Users churn before first value moment",
-    status: "committed",
-    evidence: 7,
+    slug: "schema-change-destroys-residue",
+    title: "Schema-change verification workflow destroyed dogfooded state",
+    status: "shaping",
+    priority: "P1",
+    evidence: 1,
+    solutions: 3,
   },
   {
-    slug: "context-reload-friction",
-    title: "Reloading context takes too long manually",
+    slug: "silent-env-override-misroutes-data",
+    title: "bin/crux dev-mode guard silently misroutes real user data to wrong db",
     status: "shaping",
+    priority: "P1",
     evidence: 2,
+    solutions: 3,
+  },
+  {
+    slug: "observation-correction-gap",
+    title: "Observations have no correction path after wrong filing",
+    status: "shaping",
+    priority: "P2",
+    evidence: 1,
+    solutions: 2,
+  },
+  {
+    slug: "external-intake-gap",
+    title: "Inbound external signals have no structured intake path",
+    status: "shaping",
+    priority: "P2",
+    evidence: 2,
+    solutions: 0,
+  },
+  {
+    slug: "skill-proposal-form-mismatch",
+    title: "Skill proposal pattern required CLI form, burying substance under shell syntax",
+    status: "shaping",
+    priority: "P2",
+    evidence: 1,
+    solutions: 2,
   },
 ];
 
@@ -45,8 +75,8 @@ export function WorkstreamDashboard(): React.ReactElement {
             items={problems.map((p) => ({
               slug: p.slug,
               title: p.title,
-              badges: <StatusBadge variant="lifecycle" status={p.status} />,
-              meta: `${p.evidence} evidence`,
+              badges: <StatusBadge variant="priority" tier={p.priority} />,
+              meta: `ev:${p.evidence} sol:${p.solutions}`,
             }))}
           />
         </Box>

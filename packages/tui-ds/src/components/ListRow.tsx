@@ -34,7 +34,11 @@ export function ListRow({
           <Text> </Text>
         </>
       ) : null}
-      <Text bold={focused}>{title}</Text>
+      <Box flexShrink={1}>
+        <Text bold={focused} wrap="truncate-end">
+          {title}
+        </Text>
+      </Box>
       <Box flexGrow={1} />
       {meta ? <Text color={color.dim}>{meta}</Text> : null}
     </Box>

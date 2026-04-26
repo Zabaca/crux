@@ -8,27 +8,53 @@ import { StatusBadge } from "../components/StatusBadge.js";
 
 const problem = {
   slug: "thinking-residue-gap",
-  title: "Product thinking evaporates between sessions",
+  title: "Discovery thinking has no structured residue across conversations or projects",
   status: "shaping",
-  priority: "P1",
+  priority: "P0",
 };
 
 const evidence = [
-  { id: "obs-017", content: "Restart cost dominates short engagements" },
-  { id: "obs-031", content: "Parallel workstreams drift undetected" },
-  { id: "obs-042", content: "No correction path after wrong filing" },
+  {
+    id: "OBS-001",
+    content:
+      "Discovery thinking vanishes when conversations end — no structured capture path exists",
+  },
+  {
+    id: "OBS-003",
+    content:
+      "Modesk: concrete forcing instance — historical engagement where context loss directly cost re-work",
+  },
+  {
+    id: "OBS-005",
+    content:
+      "Notion has a hosted MCP server for Claude Code but is read-only; can't write structured state",
+  },
+  {
+    id: "OBS-006",
+    content: "Linear MCP covers execution tracking, not upstream product thinking",
+  },
+  {
+    id: "OBS-007",
+    content: "Productboard fits the shape but not the economics for a solo practitioner",
+  },
 ];
 
 const solutions = [
+  { slug: "build-crux", title: "Build Crux custom per existing design", status: "chosen" },
   {
-    slug: "build-crux",
-    title: "Build Crux as a structured residue CLI",
-    status: "shaping",
+    slug: "research-existing",
+    title: "Research off-the-shelf tools against requirements",
+    status: "evaluated",
   },
   {
-    slug: "notion-backend",
-    title: "Use Notion as a lightweight backend",
-    status: "proposed",
+    slug: "hybrid-existing-storage",
+    title: "Notion as storage backend, custom skill",
+    status: "rejected",
+  },
+  {
+    slug: "status-quo",
+    title: "Continue with scattered docs, accept the growth cap",
+    status: "rejected",
   },
 ];
 
