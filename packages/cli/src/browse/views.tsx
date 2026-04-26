@@ -26,6 +26,7 @@ import {
   SectionTitle,
   SolutionStatusBadge,
 } from "./components.js";
+import { ScrollableList, type ScrollableListItem } from "@crux/tui-ds/components";
 
 type WorkstreamRow = Workstream & { openProblemCount: number };
 
@@ -124,39 +125,20 @@ export function WorkstreamDashboard({
     return <Text color="gray">loading dashboard…</Text>;
   }
 
-  const entries: DashboardEntry[] = [
-    ...rows.map((p): DashboardEntry => ({ kind: "problem", problem: p })),
-    { kind: "intake" },
-    { kind: "ideas" },
-  ];
+  const problemItems: ScrollableListItem[] = rows.map((p) => ({
+    slug: p.slug,
+    title: p.title,
+    badges: <PriorityBadge tier={p.priorityTier} />,
+    meta: `ev:${p.evidenceCount} sol:${p.solutionCount}`,
+  }));
 
-  const items = entries.map((e) => {
-    if (e.kind === "problem") {
-      const p = e.problem;
-      return {
-        key: p.id,
-        label: `${tierLabel(p.priorityTier)} ${p.slug.padEnd(42)} ${p.title}  (ev:${p.evidenceCount} sol:${p.solutionCount})`,
-        value: `p:${p.id}`,
-      };
-    }
-    if (e.kind === "intake") {
-      return {
-        key: "__intake__",
-        label: `Intake queue (${intakeCount} unlinked)`,
-        value: "intake",
-      };
-    }
-    return { key: "__ideas__", label: `Ideas queue (${ideasCount} unpromoted)`, value: "ideas" };
-  });
-
-  const onHighlight = (item: { value: string }) => {
-    const e = entryForValue(entries, item.value);
-    if (e) setHighlighted(e);
+  const onListFocus = (_item: ScrollableListItem, index: number) => {
+    const p = rows[index];
+    if (p) setHighlighted({ kind: "problem", problem: p });
   };
-  const onSelect = (item: { value: string }) => {
-    if (item.value === "intake") onOpenIntake();
-    else if (item.value === "ideas") onOpenIdeas();
-    else if (item.value.startsWith("p:")) onOpenProblem(item.value.slice(2));
+  const onListSelect = (_item: ScrollableListItem, index: number) => {
+    const p = rows[index];
+    if (p) onOpenProblem(p.id);
   };
 
   return (
@@ -170,8 +152,15 @@ export function WorkstreamDashboard({
 
       <Box>
         <Box flexDirection="column" width="50%" paddingRight={1}>
-          {rows.length === 0 ? <Empty label="no open problems" /> : null}
-          <SelectInput items={items} onSelect={onSelect} onHighlight={onHighlight} limit={20} />
+          {rows.length === 0 ? (
+            <Empty label="no open problems" />
+          ) : (
+            <ScrollableList items={problemItems} onFocus={onListFocus} onSelect={onListSelect} />
+          )}
+          <Box marginTop={1} flexDirection="column">
+            <Text color="gray"> Intake queue ({intakeCount} unlinked)</Text>
+            <Text color="gray"> Ideas queue ({ideasCount} unpromoted)</Text>
+          </Box>
         </Box>
         <Box
           flexDirection="column"
@@ -296,81 +285,80 @@ export function ProblemDetailView({
 
   const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = data;
 
-  const items: Array<{ key: string; label: string; value: string; target: ProblemTarget | null }> =
-    [];
+  type Row = { item: ScrollableListItem; target: ProblemTarget; onSelect: () => void };
+  const rows: Row[] = [];
 
-  // Header pseudo-entries are in the detail pane. List contains drill targets only.
-  items.push(
-    ...evidence.map((e) => ({
-      key: e.id,
-      label: `evidence  ${e.observation ? e.observation.id : "?"}  ${e.observation ? truncate(e.observation.content, 50) : ""}${e.observation?.archive ? " (archived)" : ""}`,
-      value: `ev:${e.id}:${e.observationId}`,
-      target: { kind: "evidence" as const, evidenceId: e.id },
-    })),
-  );
-  items.push(
-    ...solutions.map((s) => ({
-      key: s.id,
-      label: `solution  [${s.status.padEnd(9)}] ${s.slug.padEnd(40)} ${s.title}`,
-      value: `sol:${s.id}`,
-      target: { kind: "solution" as const, solutionId: s.id },
-    })),
-  );
+  for (const e of evidence) {
+    const obs = e.observation;
+    rows.push({
+      item: {
+        slug: obs ? obs.id : "?",
+        title: obs ? obs.content : "(missing observation)",
+        meta: obs?.archive ? "archived" : undefined,
+      },
+      target: { kind: "evidence", evidenceId: e.id },
+      onSelect: () => {
+        if (e.observationId) onOpenObservation(e.observationId);
+      },
+    });
+  }
+  for (const s of solutions) {
+    rows.push({
+      item: {
+        slug: s.slug,
+        title: s.title,
+        badges: <SolutionStatusBadge status={s.status} />,
+      },
+      target: { kind: "solution", solutionId: s.id },
+      onSelect: () => onOpenSolution(s.id),
+    });
+  }
   if (latestDecision) {
-    items.push({
-      key: "decision",
-      label: `decision  ${latestDecision.id}  chose ${latestDecision.chosenSolutionId}`,
-      value: "decision",
+    rows.push({
+      item: {
+        slug: latestDecision.id,
+        title: `decision — chose ${latestDecision.chosenSolutionId}`,
+      },
       target: { kind: "decision" },
+      onSelect: () => {},
     });
   }
-  items.push(
-    ...eliminations.map((e) => ({
-      key: e.id,
-      label: `elimination  ${e.id}  (${e.eliminatedSolutionIds.length} targets)`,
-      value: `elim:${e.id}`,
-      target: { kind: "elimination" as const, eliminationId: e.id },
-    })),
-  );
+  for (const el of eliminations) {
+    rows.push({
+      item: {
+        slug: el.id,
+        title: `elimination (${el.eliminatedSolutionIds.length} targets)`,
+      },
+      target: { kind: "elimination", eliminationId: el.id },
+      onSelect: () => {},
+    });
+  }
   if (abandonment) {
-    items.push({
-      key: "abandonment",
-      label: `abandonment  ${abandonment.id}`,
-      value: "abandonment",
+    rows.push({
+      item: { slug: abandonment.id, title: "abandonment" },
       target: { kind: "abandonment" },
+      onSelect: () => {},
     });
   }
-  items.push(
-    ...solutions
-      .filter((s) => s.outcome)
-      .map((s) => ({
-        key: `out-${s.id}`,
-        label: `outcome  ${s.outcome!.id}  (sol ${s.slug})`,
-        value: `out:${s.id}`,
-        target: { kind: "outcome" as const, solutionId: s.id },
-      })),
-  );
-
-  const onHighlight = (item: { value: string }) => {
-    const found = items.find((i) => i.value === item.value);
-    if (found) setHighlighted(found.target);
-  };
-  const onSelect = (item: { value: string }) => {
-    if (item.value.startsWith("ev:")) {
-      const obsId = item.value.split(":")[2];
-      if (obsId) onOpenObservation(obsId);
-    } else if (item.value.startsWith("sol:")) {
-      onOpenSolution(item.value.slice(4));
-    } else if (item.value.startsWith("out:")) {
-      onOpenSolution(item.value.slice(4));
+  for (const s of solutions) {
+    if (s.outcome) {
+      rows.push({
+        item: { slug: s.outcome.id, title: `outcome (sol ${s.slug})` },
+        target: { kind: "outcome", solutionId: s.id },
+        onSelect: () => onOpenSolution(s.id),
+      });
     }
-  };
-
-  // Default highlight
-  if (!highlighted && items[0]) {
-    // schedule to next tick to avoid state update during render
-    queueMicrotask(() => setHighlighted(items[0]!.target));
   }
+
+  const listItems = rows.map((r) => r.item);
+  const onListFocus = (_item: ScrollableListItem, index: number) => {
+    const r = rows[index];
+    if (r) setHighlighted(r.target);
+  };
+  const onListSelect = (_item: ScrollableListItem, index: number) => {
+    const r = rows[index];
+    if (r) r.onSelect();
+  };
 
   return (
     <Box flexDirection="column">
@@ -384,8 +372,11 @@ export function ProblemDetailView({
 
       <Box>
         <Box flexDirection="column" width="50%" paddingRight={1}>
-          {items.length === 0 ? <Empty label="no evidence, solutions, or decisions" /> : null}
-          <SelectInput items={items} onSelect={onSelect} onHighlight={onHighlight} limit={30} />
+          {rows.length === 0 ? (
+            <Empty label="no evidence, solutions, or decisions" />
+          ) : (
+            <ScrollableList items={listItems} onFocus={onListFocus} onSelect={onListSelect} />
+          )}
         </Box>
         <Box
           flexDirection="column"

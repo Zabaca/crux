@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Box, useInput } from "ink";
 import { ListRow } from "./ListRow.js";
 import { EmptyState } from "./EmptyState.js";
@@ -13,15 +13,33 @@ export type ScrollableListItem = {
 export type ScrollableListProps = {
   items: ScrollableListItem[];
   onSelect: (item: ScrollableListItem, index: number) => void;
+  onFocus?: (item: ScrollableListItem, index: number) => void;
   emptyMessage?: string;
 };
 
 export function ScrollableList({
   items,
   onSelect,
+  onFocus,
   emptyMessage,
 }: ScrollableListProps): React.ReactElement {
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const onFocusRef = useRef(onFocus);
+  onFocusRef.current = onFocus;
+  const lastFiredKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (items.length === 0) {
+      lastFiredKeyRef.current = null;
+      return;
+    }
+    const idx = Math.min(selectedIndex, items.length - 1);
+    const item = items[idx]!;
+    const key = `${idx}:${item.slug}`;
+    if (lastFiredKeyRef.current === key) return;
+    lastFiredKeyRef.current = key;
+    onFocusRef.current?.(item, idx);
+  }, [selectedIndex, items]);
 
   useInput((_input, key) => {
     if (items.length === 0) return;
