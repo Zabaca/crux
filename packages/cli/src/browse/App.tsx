@@ -204,6 +204,7 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         return [
           { key: "↑↓", label: "nav" },
           { key: "↵", label: "open" },
+          { key: "tab", label: "switch section" },
           { key: "esc", label: "back" },
           { key: "q", label: "quit" },
         ];
@@ -260,6 +261,7 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
       case "problem":
         return (
           <ProblemDetailView
+            workstream={view.workstream}
             problemId={view.problemId}
             onOpenSolution={(solutionId) =>
               setView({

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Box, Text } from "ink";
+import { Box, Text, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import {
   getProblemDetail,
@@ -25,7 +25,13 @@ import {
   SectionTitle,
   SolutionStatusBadge,
 } from "./components.js";
-import { ScrollableList, type ScrollableListItem } from "@crux/tui-ds/components";
+import {
+  Breadcrumb,
+  DetailPane,
+  DetailSection,
+  ScrollableList,
+  type ScrollableListItem,
+} from "@crux/tui-ds/components";
 
 type WorkstreamRow = Workstream & { openProblemCount: number };
 
@@ -199,25 +205,19 @@ function truncate(s: string, n: number): string {
 
 // ---------- Problem detail ----------
 
-type ProblemTarget =
-  | { kind: "evidence"; evidenceId: string }
-  | { kind: "solution"; solutionId: string }
-  | { kind: "decision" }
-  | { kind: "elimination"; eliminationId: string }
-  | { kind: "abandonment" }
-  | { kind: "outcome"; solutionId: string };
-
 export function ProblemDetailView({
+  workstream,
   problemId,
   onOpenSolution,
   onOpenObservation,
 }: {
+  workstream: Workstream;
   problemId: string;
   onOpenSolution: (solutionId: string) => void;
   onOpenObservation: (observationId: string) => void;
 }): React.ReactElement {
   const [data, setData] = useState<ProblemDetail | null>(null);
-  const [highlighted, setHighlighted] = useState<ProblemTarget | null>(null);
+  const [activeSection, setActiveSection] = useState<"evidence" | "solutions">("evidence");
 
   useEffect(() => {
     getProblemDetail(problemId).then((d) => {
@@ -225,265 +225,106 @@ export function ProblemDetailView({
     });
   }, [problemId]);
 
+  useInput((_input, key) => {
+    if (!data) return;
+    if (key.tab) {
+      const { evidence, solutions } = data;
+      if (evidence.length > 0 && solutions.length > 0) {
+        setActiveSection((s) => (s === "evidence" ? "solutions" : "evidence"));
+      }
+    }
+  });
+
   if (!data) return <Text color="gray">loading problem…</Text>;
 
   const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = data;
 
-  type Row = { item: ScrollableListItem; target: ProblemTarget; onSelect: () => void };
-  const rows: Row[] = [];
+  const evidenceItems: ScrollableListItem[] = evidence.map((e) => ({
+    slug: e.observation?.id ?? "?",
+    title: e.observation?.content ?? "(missing)",
+    meta: e.observation?.archive ? "archived" : undefined,
+  }));
 
-  for (const e of evidence) {
-    const obs = e.observation;
-    rows.push({
-      item: {
-        slug: obs ? obs.id : "?",
-        title: obs ? obs.content : "(missing observation)",
-        meta: obs?.archive ? "archived" : undefined,
-      },
-      target: { kind: "evidence", evidenceId: e.id },
-      onSelect: () => {
-        if (e.observationId) onOpenObservation(e.observationId);
-      },
-    });
-  }
-  for (const s of solutions) {
-    rows.push({
-      item: {
-        slug: s.slug,
-        title: s.title,
-        badges: <SolutionStatusBadge status={s.status} />,
-      },
-      target: { kind: "solution", solutionId: s.id },
-      onSelect: () => onOpenSolution(s.id),
-    });
-  }
-  if (latestDecision) {
-    rows.push({
-      item: {
-        slug: latestDecision.id,
-        title: `decision — chose ${latestDecision.chosenSolutionId}`,
-      },
-      target: { kind: "decision" },
-      onSelect: () => {},
-    });
-  }
-  for (const el of eliminations) {
-    rows.push({
-      item: {
-        slug: el.id,
-        title: `elimination (${el.eliminatedSolutionIds.length} targets)`,
-      },
-      target: { kind: "elimination", eliminationId: el.id },
-      onSelect: () => {},
-    });
-  }
-  if (abandonment) {
-    rows.push({
-      item: { slug: abandonment.id, title: "abandonment" },
-      target: { kind: "abandonment" },
-      onSelect: () => {},
-    });
-  }
-  for (const s of solutions) {
-    if (s.outcome) {
-      rows.push({
-        item: { slug: s.outcome.id, title: `outcome (sol ${s.slug})` },
-        target: { kind: "outcome", solutionId: s.id },
-        onSelect: () => onOpenSolution(s.id),
-      });
-    }
-  }
-
-  const listItems = rows.map((r) => r.item);
-  const onListFocus = (_item: ScrollableListItem, index: number) => {
-    const r = rows[index];
-    if (r) setHighlighted(r.target);
-  };
-  const onListSelect = (_item: ScrollableListItem, index: number) => {
-    const r = rows[index];
-    if (r) r.onSelect();
-  };
+  const solutionItems: ScrollableListItem[] = solutions.map((s) => ({
+    slug: s.slug,
+    title: s.title,
+    badges: <SolutionStatusBadge status={s.status} />,
+  }));
 
   return (
-    <Box flexDirection="column">
-      <Box marginBottom={1}>
-        <PriorityBadge tier={problem.priorityTier} />
-        <Text> </Text>
-        <LifecycleBadge status={problem.lifecycleStatus} />
-        <Text bold> {problem.slug}</Text>
-        <Text> — {problem.title}</Text>
-      </Box>
+    <Box flexDirection="column" flexGrow={1}>
+      <Breadcrumb
+        items={[{ label: "Workstreams" }, { label: workstream.slug }, { label: problem.slug }]}
+      />
 
-      <Box>
-        <Box flexDirection="column" width="50%" paddingRight={1}>
-          {rows.length === 0 ? (
-            <Empty label="no evidence, solutions, or decisions" />
-          ) : (
-            <ScrollableList items={listItems} onFocus={onListFocus} onSelect={onListSelect} />
-          )}
-        </Box>
-        <Box
-          flexDirection="column"
-          width="50%"
-          borderStyle="single"
-          borderColor="gray"
-          paddingX={1}
+      <Box marginTop={1} flexDirection="column" flexGrow={1}>
+        <DetailPane
+          title={problem.title}
+          subtitle={problem.slug}
+          badges={
+            <>
+              <LifecycleBadge status={problem.lifecycleStatus} />
+              <Text> </Text>
+              <PriorityBadge tier={problem.priorityTier} />
+            </>
+          }
         >
-          <ProblemDetailPane target={highlighted} data={data} />
-        </Box>
+          {evidence.length > 0 && (
+            <DetailSection label={`Evidence (${evidence.length})`}>
+              <ScrollableList
+                items={evidenceItems}
+                isFocused={activeSection === "evidence"}
+                onSelect={(_item, index) => {
+                  const e = evidence[index];
+                  if (e?.observationId) onOpenObservation(e.observationId);
+                }}
+              />
+            </DetailSection>
+          )}
+
+          {solutions.length > 0 && (
+            <DetailSection label={`Solutions (${solutions.length})`}>
+              <ScrollableList
+                items={solutionItems}
+                isFocused={activeSection === "solutions"}
+                onSelect={(_item, index) => {
+                  const s = solutions[index];
+                  if (s) onOpenSolution(s.id);
+                }}
+              />
+            </DetailSection>
+          )}
+
+          {latestDecision && (
+            <DetailSection label="Decision">
+              <Text>
+                chose <Text color="green">{latestDecision.chosenSolutionId}</Text>
+              </Text>
+              {latestDecision.rationale ? (
+                <Text color="gray">{latestDecision.rationale}</Text>
+              ) : null}
+            </DetailSection>
+          )}
+
+          {eliminations.length > 0 && (
+            <DetailSection label={`Eliminations (${eliminations.length})`}>
+              {eliminations.map((el) => (
+                <Text key={el.id}>
+                  {el.id} — {el.rationale}
+                </Text>
+              ))}
+            </DetailSection>
+          )}
+
+          {abandonment && (
+            <DetailSection label="Abandoned">
+              <Text color="gray">{abandonment.rationale}</Text>
+            </DetailSection>
+          )}
+        </DetailPane>
       </Box>
     </Box>
   );
-}
-
-function ProblemDetailPane({
-  target,
-  data,
-}: {
-  target: ProblemTarget | null;
-  data: ProblemDetail;
-}): React.ReactElement {
-  const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = data;
-  if (!target) {
-    return (
-      <Box flexDirection="column">
-        <Text bold>Description</Text>
-        <Text>{problem.description}</Text>
-        {problem.description ? null : <Empty label="no description" />}
-      </Box>
-    );
-  }
-  if (target.kind === "evidence") {
-    const e = evidence.find((x) => x.id === target.evidenceId);
-    if (!e) return <Empty label="evidence missing" />;
-    return (
-      <Box flexDirection="column">
-        <Text bold>Evidence {e.id}</Text>
-        {e.note ? <Text>note: {e.note}</Text> : null}
-        <SectionTitle>Observation</SectionTitle>
-        {e.observation ? (
-          <>
-            <Box>
-              <Text bold>{e.observation.id}</Text>
-              <ArchivedTag archive={e.observation.archive} />
-            </Box>
-            <Text>{e.observation.content}</Text>
-            {e.observation.source ? <Text color="gray">source: {e.observation.source}</Text> : null}
-            {e.observation.sourceType ? (
-              <Text color="gray">source_type: {e.observation.sourceType}</Text>
-            ) : null}
-            {e.observation.tags ? <Text color="gray">tags: {e.observation.tags}</Text> : null}
-          </>
-        ) : (
-          <Empty label="observation missing" />
-        )}
-      </Box>
-    );
-  }
-  if (target.kind === "solution") {
-    const s = solutions.find((x) => x.id === target.solutionId);
-    if (!s) return <Empty label="solution missing" />;
-    return (
-      <Box flexDirection="column">
-        <Box>
-          <SolutionStatusBadge status={s.status} />
-          <Text bold> {s.slug}</Text>
-        </Box>
-        <Text>{s.title}</Text>
-        {s.description ? (
-          <Box marginTop={1}>
-            <Text>{s.description}</Text>
-          </Box>
-        ) : null}
-        {s.effort ? <Text color="gray">effort: {s.effort}</Text> : null}
-        {s.originatingIdeaId ? <Text color="gray">from idea: {s.originatingIdeaId}</Text> : null}
-      </Box>
-    );
-  }
-  if (target.kind === "decision") {
-    if (!latestDecision) return <Empty label="no decision" />;
-    return (
-      <Box flexDirection="column">
-        <Text bold>Decision {latestDecision.id}</Text>
-        <Text>
-          chosen: <Text color="green">{latestDecision.chosenSolutionId}</Text>
-        </Text>
-        {latestDecision.rejectedSolutionIds.length > 0 ? (
-          <Text>
-            rejected: <Text color="red">{latestDecision.rejectedSolutionIds.join(", ")}</Text>
-          </Text>
-        ) : null}
-        <SectionTitle>Rationale</SectionTitle>
-        <Text>{latestDecision.rationale}</Text>
-        {latestDecision.context ? (
-          <>
-            <SectionTitle>Context</SectionTitle>
-            <Text>{latestDecision.context}</Text>
-          </>
-        ) : null}
-      </Box>
-    );
-  }
-  if (target.kind === "elimination") {
-    const e = eliminations.find((x) => x.id === target.eliminationId);
-    if (!e) return <Empty label="elimination missing" />;
-    return (
-      <Box flexDirection="column">
-        <Text bold>Elimination {e.id}</Text>
-        <Text>ruled out: {e.eliminatedSolutionIds.join(", ") || "(none)"}</Text>
-        <SectionTitle>Rationale</SectionTitle>
-        <Text>{e.rationale}</Text>
-        {e.context ? (
-          <>
-            <SectionTitle>Context</SectionTitle>
-            <Text>{e.context}</Text>
-          </>
-        ) : null}
-      </Box>
-    );
-  }
-  if (target.kind === "abandonment") {
-    if (!abandonment) return <Empty label="no abandonment" />;
-    return (
-      <Box flexDirection="column">
-        <Text bold>Abandonment {abandonment.id}</Text>
-        <SectionTitle>Rationale</SectionTitle>
-        <Text>{abandonment.rationale}</Text>
-      </Box>
-    );
-  }
-  if (target.kind === "outcome") {
-    const s = solutions.find((x) => x.id === target.solutionId);
-    const o = s?.outcome;
-    if (!o) return <Empty label="no outcome" />;
-    return (
-      <Box flexDirection="column">
-        <Text bold>Outcome {o.id}</Text>
-        <Text color="gray">for solution: {s!.slug}</Text>
-        <SectionTitle>Observed impact</SectionTitle>
-        <Text>{o.observedImpact}</Text>
-        {o.expectedImpact ? (
-          <>
-            <SectionTitle>Expected impact</SectionTitle>
-            <Text>{o.expectedImpact}</Text>
-          </>
-        ) : null}
-        {o.learnings ? (
-          <>
-            <SectionTitle>Learnings</SectionTitle>
-            <Text>{o.learnings}</Text>
-          </>
-        ) : null}
-        {o.followUpProblemIds.length > 0 ? (
-          <>
-            <SectionTitle>Follow-up problems</SectionTitle>
-            <Text>{o.followUpProblemIds.join(", ")}</Text>
-          </>
-        ) : null}
-      </Box>
-    );
-  }
-  return <Empty label="unknown target" />;
 }
 
 // ---------- Solution detail ----------

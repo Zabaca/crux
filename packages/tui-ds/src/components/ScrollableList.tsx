@@ -14,6 +14,7 @@ export type ScrollableListProps = {
   items: ScrollableListItem[];
   onSelect: (item: ScrollableListItem, index: number) => void;
   onFocus?: (item: ScrollableListItem, index: number) => void;
+  isFocused?: boolean;
   emptyMessage?: string;
 };
 
@@ -21,6 +22,7 @@ export function ScrollableList({
   items,
   onSelect,
   onFocus,
+  isFocused = true,
   emptyMessage,
 }: ScrollableListProps): React.ReactElement {
   const [selectedIndex, setSelectedIndex] = useState(0);
@@ -42,7 +44,7 @@ export function ScrollableList({
   }, [selectedIndex, items]);
 
   useInput((_input, key) => {
-    if (items.length === 0) return;
+    if (!isFocused || items.length === 0) return;
     if (key.upArrow) {
       setSelectedIndex((i) => Math.max(0, i - 1));
     } else if (key.downArrow) {
