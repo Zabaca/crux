@@ -7,6 +7,8 @@ import { DetailPane, DetailSection } from "./components/DetailPane.js";
 import { Breadcrumb } from "./components/Breadcrumb.js";
 import { EmptyState } from "./components/EmptyState.js";
 import { ScrollableList } from "./components/ScrollableList.js";
+import { WorkstreamDashboard } from "./screens/WorkstreamDashboard.js";
+import { ProblemDetail } from "./screens/ProblemDetail.js";
 import { color } from "./tokens.js";
 
 type SectionDef = { title: string; content: React.ReactElement };
@@ -144,6 +146,14 @@ const sections: SectionDef[] = [
         ]}
       />
     ),
+  },
+  {
+    title: "Screen: WorkstreamDashboard",
+    content: <WorkstreamDashboard />,
+  },
+  {
+    title: "Screen: ProblemDetail",
+    content: <ProblemDetail />,
   },
 ];
 
