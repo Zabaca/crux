@@ -6,6 +6,9 @@
     "crux": "./src/index.ts"
   },
   "type": "module",
+  "scripts": {
+    "browse:dev": "bun --watch src/index.ts browse -w crux"
+  },
   "dependencies": {
     "@crux/core": "workspace:*",
     "@crux/tui-ds": "workspace:*",
