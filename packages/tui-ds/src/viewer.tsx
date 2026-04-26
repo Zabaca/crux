@@ -150,11 +150,38 @@ const sections: SectionDef[] = [
 function Viewer(): React.ReactElement {
   const { exit } = useApp();
   const [idx, setIdx] = useState(0);
+  const [picking, setPicking] = useState(false);
+  const [pickIdx, setPickIdx] = useState(0);
   const section = sections[idx]!;
 
   useInput((input, key) => {
     if (input === "q") {
       exit();
+      return;
+    }
+    if (input === "/") {
+      setPicking((p) => !p);
+      setPickIdx(idx);
+      return;
+    }
+    if (picking) {
+      if (key.escape) {
+        setPicking(false);
+        return;
+      }
+      if (key.upArrow) {
+        setPickIdx((i) => Math.max(i - 1, 0));
+        return;
+      }
+      if (key.downArrow) {
+        setPickIdx((i) => Math.min(i + 1, sections.length - 1));
+        return;
+      }
+      if (key.return) {
+        setIdx(pickIdx);
+        setPicking(false);
+        return;
+      }
       return;
     }
     if (key.rightArrow || input === "l") setIdx((i) => Math.min(i + 1, sections.length - 1));
@@ -165,15 +192,31 @@ function Viewer(): React.ReactElement {
     <Box flexDirection="column" height={process.stdout.rows} paddingX={1}>
       <Box marginBottom={1}>
         <Text bold color={color.accent}>
-          {section.title}
+          {picking ? "pick a section" : section.title}
         </Text>
         <Text color={color.dim}>
-          {" "}
-          — {idx + 1}/{sections.length} · ← → to navigate · q quit
+          {picking
+            ? " — ↑↓ move · ↵ select · esc cancel · q quit"
+            : ` — ${idx + 1}/${sections.length} · ← → navigate · / pick · q quit`}
         </Text>
       </Box>
       <Box flexDirection="column" flexGrow={1}>
-        {section.content}
+        {picking ? (
+          <Box flexDirection="column">
+            {sections.map((s, i) => (
+              <Box key={s.title}>
+                <Text color={i === pickIdx ? color.accent : color.muted} bold={i === pickIdx}>
+                  {i === pickIdx ? "▶ " : "  "}
+                </Text>
+                <Text color={i === pickIdx ? "white" : color.muted} bold={i === pickIdx}>
+                  {s.title}
+                </Text>
+              </Box>
+            ))}
+          </Box>
+        ) : (
+          section.content
+        )}
       </Box>
     </Box>
   );
