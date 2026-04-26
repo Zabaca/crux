@@ -16,13 +16,15 @@ export function DetailPane({
   children,
 }: DetailPaneProps): React.ReactElement {
   return (
-    <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1} width="100%">
-      <Text bold wrap="wrap">
-        {title}
-      </Text>
-      {subtitle ? <Text color={color.dim}>{subtitle}</Text> : null}
-      {badges ? <Box>{badges}</Box> : null}
-      <Box flexDirection="column" marginTop={1}>
+    <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1} flexGrow={1}>
+      <Box flexDirection="column" flexShrink={1}>
+        <Text bold wrap="wrap">
+          {title}
+        </Text>
+        {subtitle ? <Text color={color.dim}>{subtitle}</Text> : null}
+        {badges ? <Box>{badges}</Box> : null}
+      </Box>
+      <Box flexDirection="column" marginTop={1} flexShrink={1}>
         {children}
       </Box>
     </Box>
@@ -41,7 +43,7 @@ export function DetailSection({ label, children }: DetailSectionProps): React.Re
         {label.toUpperCase()}
       </Text>
       <Text color={color.dim}>{"─".repeat(Math.max(label.length, 8))}</Text>
-      <Box flexDirection="column" marginTop={0} width="100%">
+      <Box flexDirection="column" marginTop={0} flexShrink={1}>
         {children}
       </Box>
     </Box>
