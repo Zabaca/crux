@@ -18,10 +18,16 @@ export function DetailPane({
   return (
     <Box flexDirection="column" borderStyle={border.panel} paddingX={2} paddingY={1}>
       <Box flexDirection="column">
-        <Text bold wrap="wrap">
-          {title}
-        </Text>
-        {subtitle ? <Text color={color.dim}>{subtitle}</Text> : null}
+        <Box>
+          <Text bold wrap="wrap">
+            {title}
+          </Text>
+        </Box>
+        {subtitle ? (
+          <Box>
+            <Text color={color.dim}>{subtitle}</Text>
+          </Box>
+        ) : null}
         {badges ? <Box>{badges}</Box> : null}
       </Box>
       <Box flexDirection="column" marginTop={1}>
