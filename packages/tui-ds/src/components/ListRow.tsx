@@ -10,6 +10,13 @@ export type ListRowProps = {
   meta?: string;
 };
 
+const SLUG_WIDTH = 24;
+
+function truncateSlug(slug: string): string {
+  if (slug.length <= SLUG_WIDTH) return slug.padEnd(SLUG_WIDTH);
+  return slug.slice(0, SLUG_WIDTH - 1) + "…";
+}
+
 export function ListRow({
   slug,
   title,
@@ -22,9 +29,9 @@ export function ListRow({
       <Text color={focused ? color.accent : undefined} bold={focused}>
         {focused ? "▶ " : "  "}
       </Text>
-      <Box width={Math.min(slug.length, 24)} flexShrink={0}>
+      <Box flexShrink={0} width={SLUG_WIDTH}>
         <Text color={color.dim} wrap="truncate-end">
-          {slug}
+          {truncateSlug(slug)}
         </Text>
       </Box>
       <Text> </Text>
