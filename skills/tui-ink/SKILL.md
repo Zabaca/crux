@@ -87,6 +87,14 @@ Percentage widths on children of a bordered/padded Box don't always resolve corr
 
 Setting `flexShrink` on a child of a `flexDirection="column"` Box can unexpectedly shrink its WIDTH (the cross axis). If a column-child's width is collapsing without an obvious reason, remove `flexShrink`.
 
+### Sibling `<Text>` items in a row Box all shrink by default
+
+Default `flexShrink` is `1` for every flex item, including bare `<Text>` elements. When a flex row overflows, Yoga shrinks ALL items proportionally — and a `<Text>` that's forced to shrink wraps its content character-by-character or word-by-word.
+
+**Symptoms:** badge `[P0]` splits across two lines as `[P` / `]`; meta `ev:11 sol:4` splits as `ev:11` / `sol:4`. Looks like the whole row is wrapping but actually each individual Text is.
+
+**Fix:** wrap fixed-size siblings (badges, meta, decorations) in `<Box flexShrink={0}>...</Box>` so they hold their natural width. Only the intended-flexible item (usually the title) keeps `flexShrink=1`. Result: when the row overflows, only the title shrinks and `wrap="truncate-end"` truncates it cleanly.
+
 ### Height constraint + overflowing content = mangled layout
 
 If the root Box has `height={rows}` and the rendered content exceeds that height, Yoga can collapse inner Boxes and merge text nodes. Either use a paginator (single visible section at a time, like the viewer does) or ensure content fits.

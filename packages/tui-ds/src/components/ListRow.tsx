@@ -30,7 +30,7 @@ export function ListRow({
       <Text> </Text>
       {badges ? (
         <>
-          {badges}
+          <Box flexShrink={0}>{badges}</Box>
           <Text> </Text>
         </>
       ) : null}
@@ -42,7 +42,9 @@ export function ListRow({
       {meta ? (
         <>
           <Text> </Text>
-          <Text color={color.dim}>{meta}</Text>
+          <Box flexShrink={0}>
+            <Text color={color.dim}>{meta}</Text>
+          </Box>
         </>
       ) : null}
     </Box>
