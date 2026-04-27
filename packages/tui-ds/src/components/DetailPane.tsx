@@ -23,12 +23,13 @@ export function DetailPane({
             {title}
           </Text>
         </Box>
-        {subtitle ? (
-          <Box>
-            <Text color={color.dim}>{subtitle}</Text>
+        {subtitle || badges ? (
+          <Box marginTop={1}>
+            {subtitle ? <Text color={color.dim}>{subtitle}</Text> : null}
+            {subtitle && badges ? <Text color={color.dim}> </Text> : null}
+            {badges ?? null}
           </Box>
         ) : null}
-        {badges ? <Box>{badges}</Box> : null}
       </Box>
       <Box flexDirection="column" marginTop={1}>
         {children}
