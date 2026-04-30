@@ -2,7 +2,12 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { problems, solutions } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { SolutionInput } from "@crux/core/validation";
+import {
+  SolutionInput,
+  OkWithIdOutput,
+  OkWithStatusOutput,
+  RenameOutput,
+} from "@crux/core/validation";
 import { NotFoundError, renameSolution, shipSolution } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
@@ -44,7 +49,7 @@ const addCmd = defineCommand({
       description: parsed.description,
       createdById: user.user.id,
     });
-    emit({ ok: true, id }, `added ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
 
@@ -95,7 +100,11 @@ const shipCmd = defineCommand({
     if (rows.length === 0)
       throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
     await shipSolution(rows[0]!.id, db);
-    emit({ ok: true, id: rows[0]!.id, status: "shipped" }, `shipped ${rows[0]!.id}`);
+    emit(
+      { ok: true, id: rows[0]!.id, status: "shipped" },
+      OkWithStatusOutput,
+      `shipped ${rows[0]!.id}`,
+    );
   },
 });
 
@@ -119,7 +128,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
-    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });
 

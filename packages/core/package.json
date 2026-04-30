@@ -11,7 +11,7 @@
     "./db/test-utils": "./src/db/test-utils.ts",
     "./db/schema": "./src/db/schema.ts",
     "./transitions": "./src/transitions/index.ts",
-    "./validation": "./src/validation/schemas.ts",
+    "./validation": "./src/validation/index.ts",
     "./config": "./src/config/user.ts",
     "./view-state": "./src/view-state/index.ts"
   },

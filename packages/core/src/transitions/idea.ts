@@ -41,4 +41,5 @@ export async function archiveIdea(
       updatedAt: now,
     })
     .where(eq(ideas.id, row.id));
+  return { id: row.id };
 }

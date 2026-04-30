@@ -11,6 +11,7 @@ import {
   type ViewEvent,
 } from "@crux/core/view-state";
 import { emit, emitError, setJsonMode } from "../output.js";
+import { ViewStateOutput, ViewPathOutput } from "@crux/core/validation";
 
 const getCmd = defineCommand({
   meta: { name: "get", description: "Print current view state." },
@@ -19,7 +20,11 @@ const getCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const snap = loadState();
     const payload = { value: snap.value, context: snap.context };
-    emit(payload, `${formatStateValue(snap.value)}\t${JSON.stringify(snap.context)}`);
+    emit(
+      payload,
+      ViewStateOutput,
+      `${formatStateValue(snap.value)}\t${JSON.stringify(snap.context)}`,
+    );
   },
 });
 
@@ -42,7 +47,7 @@ const nextCmd = defineCommand({
           .map((e) => `${e.type}${e.payload ? `  ${JSON.stringify(e.payload)}` : "  (no payload)"}`)
           .join("\n")
       : "(none)";
-    emit({ value: snap.value, events: withHints }, text);
+    emit({ value: snap.value, events: withHints }, ViewStateOutput, text);
   },
 });
 
@@ -53,7 +58,7 @@ const resetCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const snap = resetState();
     const payload = { ok: true, value: snap.value, context: snap.context };
-    emit(payload, `reset → ${formatStateValue(snap.value)}`);
+    emit(payload, ViewStateOutput, `reset → ${formatStateValue(snap.value)}`);
   },
 });
 
@@ -90,6 +95,7 @@ const sendCmd = defineCommand({
       const snap = await sendViewEvent(event);
       emit(
         { ok: true, value: snap.value, context: snap.context },
+        ViewStateOutput,
         `${formatStateValue(snap.value)}\t${JSON.stringify(snap.context)}`,
       );
     } catch (e) {
@@ -111,7 +117,7 @@ const pathCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const path = resolveViewStatePath();
-    emit({ path }, path);
+    emit({ path }, ViewPathOutput, path);
   },
 });
 

@@ -2,7 +2,13 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { ideas, problems, solutions, workstreams } from "@crux/core/db/schema";
 import { requireUser, slugifyName } from "@crux/core/config";
-import { IdeaInput, IdeaPromoteInput, IdeaArchiveInput } from "@crux/core/validation";
+import {
+  IdeaInput,
+  IdeaPromoteInput,
+  IdeaArchiveInput,
+  OkWithIdOutput,
+  RenameOutput,
+} from "@crux/core/validation";
 import { NotFoundError, archiveIdea, renameIdea } from "@crux/core/transitions";
 import { and, eq, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
@@ -60,7 +66,7 @@ const addCmd = defineCommand({
         hypothesizedProblemArea: parsed.hypothesizedProblemArea,
         tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
       });
-    emit({ ok: true, id }, `added ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
 
@@ -156,6 +162,7 @@ const promoteCmd = defineCommand({
     });
     emit(
       { ok: true, id, originatingIdeaId: ideaRows[0]!.id },
+      OkWithIdOutput,
       `promoted ${ideaRows[0]!.id} → ${id}`,
     );
     void isNull;
@@ -182,8 +189,8 @@ const archiveCmd = defineCommand({
     });
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
-    await archiveIdea(ws.id, parsed.slug, parsed.rationale, user.user.id, getDb());
-    emit({ ok: true, slug: parsed.slug }, `archived IDEA-${parsed.slug}`);
+    const { id } = await archiveIdea(ws.id, parsed.slug, parsed.rationale, user.user.id, getDb());
+    emit({ ok: true, id }, OkWithIdOutput, `archived ${id}`);
   },
 });
 
@@ -207,7 +214,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
-    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });
 

@@ -18,6 +18,7 @@ import {
   workstreams,
 } from "@crux/core/db/schema";
 import { NotFoundError } from "@crux/core/transitions";
+import { ContextOutput } from "@crux/core/validation";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -261,18 +262,21 @@ export const contextCommand = defineCommand({
     }
     const themesInlined = wsThemes.map((t) => ({ ...t, solutionIds: solByTheme.get(t.id) ?? [] }));
 
-    emit({
-      workstream: wsRow,
-      now: digestProblems.filter((p) => p.status === "now"),
-      next: digestProblems.filter((p) => p.status === "next"),
-      later: digestProblems.filter((p) => p.status === "later"),
-      unscheduled: digestProblems.filter((p) => p.status == null),
-      done: digestProblems.filter((p) => p.status === "done"),
-      abandoned: digestProblems.filter((p) => p.status === "abandoned"),
-      recent_observations_unlinked: unlinked,
-      unpromoted_ideas: unpromotedIdeas,
-      themes: themesInlined,
-      seed_version: SEED_VERSION,
-    });
+    emit(
+      {
+        workstream: wsRow,
+        now: digestProblems.filter((p) => p.status === "now"),
+        next: digestProblems.filter((p) => p.status === "next"),
+        later: digestProblems.filter((p) => p.status === "later"),
+        unscheduled: digestProblems.filter((p) => p.status == null),
+        done: digestProblems.filter((p) => p.status === "done"),
+        abandoned: digestProblems.filter((p) => p.status === "abandoned"),
+        recent_observations_unlinked: unlinked,
+        unpromoted_ideas: unpromotedIdeas,
+        themes: themesInlined,
+        seed_version: SEED_VERSION,
+      },
+      ContextOutput,
+    );
   },
 });

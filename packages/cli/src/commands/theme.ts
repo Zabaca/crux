@@ -1,7 +1,13 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { solutions, themes, themeSolutions, workstreams } from "@crux/core/db/schema";
-import { ThemeAttachInput, ThemeInput } from "@crux/core/validation";
+import {
+  ThemeAttachInput,
+  ThemeInput,
+  OkWithIdOutput,
+  RenameOutput,
+  ThemeAttachOutput,
+} from "@crux/core/validation";
 import { NotFoundError, renameTheme } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
@@ -42,7 +48,7 @@ const addCmd = defineCommand({
       description: parsed.description,
       timeframe: parsed.timeframe,
     });
-    emit({ ok: true, id }, `added ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
 
@@ -105,6 +111,7 @@ const attachCmd = defineCommand({
       .onConflictDoNothing();
     emit(
       { ok: true, themeId: theme[0]!.id, solutionId: sol[0]!.id },
+      ThemeAttachOutput,
       `attached ${sol[0]!.id} → ${theme[0]!.id}`,
     );
   },
@@ -130,7 +137,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
-    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });
 

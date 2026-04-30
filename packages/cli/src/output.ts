@@ -18,15 +18,41 @@ export function setCaptureWriter(fn: ((payload: unknown) => void) | null): void 
   captureWriter = fn;
 }
 
-export function emit(payload: unknown, humanLine?: string): void {
+/** Minimal interface satisfied by any Zod schema (avoids importing zod into cli). */
+export interface OutputSchema {
+  parse(data: unknown): unknown;
+}
+
+/**
+ * emit(payload)                         — write payload (JSON or human)
+ * emit(payload, humanLine)              — write payload JSON or humanLine (back-compat)
+ * emit(payload, schema)                 — validate then write payload
+ * emit(payload, schema, humanLine)      — validate then write payload JSON or humanLine
+ */
+export function emit(
+  payload: unknown,
+  schemaOrHuman?: OutputSchema | string,
+  humanLine?: string,
+): void {
+  let schema: OutputSchema | undefined;
+  let human: string | undefined;
+  if (typeof schemaOrHuman === "string") {
+    human = schemaOrHuman;
+  } else {
+    schema = schemaOrHuman;
+    human = humanLine;
+  }
+  if (schema) {
+    schema.parse(payload); // throws ZodError on shape violation
+  }
   if (captureWriter) {
     captureWriter(payload);
     return;
   }
-  if (jsonMode || humanLine === undefined) {
+  if (jsonMode || human === undefined) {
     process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
   } else {
-    process.stdout.write(humanLine + "\n");
+    process.stdout.write(human + "\n");
   }
 }
 

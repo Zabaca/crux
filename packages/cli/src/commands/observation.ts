@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { observations, workstreams } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { ObservationInput, ObservationArchiveInput } from "@crux/core/validation";
+import { ObservationInput, ObservationArchiveInput, OkWithIdOutput } from "@crux/core/validation";
 import { NotFoundError, archiveObservation } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
@@ -67,7 +67,7 @@ const addCmd = defineCommand({
         sourceType: parsed.sourceType,
         tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
       });
-    emit({ ok: true, id }, `added ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
 
@@ -125,7 +125,11 @@ const archiveCmd = defineCommand({
     });
     const user = requireUser();
     await archiveObservation(parsed.observationId, parsed.rationale, user.user.id, getDb());
-    emit({ ok: true, id: parsed.observationId }, `archived ${parsed.observationId}`);
+    emit(
+      { ok: true, id: parsed.observationId },
+      OkWithIdOutput,
+      `archived ${parsed.observationId}`,
+    );
   },
 });
 

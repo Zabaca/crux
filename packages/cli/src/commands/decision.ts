@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { decisions, problems, solutions, workstreams } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { DecisionInput } from "@crux/core/validation";
+import { DecisionInput, OkWithIdOutput } from "@crux/core/validation";
 import { NotFoundError, createDecision } from "@crux/core/transitions";
 import { and, eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
@@ -102,7 +102,7 @@ const addCmd = defineCommand({
       },
       db,
     );
-    emit({ ok: true, id }, `added ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
 

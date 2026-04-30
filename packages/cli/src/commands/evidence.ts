@@ -3,6 +3,7 @@ import { getDb } from "@crux/core";
 import { evidence, observations, problems } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
 import { NotFoundError } from "@crux/core/transitions";
+import { OkWithIdOutput } from "@crux/core/validation";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
@@ -45,7 +46,7 @@ const linkCmd = defineCommand({
       note: args.note,
       createdById: user.user.id,
     });
-    emit({ ok: true, id }, `linked ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `linked ${id}`);
   },
 });
 

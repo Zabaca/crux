@@ -16,7 +16,8 @@ import { setDb } from "@crux/core/db";
 import { createTestDb, type CruxTestDb } from "@crux/core/db/test-utils";
 import { users } from "@crux/core/db/schema";
 import { slugifyName } from "@crux/core/config";
-import { setCaptureWriter, setJsonMode } from "../output.js";
+import { setCaptureWriter, setJsonMode, emit } from "../output.js";
+import { OkWithIdOutput, ProblemShowOutput, ContextOutput } from "@crux/core/validation";
 
 // Command modules — imported after the singleton helpers above.
 import { workstreamCommand } from "../commands/workstream.js";
@@ -330,5 +331,37 @@ describe("regression OBS-030 (c): idea promote slugs the title, not the idea slu
     expect(result.id).toBe(`SOL-${expectedSlug}`);
     // The solution slug must NOT be the idea slug "my-idea".
     expect(result.id).not.toBe("SOL-my-idea");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Schema validation: emit() rejects malformed payloads at construction time
+// ---------------------------------------------------------------------------
+
+describe("schema validation: emit() rejects malformed payloads", () => {
+  test("OkWithIdOutput rejects payload missing 'id'", () => {
+    // { ok: true } with no `id` must throw.
+    expect(() => emit({ ok: true }, OkWithIdOutput)).toThrow();
+  });
+
+  test("ProblemShowOutput rejects payload missing 'solutions'", () => {
+    // A bare problem row (no solutions[]) must fail with path `solutions: Required`.
+    const bareRow = { id: "PRB-test", slug: "test", title: "T", status: null };
+    expect(() => emit(bareRow, ProblemShowOutput)).toThrow();
+  });
+
+  test("ContextOutput rejects payload missing 'unscheduled' bucket", () => {
+    // If context accidentally nests problems rather than spreading them, schema throws.
+    const malformed = {
+      workstream: { slug: "ws" },
+      now: [],
+      next: [],
+      later: [],
+      // 'unscheduled' deliberately omitted
+      done: [],
+      abandoned: [],
+      seed_version: "2026-04-30",
+    };
+    expect(() => emit(malformed, ContextOutput)).toThrow();
   });
 });

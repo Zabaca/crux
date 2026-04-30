@@ -10,7 +10,14 @@ import {
   workstreams,
 } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { ProblemInput, RoadmapTier } from "@crux/core/validation";
+import {
+  OkWithIdOutput,
+  OkWithStatusOutput,
+  ProblemShowOutput,
+  RenameOutput,
+  RoadmapTier,
+  ProblemInput,
+} from "@crux/core/validation";
 import {
   abandonProblem,
   markProblemDone,
@@ -64,7 +71,7 @@ const addCmd = defineCommand({
       description: parsed.description,
       createdById: user.user.id,
     });
-    emit({ ok: true, id }, `added ${id}`);
+    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
 
@@ -150,7 +157,10 @@ const showCmd = defineCommand({
       latestDecisionPayload = { ...latestDec, rejectedSolutionIds: rej.map((r) => r.solutionId) };
     }
 
-    emit({ ...p, solutions: solutionsInlined, latest_decision: latestDecisionPayload });
+    emit(
+      { ...p, solutions: solutionsInlined, latest_decision: latestDecisionPayload },
+      ProblemShowOutput,
+    );
   },
 });
 
@@ -166,7 +176,7 @@ const scheduleCmd = defineCommand({
     const tier = RoadmapTier.parse(args.tier);
     const p = await resolveProblem(args.slug);
     await scheduleProblem(p.id, tier, getDb());
-    emit({ ok: true, id: p.id, status: tier }, `scheduled ${p.id} → ${tier}`);
+    emit({ ok: true, id: p.id, status: tier }, OkWithStatusOutput, `scheduled ${p.id} → ${tier}`);
   },
 });
 
@@ -177,7 +187,7 @@ const unscheduleCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const p = await resolveProblem(args.slug);
     await unscheduleProblem(p.id, getDb());
-    emit({ ok: true, id: p.id, status: null }, `unscheduled ${p.id}`);
+    emit({ ok: true, id: p.id, status: null }, OkWithStatusOutput, `unscheduled ${p.id}`);
   },
 });
 
@@ -188,7 +198,7 @@ const doneCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const p = await resolveProblem(args.slug);
     await markProblemDone(p.id, getDb());
-    emit({ ok: true, id: p.id, status: "done" }, `done ${p.id}`);
+    emit({ ok: true, id: p.id, status: "done" }, OkWithStatusOutput, `done ${p.id}`);
   },
 });
 
@@ -204,7 +214,7 @@ const abandonCmd = defineCommand({
     const user = requireUser();
     const p = await resolveProblem(args.slug);
     await abandonProblem(p.id, args.rationale, user.user.id, getDb());
-    emit({ ok: true, id: p.id, status: "abandoned" }, `abandoned ${p.id}`);
+    emit({ ok: true, id: p.id, status: "abandoned" }, OkWithStatusOutput, `abandoned ${p.id}`);
   },
 });
 
@@ -228,7 +238,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
-    emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
+    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });
 
