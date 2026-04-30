@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getObservationById } from "@/lib/queries";
 import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge, statusVariant } from "@/components/ui/badge";
+import { Badge, roadmapStatusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 
 export const dynamic = "force-dynamic";
@@ -79,8 +79,8 @@ export default async function ObservationPage({
                     <Card className="hover:border-primary/40 transition-colors">
                       <CardContent className="p-4 space-y-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
-                          <Badge variant={statusVariant(problem.lifecycleStatus)}>
-                            {problem.lifecycleStatus}
+                          <Badge variant={roadmapStatusVariant(problem.status)}>
+                            {problem.status ?? "unscheduled"}
                           </Badge>
                           <span className="font-mono text-muted-foreground">{problem.slug}</span>
                           <span className="font-mono text-muted-foreground">via {ev.id}</span>

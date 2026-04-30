@@ -1,11 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createActor, type Snapshot } from "xstate";
 import { getDb } from "../db/client.js";
 import { problems, workstreams } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { viewMachine, ViewEventSchema, type ViewEvent } from "./machine.js";
+import { resolveCruxHome } from "../config/user.js";
 
 type ViewSnapshot = ReturnType<ReturnType<typeof createActor<typeof viewMachine>>["getSnapshot"]>;
 type PersistedViewSnapshot = ReturnType<
@@ -16,36 +16,14 @@ type PersistedViewSnapshot = ReturnType<
  * Resolve the path where the view-state JSON lives.
  *
  * Resolution order:
- *   1. `CRUX_VIEW_STATE_PATH` env var (absolute wins over dev-mode).
- *   2. Dev-mode: walk up from cwd; if a dir contains both `.git` and
- *      `packages/core`, use `<repo>/.view-state.json`. Mirrors `bin/crux`.
- *   3. `$XDG_DATA_HOME/crux/view-state.json` (default `~/.local/share`).
+ *   1. `CRUX_VIEW_STATE_PATH` env var (explicit override).
+ *   2. `$CRUX_HOME/view-state.json` where CRUX_HOME defaults to `~/.claude/.crux`.
  */
 export function resolveViewStatePath(): string {
   if (process.env.CRUX_VIEW_STATE_PATH) {
     return resolve(process.env.CRUX_VIEW_STATE_PATH);
   }
-
-  // Dev-mode walk-up.
-  let dir = process.cwd();
-  const root = resolve("/");
-  while (dir !== root) {
-    try {
-      const gitPath = join(dir, ".git");
-      const corePath = join(dir, "packages", "core");
-      if (existsSync(gitPath) && existsSync(corePath) && statSync(corePath).isDirectory()) {
-        return join(dir, ".view-state.json");
-      }
-    } catch {
-      // ignore and keep walking
-    }
-    const parent = dirname(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-
-  const dataHome = process.env.XDG_DATA_HOME || join(homedir(), ".local", "share");
-  return join(dataHome, "crux", "view-state.json");
+  return join(resolveCruxHome(), "view-state.json");
 }
 
 /**

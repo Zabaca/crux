@@ -21,20 +21,15 @@ const badgeVariants = cva(
           "border-transparent bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-100",
         archived:
           "border-transparent bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
-        // Lifecycle
-        shaping:
-          "border-transparent bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-100",
-        committed:
-          "border-transparent bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-100",
-        shipping:
-          "border-transparent bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-100",
+        // Roadmap status
+        now: "border-transparent bg-red-600 text-white",
+        next: "border-transparent bg-orange-500 text-white",
+        later: "border-transparent bg-stone-300 text-stone-800",
+        done: "border-transparent bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-100",
         abandoned:
           "border-transparent bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-200",
-        // Priority tiers
-        p0: "border-transparent bg-red-600 text-white",
-        p1: "border-transparent bg-orange-500 text-white",
-        p2: "border-transparent bg-amber-400 text-amber-950",
-        p3: "border-transparent bg-stone-300 text-stone-800",
+        unscheduled:
+          "border-transparent bg-slate-50 text-slate-500 dark:bg-slate-800 dark:text-slate-400",
       },
     },
     defaultVariants: { variant: "default" },
@@ -58,9 +53,10 @@ export function statusVariant(status: string | null | undefined): BadgeVariant {
     case "rejected":
     case "evaluated":
     case "archived":
-    case "shaping":
-    case "committed":
-    case "shipping":
+    case "now":
+    case "next":
+    case "later":
+    case "done":
     case "abandoned":
       return status;
     default:
@@ -68,17 +64,15 @@ export function statusVariant(status: string | null | undefined): BadgeVariant {
   }
 }
 
-export function priorityVariant(tier: string | null | undefined): BadgeVariant {
-  switch (tier) {
-    case "P0":
-      return "p0";
-    case "P1":
-      return "p1";
-    case "P2":
-      return "p2";
-    case "P3":
-      return "p3";
+export function roadmapStatusVariant(status: string | null | undefined): BadgeVariant {
+  switch (status) {
+    case "now":
+    case "next":
+    case "later":
+    case "done":
+    case "abandoned":
+      return status;
     default:
-      return "outline";
+      return "unscheduled";
   }
 }

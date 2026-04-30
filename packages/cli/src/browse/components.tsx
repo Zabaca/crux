@@ -13,19 +13,12 @@ const SOLUTION_COLOR: Record<string, Color> = {
   evaluated: "blue",
 };
 
-const LIFECYCLE_COLOR: Record<string, Color> = {
-  shaping: "yellow",
-  committed: "blue",
-  shipping: "cyan",
-  shipped: "green",
+const STATUS_COLOR: Record<string, Color> = {
+  now: "red",
+  next: "yellow",
+  later: "blue",
+  done: "green",
   abandoned: "gray",
-};
-
-const PRIORITY_COLOR: Record<string, Color> = {
-  P0: "red",
-  P1: "yellow",
-  P2: "blue",
-  P3: "gray",
 };
 
 export function SolutionStatusBadge({ status }: { status: string }): React.ReactElement {
@@ -37,21 +30,12 @@ export function SolutionStatusBadge({ status }: { status: string }): React.React
   );
 }
 
-export function LifecycleBadge({ status }: { status: string }): React.ReactElement {
-  const color = LIFECYCLE_COLOR[status] ?? "white";
+export function StatusBadge({ status }: { status: string | null }): React.ReactElement {
+  if (!status) return <Text color="gray">[unscheduled]</Text>;
+  const color = STATUS_COLOR[status] ?? "white";
   return (
     <Text color={color} bold>
       [{status}]
-    </Text>
-  );
-}
-
-export function PriorityBadge({ tier }: { tier: string | null }): React.ReactElement {
-  if (!tier) return <Text color="gray">[--]</Text>;
-  const color = PRIORITY_COLOR[tier] ?? "white";
-  return (
-    <Text color={color} bold>
-      [{tier}]
     </Text>
   );
 }

@@ -20,10 +20,9 @@ import {
 import {
   ArchivedTag,
   Empty,
-  LifecycleBadge,
-  PriorityBadge,
   SectionTitle,
   SolutionStatusBadge,
+  StatusBadge,
 } from "./components.js";
 import {
   Breadcrumb,
@@ -102,12 +101,7 @@ export function WorkstreamDashboard({
 
   useEffect(() => {
     listOpenProblems(workstream.id).then((all) => {
-      const open = all.filter(
-        (p) =>
-          p.lifecycleStatus === "shaping" ||
-          p.lifecycleStatus === "committed" ||
-          p.lifecycleStatus === "shipping",
-      );
+      const open = all.filter((p) => p.status !== "done" && p.status !== "abandoned");
       setRows(open);
       if (!highlighted && open[0]) setHighlighted({ kind: "problem", problem: open[0] });
     });
@@ -122,7 +116,7 @@ export function WorkstreamDashboard({
   const problemItems: ScrollableListItem[] = rows.map((p) => ({
     slug: p.slug,
     title: p.title,
-    badges: <PriorityBadge tier={p.priorityTier} />,
+    badges: <StatusBadge status={p.status} />,
     meta: `ev:${p.evidenceCount} sol:${p.solutionCount}`,
   }));
 
@@ -176,9 +170,7 @@ function DashboardDetail({ entry }: { entry: DashboardEntry | null }): React.Rea
   return (
     <Box flexDirection="column">
       <Box>
-        <PriorityBadge tier={p.priorityTier} />
-        <Text> </Text>
-        <LifecycleBadge status={p.lifecycleStatus} />
+        <StatusBadge status={p.status} />
       </Box>
       <Box marginTop={1}>
         <Text bold>{p.slug}</Text>
@@ -261,13 +253,7 @@ export function ProblemDetailView({
         <DetailPane
           title={problem.title}
           subtitle={problem.slug}
-          badges={
-            <>
-              <LifecycleBadge status={problem.lifecycleStatus} />
-              <Text> </Text>
-              <PriorityBadge tier={problem.priorityTier} />
-            </>
-          }
+          badges={<StatusBadge status={problem.status} />}
         >
           {evidence.length > 0 && (
             <DetailSection label={`Evidence (${evidence.length})`}>
@@ -349,7 +335,7 @@ export function SolutionDetailView({ solutionId }: { solutionId: string }): Reac
       </Box>
       <Box marginTop={1}>
         <Text color="gray">
-          problem: {problem.slug} ({problem.lifecycleStatus})
+          problem: {problem.slug} ({problem.status ?? "unscheduled"})
         </Text>
       </Box>
       {solution.description ? (
@@ -459,7 +445,7 @@ export function ObservationDetailView({
         evidenceLinks.map((e) => (
           <Box key={e.id} flexDirection="column" marginBottom={1}>
             <Box>
-              <LifecycleBadge status={e.problem.lifecycleStatus} />
+              <StatusBadge status={e.problem.status} />
               <Text bold> {e.problem.slug}</Text>
               <Text> {e.problem.title}</Text>
             </Box>

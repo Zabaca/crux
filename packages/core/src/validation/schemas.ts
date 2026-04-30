@@ -33,8 +33,9 @@ export const ProblemInput = z.object({
   slug,
   title: z.string().min(1),
   description: z.string().min(1),
-  priorityTier: z.enum(["P0", "P1", "P2", "P3"]).optional(),
 });
+
+export const RoadmapTier = z.enum(["now", "next", "later"]);
 
 export const EvidenceInput = z.object({
   observationId: z.string().min(1),

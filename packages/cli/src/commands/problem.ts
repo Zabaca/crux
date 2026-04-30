@@ -1,16 +1,25 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
-import { problems, workstreams } from "@crux/core/db/schema";
+import {
+  decisionRejectedSolutions,
+  decisions,
+  outcomeFollowUpProblems,
+  outcomes,
+  problems,
+  solutions,
+  workstreams,
+} from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import { ProblemInput } from "@crux/core/validation";
+import { ProblemInput, RoadmapTier } from "@crux/core/validation";
 import {
   abandonProblem,
-  commitProblem,
+  markProblemDone,
   NotFoundError,
   renameProblem,
-  shipProblem,
+  scheduleProblem,
+  unscheduleProblem,
 } from "@crux/core/transitions";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
 async function resolveWorkstream(slug: string) {
@@ -34,7 +43,6 @@ const addCmd = defineCommand({
     slug: { type: "string", required: true },
     title: { type: "string", required: true },
     description: { type: "string", required: true },
-    priority: { type: "string", description: "P0 | P1 | P2 | P3" },
     json: { type: "boolean" },
   },
   async run({ args }) {
@@ -44,7 +52,6 @@ const addCmd = defineCommand({
       slug: args.slug,
       title: args.title,
       description: args.description,
-      priorityTier: args.priority,
     });
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
@@ -55,7 +62,6 @@ const addCmd = defineCommand({
       workstreamId: ws.id,
       title: parsed.title,
       description: parsed.description,
-      priorityTier: parsed.priorityTier,
       createdById: user.user.id,
     });
     emit({ ok: true, id }, `added ${id}`);
@@ -66,13 +72,27 @@ const listCmd = defineCommand({
   meta: { name: "list", description: "List problems in a workstream." },
   args: {
     workstream: { type: "string", required: true, alias: "w" },
+    status: {
+      type: "string",
+      description: "now | next | later | done | abandoned | unscheduled",
+    },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const ws = await resolveWorkstream(args.workstream);
-    const rows = await getDb().select().from(problems).where(eq(problems.workstreamId, ws.id));
-    emit(rows, rows.map((r) => `${r.id}\t${r.lifecycleStatus}\t${r.title}`).join("\n") || "(none)");
+    const filter = args.status;
+    const where =
+      filter === "unscheduled"
+        ? and(eq(problems.workstreamId, ws.id), isNull(problems.status))
+        : filter
+          ? and(eq(problems.workstreamId, ws.id), eq(problems.status, filter))
+          : eq(problems.workstreamId, ws.id);
+    const rows = await getDb().select().from(problems).where(where);
+    emit(
+      rows,
+      rows.map((r) => `${r.id}\t${r.status ?? "unscheduled"}\t${r.title}`).join("\n") || "(none)",
+    );
   },
 });
 
@@ -81,29 +101,94 @@ const showCmd = defineCommand({
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    emit(await resolveProblem(args.slug));
+    const db = getDb();
+    const p = await resolveProblem(args.slug);
+
+    const sols = await db.select().from(solutions).where(eq(solutions.problemId, p.id));
+    const solIds = sols.map((s) => s.id);
+    const outcomeRows = solIds.length
+      ? await db.select().from(outcomes).where(inArray(outcomes.solutionId, solIds))
+      : [];
+    const outcomeBySol = new Map(outcomeRows.map((o) => [o.solutionId, o]));
+    const outcomeIds = outcomeRows.map((o) => o.id);
+    const followUps = outcomeIds.length
+      ? await db
+          .select()
+          .from(outcomeFollowUpProblems)
+          .where(inArray(outcomeFollowUpProblems.outcomeId, outcomeIds))
+      : [];
+    const followUpsByOutcome = new Map<string, string[]>();
+    for (const f of followUps) {
+      const list = followUpsByOutcome.get(f.outcomeId) ?? [];
+      list.push(f.problemId);
+      followUpsByOutcome.set(f.outcomeId, list);
+    }
+    const solutionsInlined = sols.map((s) => {
+      const outcome = outcomeBySol.get(s.id);
+      return {
+        ...s,
+        outcome: outcome
+          ? { ...outcome, followUpProblemIds: followUpsByOutcome.get(outcome.id) ?? [] }
+          : null,
+      };
+    });
+
+    const latestDec = (
+      await db
+        .select()
+        .from(decisions)
+        .where(eq(decisions.problemId, p.id))
+        .orderBy(desc(decisions.createdAt))
+        .limit(1)
+    )[0];
+    let latestDecisionPayload: unknown = null;
+    if (latestDec) {
+      const rej = await db
+        .select({ solutionId: decisionRejectedSolutions.solutionId })
+        .from(decisionRejectedSolutions)
+        .where(eq(decisionRejectedSolutions.decisionId, latestDec.id));
+      latestDecisionPayload = { ...latestDec, rejectedSolutionIds: rej.map((r) => r.solutionId) };
+    }
+
+    emit({ ...p, solutions: solutionsInlined, latest_decision: latestDecisionPayload });
   },
 });
 
-const commitCmd = defineCommand({
-  meta: { name: "commit", description: "Commit a problem (requires a Decision)." },
+const scheduleCmd = defineCommand({
+  meta: { name: "schedule", description: "Schedule a problem onto the roadmap." },
+  args: {
+    slug: { type: "positional", required: true },
+    tier: { type: "string", required: true, description: "now | next | later" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const tier = RoadmapTier.parse(args.tier);
+    const p = await resolveProblem(args.slug);
+    await scheduleProblem(p.id, tier, getDb());
+    emit({ ok: true, id: p.id, status: tier }, `scheduled ${p.id} → ${tier}`);
+  },
+});
+
+const unscheduleCmd = defineCommand({
+  meta: { name: "unschedule", description: "Remove a problem from the roadmap (back to null)." },
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const p = await resolveProblem(args.slug);
-    await commitProblem(p.id, getDb());
-    emit({ ok: true, id: p.id, lifecycleStatus: "committed" }, `committed ${p.id}`);
+    await unscheduleProblem(p.id, getDb());
+    emit({ ok: true, id: p.id, status: null }, `unscheduled ${p.id}`);
   },
 });
 
-const shipCmd = defineCommand({
-  meta: { name: "ship", description: "Ship a problem (chosen Solution must be shipped)." },
+const doneCmd = defineCommand({
+  meta: { name: "done", description: "Mark a problem done (chosen Solution must be shipped)." },
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const p = await resolveProblem(args.slug);
-    await shipProblem(p.id, getDb());
-    emit({ ok: true, id: p.id, lifecycleStatus: "shipped" }, `shipped ${p.id}`);
+    await markProblemDone(p.id, getDb());
+    emit({ ok: true, id: p.id, status: "done" }, `done ${p.id}`);
   },
 });
 
@@ -119,7 +204,7 @@ const abandonCmd = defineCommand({
     const user = requireUser();
     const p = await resolveProblem(args.slug);
     await abandonProblem(p.id, args.rationale, user.user.id, getDb());
-    emit({ ok: true, id: p.id, lifecycleStatus: "abandoned" }, `abandoned ${p.id}`);
+    emit({ ok: true, id: p.id, status: "abandoned" }, `abandoned ${p.id}`);
   },
 });
 
@@ -133,7 +218,6 @@ const renameCmd = defineCommand({
     newSlug: { type: "positional", required: true, description: "New slug" },
     title: { type: "string" },
     description: { type: "string" },
-    priority: { type: "string", description: "P0 | P1 | P2 | P3" },
     json: { type: "boolean" },
   },
   async run({ args }) {
@@ -141,7 +225,7 @@ const renameCmd = defineCommand({
     const r = await renameProblem(
       args.oldSlug,
       args.newSlug,
-      { title: args.title, description: args.description, priorityTier: args.priority },
+      { title: args.title, description: args.description },
       getDb(),
     );
     emit({ ok: true, ...r }, `renamed ${r.oldId} → ${r.newId}`);
@@ -154,8 +238,9 @@ export const problemCommand = defineCommand({
     add: addCmd,
     list: listCmd,
     show: showCmd,
-    commit: commitCmd,
-    ship: shipCmd,
+    schedule: scheduleCmd,
+    unschedule: unscheduleCmd,
+    done: doneCmd,
     abandon: abandonCmd,
     rename: renameCmd,
   },

@@ -39,8 +39,14 @@ export type Abandonment = typeof abandonments.$inferSelect;
 export type Outcome = typeof outcomes.$inferSelect & { followUpProblemIds: string[] };
 export type Idea = typeof ideas.$inferSelect & { archive: ArchiveBlock };
 
-const PRIORITY_RANK: Record<string, number> = { P0: 0, P1: 1, P2: 2, P3: 3 };
-const rankPriority = (tier: string | null): number => (tier ? (PRIORITY_RANK[tier] ?? 99) : 99);
+const STATUS_RANK: Record<string, number> = {
+  now: 0,
+  next: 1,
+  later: 2,
+  done: 4,
+  abandoned: 5,
+};
+const rankStatus = (s: string | null): number => (s == null ? 3 : (STATUS_RANK[s] ?? 99));
 
 const SOLUTION_STATUS_RANK: Record<string, number> = {
   chosen: 0,
@@ -70,11 +76,7 @@ export async function listWorkstreams() {
   const allProblems = await db.select().from(problems);
   const openByWs = new Map<string, number>();
   for (const p of allProblems) {
-    if (
-      p.lifecycleStatus === "shaping" ||
-      p.lifecycleStatus === "committed" ||
-      p.lifecycleStatus === "shipping"
-    ) {
+    if (p.status !== "done" && p.status !== "abandoned") {
       openByWs.set(p.workstreamId, (openByWs.get(p.workstreamId) ?? 0) + 1);
     }
   }
@@ -113,7 +115,7 @@ export async function listOpenProblems(workstreamId: string): Promise<ProblemSum
       solutionCount: solCount.get(r.id) ?? 0,
     }))
     .sort((a, b) => {
-      const d = rankPriority(a.priorityTier) - rankPriority(b.priorityTier);
+      const d = rankStatus(a.status) - rankStatus(b.status);
       if (d !== 0) return d;
       return a.createdAt - b.createdAt;
     });

@@ -1,13 +1,18 @@
-export function priorityRank(tier: string | null | undefined): number {
-  switch (tier) {
-    case "P0":
+export function statusRank(status: string | null | undefined): number {
+  switch (status) {
+    case "now":
       return 0;
-    case "P1":
+    case "next":
       return 1;
-    case "P2":
+    case "later":
       return 2;
-    case "P3":
+    case null:
+    case undefined:
       return 3;
+    case "done":
+      return 4;
+    case "abandoned":
+      return 5;
     default:
       return 99;
   }

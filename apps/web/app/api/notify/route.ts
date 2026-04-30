@@ -1,11 +1,18 @@
 import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { join, dirname } from "path";
+import { userConfig } from "@crux/core";
+const { resolveCruxHome } = userConfig;
 
 function resolveInboxPath(): string | null {
   if (process.env.CRUX_AGENT_INBOX) return process.env.CRUX_AGENT_INBOX;
-  const defaultPath = join(homedir(), ".claude/teams/crux-mvp/inboxes/team-lead.json");
-  return defaultPath;
+  try {
+    const runtime = JSON.parse(readFileSync(join(resolveCruxHome(), "runtime.json"), "utf8"));
+    if (runtime.inboxPath) return runtime.inboxPath.replace(/^~/, homedir());
+  } catch {
+    // runtime.json absent or malformed — fall through
+  }
+  return join(homedir(), ".claude/teams/crux/inboxes/team-lead.json");
 }
 
 export async function POST() {

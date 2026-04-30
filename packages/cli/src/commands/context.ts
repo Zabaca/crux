@@ -23,18 +23,22 @@ import { emit, setJsonMode } from "../output.js";
 
 const SEED_VERSION = "2026-04-21";
 
-function legalNextTransitions(lifecycleStatus: string): string[] {
-  switch (lifecycleStatus) {
-    case "shaping":
-      return ["commit", "abandon"];
-    case "committed":
-      return ["ship", "abandon"];
-    case "shipping":
-      return ["ship", "abandon"];
-    default:
-      return [];
-  }
+function legalNextTransitions(status: string | null, hasShippedSolution: boolean): string[] {
+  if (status === "done" || status === "abandoned") return [];
+  const events: string[] = ["schedule", "abandon"];
+  if (status !== null) events.push("unschedule");
+  if (hasShippedSolution) events.push("done");
+  return events;
 }
+
+const STATUS_RANK: Record<string, number> = {
+  now: 0,
+  next: 1,
+  later: 2,
+  done: 4,
+  abandoned: 5,
+};
+const rankStatus = (s: string | null): number => (s == null ? 3 : (STATUS_RANK[s] ?? 99));
 
 export const contextCommand = defineCommand({
   meta: {
@@ -62,32 +66,18 @@ export const contextCommand = defineCommand({
         slug: args.workstream,
       });
 
-    const openProblemsRaw = await db
+    const allProblemsRaw = await db
       .select()
       .from(problems)
       .where(eq(problems.workstreamId, wsRow.id));
-    const priorityRank = (tier: string | null): number => {
-      switch (tier) {
-        case "P0":
-          return 0;
-        case "P1":
-          return 1;
-        case "P2":
-          return 2;
-        case "P3":
-          return 3;
-        default:
-          return 99;
-      }
-    };
-    const openProblems = [...openProblemsRaw].sort((a, b) => {
-      const d = priorityRank(a.priorityTier) - priorityRank(b.priorityTier);
+    const allProblems = [...allProblemsRaw].sort((a, b) => {
+      const d = rankStatus(a.status) - rankStatus(b.status);
       if (d !== 0) return d;
       return a.createdAt - b.createdAt;
     });
 
     const digestProblems = await Promise.all(
-      openProblems.map(async (p) => {
+      allProblems.map(async (p) => {
         // Evidence + inlined observation.
         const ev = await db.select().from(evidence).where(eq(evidence.problemId, p.id));
         const obsIds = ev.map((e) => e.observationId);
@@ -190,14 +180,15 @@ export const contextCommand = defineCommand({
           .where(eq(abandonments.problemId, p.id))
           .limit(1);
 
+        const hasShippedSolution = sols.some((s) => s.status === "shipped");
         return {
-          problem: p,
+          ...p,
           evidence: evidenceInlined,
           solutions: solutionsInlined,
           latest_decision: latestDecisionPayload,
           eliminations: eliminationsInlined,
           abandonment: abandonRows[0] ?? null,
-          legal_next_transitions: legalNextTransitions(p.lifecycleStatus),
+          legal_next_transitions: legalNextTransitions(p.status, hasShippedSolution),
         };
       }),
     );
@@ -272,7 +263,12 @@ export const contextCommand = defineCommand({
 
     emit({
       workstream: wsRow,
-      open_problems: digestProblems,
+      now: digestProblems.filter((p) => p.status === "now"),
+      next: digestProblems.filter((p) => p.status === "next"),
+      later: digestProblems.filter((p) => p.status === "later"),
+      unscheduled: digestProblems.filter((p) => p.status == null),
+      done: digestProblems.filter((p) => p.status === "done"),
+      abandoned: digestProblems.filter((p) => p.status === "abandoned"),
       recent_observations_unlinked: unlinked,
       unpromoted_ideas: unpromotedIdeas,
       themes: themesInlined,

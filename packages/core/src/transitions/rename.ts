@@ -76,8 +76,6 @@ const POST_CASCADE_HOOKS: Partial<Record<EntityKind, PostCascadeHook>> = {
 export type RenameUpdates = {
   title?: string;
   description?: string;
-  /** Problem-only — accepted for problem rename, ignored elsewhere. */
-  priorityTier?: string | null;
 };
 
 export type RenameResult = {
@@ -188,9 +186,6 @@ export async function renameEntity(
       }
       if (updates.description !== undefined) {
         setFragments.push(sql`description = ${updates.description}`);
-      }
-      if (kind === "problem" && updates.priorityTier !== undefined) {
-        setFragments.push(sql`priority_tier = ${updates.priorityTier}`);
       }
       // Bump updated_at on tables that have it (themes does not).
       if (kind !== "theme") {

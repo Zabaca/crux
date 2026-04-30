@@ -12,6 +12,11 @@ export interface UserConfig {
   };
 }
 
+export function resolveCruxHome(): string {
+  if (process.env.CRUX_HOME) return process.env.CRUX_HOME;
+  return join(homedir(), ".claude", ".crux");
+}
+
 export function configDir(): string {
   const xdg = process.env.XDG_CONFIG_HOME;
   const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".config");

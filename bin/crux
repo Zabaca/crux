@@ -32,16 +32,16 @@ fi
 # was invoked from an unrelated cwd (see issue #2). Cwd-scoping is the concrete
 # "doing dev work on crux itself" signal. CRUX_DEV=0 force-disables even when
 # cwd is inside the repo. An explicit CRUX_DB_URL always wins.
-if [ -z "${CRUX_DB_URL:-}" ] && [ -d "$PLUGIN_ROOT/.git" ]; then
+if [ -z "${CRUX_HOME:-}" ] && [ -d "$PLUGIN_ROOT/.git" ]; then
   case "$PWD/" in
     "$PLUGIN_ROOT"/*|"$PLUGIN_ROOT/")
       if [ "${CRUX_DEV:-}" = "0" ]; then
-        # Explicit opt-out: force XDG path so the committed .env doesn't silently
-        # pull us back into the dev db when Bun auto-loads it.
-        export CRUX_DB_URL="file:${XDG_DATA_HOME:-$HOME/.local/share}/crux/crux.db"
+        # Explicit opt-out: force production path so the committed .env doesn't
+        # pull us back into the dev state when Bun auto-loads it.
+        export CRUX_HOME="$HOME/.claude/.crux"
       else
-        export CRUX_DB_URL="file:$PLUGIN_ROOT/.crux.db"
-        echo "crux: dev-mode guard active — writing to $PLUGIN_ROOT/.crux.db (set CRUX_DEV=0 to disable)" >&2
+        export CRUX_HOME="$PLUGIN_ROOT/.crux"
+        echo "crux: dev-mode guard active — writing to $PLUGIN_ROOT/.crux (set CRUX_DEV=0 to disable)" >&2
       fi
       ;;
   esac

@@ -10,9 +10,10 @@ dist/
 *.db-shm
 *.db-wal
 .crux.db*
+.crux/
 
-# Local config — .env is committed on purpose (pins dev db to repo-local
-# .crux.db; see the file for context). Only .env.local variants are private.
+# Local config — .env is committed on purpose (pins dev state to repo-local
+# .crux/; see the file for context). Only .env.local variants are private.
 .env.local
 .env.*.local
 
@@ -20,8 +21,10 @@ dist/
 .vscode/
 .idea/
 *.log
+*.tsbuildinfo
 
 # Claude/agent noise — whitelist what's intentional, ignore the rest.
 .claude/*
 !.claude/skills/
 .view-state.json
+.env

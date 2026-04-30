@@ -1,149 +1,157 @@
 ---
 name: crux
-description: Capture product-discovery thinking through the `crux` CLI as the conversation shapes it — Problems, Evidence, Solutions, Eliminations, Decisions — so the next session starts warm instead of cold. Use during discovery/design conversations; do not use for implementation-only work.
+description: Capture observations and ideas mid-conversation through the `crux` CLI — cheap, low-friction intake. Synthesis (problems, solutions, decisions) is deferred to `/crux:review`. Use during discovery/design conversations whenever something worth remembering surfaces; do not use for implementation-only work.
 ---
 
-# Crux
+# Crux — intake mode
 
-Crux is a product-thinking residue tool. It captures the output of discovery conversations as typed state — Workstreams, Observations, Problems, Evidence, Solutions, Eliminations, Decisions, Outcomes — so future sessions can reload them via `crux context -w <slug> --json` instead of starting cold.
+Crux is a product-thinking residue tool. This skill is the **default intake mode**: capture Observations and Ideas as they surface, cheaply, without trying to synthesize them into Problems on the spot.
 
-This skill tells you when to reach for `crux`, when not to, and how to use it well.
+Synthesis — promoting Observations into Evidence on Problems, creating new Problems, ruling out or committing to Solutions — is the job of a separate review pass. Run `/crux:review` when the user is ready to do that work.
+
+Mixing intake and synthesis raises capture friction and produces premature problem statements. Keep them apart.
 
 ## How to invoke the CLI
 
-Throughout this skill, `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always invoke the CLI via that explicit path — it's not on `$PATH`, and each Bash invocation in Claude Code spawns a fresh shell so aliases/env vars don't persist between calls.
+`crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
 
 ```sh
 ${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --json
 ```
 
-The wrapper lazily runs `bun install` in the plugin dir on first use, so you don't need a separate deps check.
+The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
 
-## When to invoke Crux
+## When to invoke (intake)
 
-- The user articulates a claim, observation, or constraint worth remembering → `crux observation add`.
-- The conversation is shaping a real problem-to-solve (who, why it matters, what's blocked) and the shape has settled enough to name → `crux problem add`.
-- You or the user propose a concrete option for a Problem → `crux solution add`.
-- A direction is ruled out even though no winner is picked → `crux elimination add`. Progressive narrowing is a real move.
-- A direction is committed to → `crux decision add`. Rejected alternatives are named explicitly.
-- A Problem stops being worth solving → `crux problem abandon --rationale "..."`.
-- An Observation or Idea was misfiled, turned out wrong, or became irrelevant → `crux observation archive <obs-id> --rationale "..."` / `crux idea archive <slug> -w <ws> --rationale "..."`. Terminal. Archived rows stay in the db with a rationale but are hidden from default context queues.
-- A shipped Solution's impact is known → `crux outcome add`.
+- User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add`.
+- User floats a solution-space hunch without a matching Problem yet → `crux idea add`.
+- An existing Observation or Idea was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."` / `crux idea archive <slug> -w <ws> --rationale "..."`. Terminal.
 
-## When NOT to invoke Crux
+That's the full intake surface. Anything else — Problems, Evidence, Solutions, Eliminations, Decisions, Outcomes, scheduling — belongs in `/crux:review`.
 
-- The conversation is pure implementation or debugging — code goes in files, not in Crux.
-- The user is venting, exploring, or thinking out loud and nothing has settled.
-- You're tempted to file an entity you invented that wasn't grounded in the user's thinking.
-- The item is a to-do or reminder. Crux isn't a task tracker.
+## When NOT to invoke
 
-Low-friction intake is a feature, but so is judgment. A blurry thought filed prematurely as a Problem creates drag on every later reload.
+- Pure implementation or debugging — code goes in files.
+- User venting / exploring out loud, nothing settled.
+- You're tempted to file something the user didn't actually say.
+- To-dos and reminders. Crux is not a task tracker.
+
+Low-friction intake is a feature, but so is judgment. A blurry thought filed prematurely creates drag on every later reload.
 
 ## First-run init
 
-Before the first `crux` command in a session, run these checks in order and act only when something's missing. All pass on steady state → no-op, near-zero latency. First run on a new machine hits them once.
+Before the first `crux` command in a session, run these checks in order. Steady state → all no-op.
 
-1. **Bun runtime**: `command -v bun`. If missing, surface install instructions to the user — the wrapper exits with a clear message but you should pre-empt that. Cross-platform install:
+1. **Bun runtime**: `command -v bun`. If missing, surface install:
    - macOS/Linux: `curl -fsSL https://bun.sh/install | bash`
-   - macOS via Homebrew: `brew install oven-sh/bun/bun`
+   - Homebrew: `brew install oven-sh/bun/bun`
    - Windows: `powershell -c "irm bun.sh/install.ps1|iex"`
-   - After install the user must restart their shell (or source the bun config) before continuing.
-2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. If missing, the wrapper lazily installs via `bun install` on first invocation. You can pre-warm by running `${CLAUDE_PLUGIN_ROOT}/bin/crux --help` once. First install takes a few seconds; subsequent invocations are instant.
+   - User must restart shell after install.
+2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. Wrapper auto-installs on first invocation; pre-warm with `${CLAUDE_PLUGIN_ROOT}/bin/crux --help`.
 3. **Database**: `test -f ~/.local/share/crux/crux.db`. If missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
-4. **User config**: `test -f ~/.config/crux/config.toml`. If missing, ask the user for their name and email, then `${CLAUDE_PLUGIN_ROOT}/bin/crux user init --name "..." --email "..."`.
-5. **Agent bus (team + inbox)**: Ensure the `crux-mvp` team exists and your inbox is seeded so the web/TUI notify button can wake you:
-   - Check: `test -f ~/.claude/teams/crux-mvp/config.json`
-   - If missing: use the `TeamCreate` tool with `team_name: "crux-mvp"`, then seed the inbox:
-     ```sh
-     mkdir -p ~/.claude/teams/crux-mvp/inboxes
-     echo '[]' > ~/.claude/teams/crux-mvp/inboxes/team-lead.json
-     ```
-   - If already exists: no-op.
-6. **Web UI**: Check if the Crux web UI is running on port 3210:
-   - Check: `lsof -i :3210 | grep LISTEN`
-   - If running: no-op.
-   - If not running: start it in the background from the plugin/repo root:
-     ```sh
-     cd <repo-root> && bun run --filter @crux/web dev &> /tmp/crux-web-dev.log &
-     ```
-     Wait ~3 seconds, then verify with `curl -s -o /dev/null -w "%{http_code}" http://localhost:3210/`. Once up, open `http://localhost:3210` in the browser for the user.
+4. **User config**: `test -f ~/.config/crux/config.toml`. If missing, ask name/email then `crux user init --name "..." --email "..."`.
+5. **Agent bus**: `TeamCreate` with `team_name: "crux"`. If team already exists, skip. Then write runtime pointer:
+   ```sh
+   CRUX_HOME="${CRUX_HOME:-$HOME/.claude/.crux}"
+   mkdir -p "$CRUX_HOME"
+   SESSION_ID=$(cat "$CRUX_HOME/session-id" 2>/dev/null)
+   cat > "$CRUX_HOME/runtime.json" <<EOF
+   {
+     "teamName": "crux",
+     "inboxPath": "$HOME/.claude/teams/crux/inboxes/team-lead.json",
+     "sessionId": "$SESSION_ID",
+     "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+   }
+   EOF
+   ```
+6. **Web UI**: `lsof -i :3210 | grep LISTEN`. If down, start:
+   ```sh
+   cd <repo-root> && bun run --filter @crux/web dev &> /tmp/crux-web-dev.log &
+   ```
+   Wait ~3s, verify `curl -s -o /dev/null -w "%{http_code}" http://localhost:3210/`. Open in browser for user.
 
 ## Load context before contributing
 
-When the user names a workstream, run this _before_ adding new state:
+When user names a workstream, run before adding state:
 
 ```sh
 crux context -w <slug> --json
 ```
 
-Anchor on:
+For intake mode, anchor on:
 
-- `open_problems[]` — what's shaping vs committed, how much evidence each has.
-- `open_problems[].latest_decision` — what's already been decided and why.
-- `open_problems[].eliminations[]` — what's been ruled out; don't re-propose those.
-- `unpromoted_ideas[]` — solution-space hunches still looking for a Problem.
+- `recent_observations_unlinked[]` — what's been captured but not yet promoted; avoid duplicates.
+- `unpromoted_ideas[]` — same, for solution-space hunches.
+- `now[]`, `next[]`, `later[]`, `unscheduled[]` — read-only awareness of open Problems. **Do not link Evidence here** — that's review-mode work. Use them only to phrase Observation tags better and to recognize when a thought duplicates known terrain.
 
-If no workstream is in context and you can't infer one from the cwd, ask the user before inventing one.
+If no workstream is in context and you can't infer one from cwd, ask before inventing.
 
 ## Propose-then-file, don't silently file
 
-When you determine something should be filed, propose it in **prose** first — name the entity type, summarize the content, and call out the key fields (workstream, source-type, tags, priority, links to other entities). What the user reviews is the substance, not the shell syntax. Example:
+When you decide something should be captured, propose it in **prose** first — entity type, content summary, key fields (workstream, source-type, tags). What the user reviews is substance, not shell syntax. Example:
 
-> I'd file an **Observation** (external, tagged `dogfood,intake`) — _"GitHub issue #1: observations have no correction path..."_ — and link it as **Evidence** to `observation-correction-gap` with note _"Direct reporter articulation of the gap."_
+> I'd file an **Observation** (external, tagged `dogfood,intake`) — _"GitHub issue #1: observations have no correction path..."_
 
-Do not lead with the CLI invocation. Flag-and-argument form buries the content under ceremony, especially when proposing multiple entities in one turn. Invoke the CLI yourself once the user approves.
+Don't lead with the CLI invocation. Invoke once user approves.
 
-Execute directly without pre-showing only when the user has explicitly authorized batch capture ("just file the observations from this conversation") or when you're resuming work the user already approved.
+Skip the preview only when user explicitly authorized batch capture ("just file the observations from this conversation").
 
-## Entity discipline
+## Observation vs Idea
 
-### Observation vs Idea
+- **Observation** = problem-space, source-grounded (user report, metric, reading, internal experience).
+- **Idea** = solution-space hunch without a matching Problem yet.
 
-- **Observation** is problem-space — something noticed, grounded in a source (user report, metric, reading, internal experience).
-- **Idea** is solution-space — a hunch before a matching Problem exists.
+If it comes from a source, Observation. If it's a vague "what if we just…", Idea.
 
-If the item comes from a source, it's an Observation. If it's a vague "what if we just…" floating without a Problem yet, it's an Idea.
+**Do not link Observations to Problems here.** Even when an Observation obviously supports an existing Problem, file it standalone in intake mode. The link gets made deliberately during `/crux:review` so the user reviews the synthesis. Premature linking buries weak evidence under strong-looking trails.
 
-### Evidence, not Problem redefinition
+## Archive (intake hygiene)
 
-When an Observation supports an existing Problem, file `crux evidence link` rather than rewriting the Problem statement to absorb the new weight. Evidence preserves origin trail; Problem statements stay stable.
+Observations and Ideas are never deleted — origin trail is permanent — but misfiles happen. Use archive when:
 
-### Elimination vs Decision
+- Typo, test row, wrong workstream
+- Obvious duplicate of existing row
+- Relevance evaporated mid-conversation
 
-- **Elimination** rejects one or more Solutions _without_ picking a winner. Use for progressive narrowing: "we've ruled out SaaS tools, still choosing between X and Y."
-- **Decision** commits to a chosen Solution _and_ names rejected ones. Use when you're actually choosing.
-
-A Decision where rejected Solutions aren't rows in the db is dishonest — it claims to have compared options that were never filed. Before filing a Decision, ensure every rejected alternative exists as a `proposed` Solution. If the user is about to commit to option A and options B, C haven't been recorded as Solutions, file them first.
-
-### Abandonment is first-class
-
-`crux problem abandon <slug> --rationale "..."` is a real event, not deletion. The rationale travels forward so future sessions don't re-derive the same dead end.
-
-### Archive is first-class, parallel to Abandonment
-
-Observations and Ideas are never deleted — the origin trail is permanent — but misfiles and dead-end intake happen. `crux observation archive <obs-id> --rationale "..."` and `crux idea archive <slug> -w <ws> --rationale "..."` mark an intake row as noted-but-wrong without removing it. Archived rows disappear from default context queues (`recent_observations_unlinked`, `unpromoted_ideas`) so they don't generate reload noise, but they stay visible under any Problem's Evidence with their rationale inlined — the synthesis trail stays honest. Use archive for typos, test rows, wrong-workstream filings, and Observations/Ideas whose relevance evaporated. Terminal: there is no un-archive, same shape as Abandonment.
-
-### Priority only when genuinely felt
-
-`--priority P0|P1|P2|P3` is optional. Reserve **P0** for "this is blocking real work right now." Default to leaving it unset rather than ranking everything P1.
+Archive is terminal — no un-archive. Archived rows hide from default queues but remain visible under any Problem's Evidence with rationale inlined.
 
 ## Slugs and titles
 
 - Workstream slug: kebab-case area name — `crux`, `farm-app`, `client-acme`.
-- Problem slug: noun-phrase describing the gap — `thinking-residue-gap`, `onboarding-dropoff`. Not questions, not feature names.
-- Solution slug: descriptive approach — `build-crux`, `notion-as-backend`. Not outcomes.
+- Idea slug: descriptive hunch — `auto-link-strong-evidence`, `notion-mirror`. Not outcomes.
 - Titles are one sentence. Descriptions are the paragraph.
 
 ## Attribution
 
-`reporter_id` / `decided_by_id` / `eliminated_by_id` come from `~/.config/crux/config.toml`. If a command fails with "no user configured," run `crux user init`.
+`reporter_id` comes from `~/.config/crux/config.toml`. If a command fails with "no user configured," run `crux user init`.
 
-**You (Claude) are not a User.** Everything you file is attributed to the human whose machine ran the CLI. Preserve the distinction between "Claude found this" and "user observed this" in the _content_ of the entry — tags, phrasing — not in the reporter field.
+**You (Claude) are not a User.** Everything you file is attributed to the human. Preserve the "Claude noticed this" vs "user said this" distinction in tags/phrasing, not in the reporter field.
 
-## Reload mid-session
+## Handoff to review
 
-When a conversation runs long and branches into a new Problem area, consider re-running `crux context -w <slug> --json` before proposing entities in the new area. State can change between calls if other sessions are active.
+When the user says they want to review observations, promote ideas, shape Problems, file Solutions, or commit a Decision, switch to `/crux:review`. That skill owns the full synthesis surface (problem add/schedule/abandon, evidence link, solution add, elimination, decision, outcome).
 
-## Cross-workstream audit
+Signal phrases that should hand off: "let's review what we've captured," "promote that into a problem," "file a decision," "rule that out," "what should we work on next."
 
-For the "where do my active engagements actually stand?" question, there's no single command yet — planned for a later iteration. For now, run `crux workstream list --json` and then `crux context` per workstream, or query the db directly.
+## View control bus
+
+The view-state machine tracks what the user is looking at across web UI and TUI. Use to navigate surfaces and read current focus without screenshots.
+
+```sh
+crux view get --json        # current state + context
+crux view next --json       # legal events from current state
+crux view send <EVENT> --json
+crux view send <EVENT> '{"slug":"x"}' --json
+crux view reset --json
+crux view path
+```
+
+`crux view send` fails non-zero if event is refused. Check `crux view next` first when uncertain.
+
+**Critical:** Always use `crux view send`; never edit `view-state.json` directly. Direct edits bypass guards and corrupt state.
+
+**Data mutations do not push to surfaces.** Open web UI won't auto-refresh on db changes — user must reload. Navigation does update live. Two separate channels.
+
+## Browse (TUI fallback)
+
+When web UI isn't running, `crux browse -w <slug>` opens an interactive terminal UI. Same view-state machine.

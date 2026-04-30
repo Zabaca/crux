@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { getProblemBySlug, getWorkstreamBySlug } from "@/lib/queries";
 import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge, priorityVariant, statusVariant } from "@/components/ui/badge";
+import { Badge, roadmapStatusVariant, statusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
 
@@ -35,11 +35,8 @@ export default async function ProblemPage({
         subtitle={problem.slug}
         actions={
           <div className="flex items-center gap-2">
-            {problem.priorityTier ? (
-              <Badge variant={priorityVariant(problem.priorityTier)}>{problem.priorityTier}</Badge>
-            ) : null}
-            <Badge variant={statusVariant(problem.lifecycleStatus)}>
-              {problem.lifecycleStatus}
+            <Badge variant={roadmapStatusVariant(problem.status)}>
+              {problem.status ?? "unscheduled"}
             </Badge>
           </div>
         }

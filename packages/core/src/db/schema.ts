@@ -91,10 +91,8 @@ export const problems = sqliteTable("problems", {
     .references(() => workstreams.id),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  /** shaping | committed | shipping | shipped | abandoned */
-  lifecycleStatus: text("lifecycle_status").notNull().default("shaping"),
-  /** P0 | P1 | P2 | P3 — optional priority tier. */
-  priorityTier: text("priority_tier"),
+  /** now | next | later | done | abandoned. null = unscheduled (default). */
+  status: text("status"),
   createdById: text("created_by_id")
     .notNull()
     .references(() => users.id),

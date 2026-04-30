@@ -1,10 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
 import { eq } from "drizzle-orm";
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
 import {
   decisions,
   evidence,
@@ -14,44 +9,15 @@ import {
   users,
   workstreams,
 } from "../db/schema.js";
-import * as schema from "../db/schema.js";
+import { createTestDb, type CruxTestDb } from "../db/test-utils.js";
 import { NotFoundError, TransitionError } from "./errors.js";
 import { renameProblem } from "./rename.js";
 
-type DB = ReturnType<typeof drizzle<typeof schema>>;
-
-let dir: string;
-let dbFile: string;
-let db: DB;
-
-const MIGRATIONS_DIR = new URL("../db/migrations", import.meta.url).pathname;
-
-async function applyMigrations(d: DB) {
-  // libSQL migrations live as .sql files in db/migrations. We can't pull in
-  // drizzle-kit at test time; just execute each statement file in order.
-  const files = readdirSync(MIGRATIONS_DIR)
-    .filter((f) => f.endsWith(".sql"))
-    .sort();
-  for (const f of files) {
-    const sqlText = readFileSync(join(MIGRATIONS_DIR, f), "utf8");
-    // statement-breakpoint splits drizzle-generated migration files
-    const stmts = sqlText
-      .split(/--> statement-breakpoint/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    for (const stmt of stmts) {
-      // @ts-expect-error using session for raw exec
-      await d.session.client.execute(stmt);
-    }
-  }
-}
+let db: CruxTestDb;
+let cleanup: () => void;
 
 beforeEach(async () => {
-  dir = mkdtempSync(join(tmpdir(), "crux-rename-"));
-  dbFile = join(dir, "test.db");
-  const client = createClient({ url: `file:${dbFile}` });
-  db = drizzle(client, { schema });
-  await applyMigrations(db);
+  ({ db, cleanup } = await createTestDb());
 
   // Seed: 1 user, 1 workstream, 1 problem with 2 solutions, 2 observations,
   // 2 evidence rows, 1 decision.
@@ -123,17 +89,12 @@ beforeEach(async () => {
 });
 
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
+  cleanup();
 });
 
 describe("renameProblem", () => {
   test("renames problem and cascades to all FK referrers", async () => {
-    const r = await renameProblem(
-      "foo",
-      "bar",
-      { title: "Bar Problem", description: "new", priorityTier: "P1" },
-      db,
-    );
+    const r = await renameProblem("foo", "bar", { title: "Bar Problem", description: "new" }, db);
     expect(r.oldId).toBe("PRB-foo");
     expect(r.newId).toBe("PRB-bar");
 
@@ -145,8 +106,6 @@ describe("renameProblem", () => {
     expect(cur[0].slug).toBe("bar");
     expect(cur[0].title).toBe("Bar Problem");
     expect(cur[0].description).toBe("new");
-    expect(cur[0].priorityTier).toBe("P1");
-
     // Solutions cascade.
     const sols = await db.select().from(solutions).where(eq(solutions.problemId, "PRB-bar"));
     expect(sols.length).toBe(2);

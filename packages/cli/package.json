@@ -7,7 +7,8 @@
   },
   "type": "module",
   "scripts": {
-    "browse:dev": "CRUX_DB_URL=file:$(git rev-parse --show-toplevel)/.crux.db bun --watch src/index.ts browse"
+    "browse:dev": "CRUX_DB_URL=file:$(git rev-parse --show-toplevel)/.crux.db bun --watch src/index.ts browse",
+    "test": "bun test"
   },
   "dependencies": {
     "@crux/core": "workspace:*",

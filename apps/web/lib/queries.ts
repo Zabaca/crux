@@ -16,7 +16,7 @@ import {
 } from "@crux/core/db/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "./db";
-import { priorityRank, solutionStatusRank } from "./sort";
+import { solutionStatusRank, statusRank } from "./sort";
 
 export type Workstream = typeof workstreams.$inferSelect;
 export type Problem = typeof problems.$inferSelect;
@@ -36,12 +36,10 @@ export async function listWorkstreams() {
   const counts = await Promise.all(
     wss.map(async (ws) => {
       const probs = await d
-        .select({ id: problems.id, lifecycleStatus: problems.lifecycleStatus })
+        .select({ id: problems.id, status: problems.status })
         .from(problems)
         .where(eq(problems.workstreamId, ws.id));
-      const open = probs.filter(
-        (p) => p.lifecycleStatus !== "shipped" && p.lifecycleStatus !== "abandoned",
-      ).length;
+      const open = probs.filter((p) => p.status !== "done" && p.status !== "abandoned").length;
       return { workstream: ws, openProblemCount: open, totalProblemCount: probs.length };
     }),
   );
@@ -85,7 +83,7 @@ export async function getWorkstreamProblems(workstreamId: string) {
     solutionCount: solCountByProblem.get(p.id) ?? 0,
   }));
   annotated.sort((a, b) => {
-    const d = priorityRank(a.priorityTier) - priorityRank(b.priorityTier);
+    const d = statusRank(a.status) - statusRank(b.status);
     if (d !== 0) return d;
     return a.createdAt - b.createdAt;
   });

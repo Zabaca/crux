@@ -1,10 +1,10 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { ideas, problems, solutions, workstreams } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
+import { requireUser, slugifyName } from "@crux/core/config";
 import { IdeaInput, IdeaPromoteInput, IdeaArchiveInput } from "@crux/core/validation";
 import { NotFoundError, archiveIdea, renameIdea } from "@crux/core/transitions";
-import { eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
 function asTags(v: unknown): string[] {
@@ -106,8 +106,9 @@ const promoteCmd = defineCommand({
   meta: { name: "promote", description: "Promote an idea into a Solution against a Problem." },
   args: {
     slug: { type: "positional", required: true, description: "idea slug" },
+    workstream: { type: "string", required: true, alias: "w" },
     problem: { type: "string", required: true, description: "problem slug" },
-    "solution-slug": { type: "string", description: "Override (default: idea slug)." },
+    "solution-slug": { type: "string", description: "Override slug (default: title-derived)." },
     title: { type: "string", required: true },
     description: { type: "string" },
     effort: { type: "string", description: "S | M | L | XL" },
@@ -118,13 +119,18 @@ const promoteCmd = defineCommand({
     const parsed = IdeaPromoteInput.parse({
       ideaSlug: args.slug,
       problemSlug: args.problem,
-      solutionSlug: args["solution-slug"] || args.slug,
+      solutionSlug: args["solution-slug"] || slugifyName(args.title),
       title: args.title,
       description: args.description,
       effort: args.effort,
     });
     const db = getDb();
-    const ideaRows = await db.select().from(ideas).where(eq(ideas.slug, parsed.ideaSlug)).limit(1);
+    const ws = await resolveWorkstream(args.workstream);
+    const ideaRows = await db
+      .select()
+      .from(ideas)
+      .where(and(eq(ideas.workstreamId, ws.id), eq(ideas.slug, parsed.ideaSlug)))
+      .limit(1);
     if (ideaRows.length === 0)
       throw new NotFoundError(`idea not found: ${parsed.ideaSlug}`, { slug: parsed.ideaSlug });
     const pr = await db

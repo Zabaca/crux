@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./db": "./src/db/client.ts",
     "./db/migrations-path": "./src/db/migrations-path.ts",
+    "./db/test-utils": "./src/db/test-utils.ts",
     "./db/schema": "./src/db/schema.ts",
     "./transitions": "./src/transitions/index.ts",
     "./validation": "./src/validation/schemas.ts",
