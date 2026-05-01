@@ -7,6 +7,7 @@ import { NotFoundError, createDecision } from "@crux/core/transitions";
 import { and, eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
+import { wsArg, problemArg, hintCtx } from "../ctx-defaults.js";
 
 async function nextDecisionId(): Promise<string> {
   const all = await getDb().select({ id: decisions.id }).from(decisions);
@@ -32,8 +33,8 @@ const addCmd = defineCommand({
       "Record a decision — flip chosen Solution to chosen, rejected Solutions to rejected.",
   },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
-    problem: { type: "string", required: true },
+    workstream: { type: "string", required: false, alias: "w" },
+    problem: { type: "string", required: false },
     chosen: { type: "string", required: true },
     rejected: { type: "string", description: "Repeatable or comma-separated." },
     rationale: { type: "string", required: true },
@@ -42,10 +43,13 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    const wsVal = wsArg(args.workstream);
+    const prVal = problemArg(args.problem);
     guardAction("ADD_DECISION");
+    hintCtx(wsVal, prVal);
     const parsed = DecisionInput.parse({
-      workstream: args.workstream,
-      problemSlug: args.problem,
+      workstream: wsVal,
+      problemSlug: prVal,
       chosen: args.chosen,
       rejected: asList(args.rejected),
       rationale: args.rationale,

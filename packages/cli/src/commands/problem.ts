@@ -30,6 +30,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
 import { recordQuery } from "../record-query.js";
+import { wsArg, hintCtx } from "../ctx-defaults.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -48,7 +49,7 @@ async function resolveProblem(slug: string) {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a problem to a workstream." },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
+    workstream: { type: "string", required: false, alias: "w" },
     slug: { type: "string", required: true },
     title: { type: "string", required: true },
     description: { type: "string", required: true },
@@ -56,13 +57,15 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    const wsVal = wsArg(args.workstream);
     guardAction("ADD_PROBLEM");
     const parsed = ProblemInput.parse({
-      workstream: args.workstream,
+      workstream: wsVal,
       slug: args.slug,
       title: args.title,
       description: args.description,
     });
+    hintCtx(wsVal);
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
     const id = `PRB-${parsed.slug}`;
@@ -82,7 +85,7 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List problems in a workstream." },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
+    workstream: { type: "string", required: false, alias: "w" },
     status: {
       type: "string",
       description: "now | next | later | done | abandoned | unscheduled",
@@ -91,7 +94,9 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const ws = await resolveWorkstream(args.workstream);
+    const wsVal = wsArg(args.workstream);
+    hintCtx(wsVal);
+    const ws = await resolveWorkstream(wsVal);
     const filter = args.status;
     const where =
       filter === "unscheduled"

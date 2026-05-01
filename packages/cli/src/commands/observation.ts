@@ -7,6 +7,7 @@ import { NotFoundError, archiveObservation } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
+import { wsArg, hintCtx } from "../ctx-defaults.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -35,7 +36,7 @@ function asTags(v: unknown): string[] {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Record a new observation." },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
+    workstream: { type: "string", required: false, alias: "w" },
     content: { type: "string", required: true },
     source: { type: "string" },
     "source-type": {
@@ -47,14 +48,16 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    const wsVal = wsArg(args.workstream);
     guardAction("ADD_OBSERVATION");
     const parsed = ObservationInput.parse({
-      workstream: args.workstream,
+      workstream: wsVal,
       content: args.content,
       source: args.source,
       sourceType: args["source-type"],
       tags: asTags(args.tag),
     });
+    hintCtx(wsVal);
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
     const id = await nextObsId();
@@ -77,12 +80,14 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List observations in a workstream." },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
+    workstream: { type: "string", required: false, alias: "w" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const ws = await resolveWorkstream(args.workstream);
+    const wsVal = wsArg(args.workstream);
+    hintCtx(wsVal);
+    const ws = await resolveWorkstream(wsVal);
     const rows = await getDb()
       .select()
       .from(observations)

@@ -4,6 +4,7 @@ import { abandonments, problems, workstreams } from "@crux/core/db/schema";
 import { NotFoundError } from "@crux/core/transitions";
 import { eq, inArray } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { wsArg, hintCtx } from "../ctx-defaults.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -15,12 +16,14 @@ async function resolveWorkstream(slug: string) {
 const listCmd = defineCommand({
   meta: { name: "list", description: "List abandonments in a workstream." },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
+    workstream: { type: "string", required: false, alias: "w" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const ws = await resolveWorkstream(args.workstream);
+    const wsVal = wsArg(args.workstream);
+    hintCtx(wsVal);
+    const ws = await resolveWorkstream(wsVal);
     const db = getDb();
     const wsProblems = await db
       .select({ id: problems.id })

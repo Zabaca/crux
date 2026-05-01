@@ -8,15 +8,16 @@ import {
   OkWithStatusOutput,
   RenameOutput,
 } from "@crux/core/validation";
-import { NotFoundError, renameSolution, shipSolution } from "@crux/core/transitions";
+import { NotFoundError, renameSolution, shipSolution, editSolution } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
-import { emit, setJsonMode } from "../output.js";
+import { emit, setJsonMode, emitError } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
+import { problemArg, hintCtx } from "../ctx-defaults.js";
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a solution candidate to a problem." },
   args: {
-    problem: { type: "string", required: true, description: "problem slug" },
+    problem: { type: "string", required: false, description: "problem slug" },
     slug: { type: "string", required: true },
     title: { type: "string", required: true },
     description: { type: "string" },
@@ -24,9 +25,11 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    const prVal = problemArg(args.problem);
     guardAction("ADD_SOLUTION");
+    hintCtx(undefined, prVal);
     const parsed = SolutionInput.parse({
-      problemSlug: args.problem,
+      problemSlug: prVal,
       slug: args.slug,
       title: args.title,
       description: args.description,
@@ -139,7 +142,50 @@ const renameCmd = defineCommand({
   },
 });
 
+const editCmd = defineCommand({
+  meta: { name: "edit", description: "Edit a solution's description or title." },
+  args: {
+    slug: { type: "positional", required: true },
+    description: { type: "string" },
+    title: { type: "string" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    if (!args.description && !args.title) {
+      emitError({ code: "VALIDATION_ERROR", message: "Provide --description or --title" });
+      process.exit(1);
+    }
+    guardAction("EDIT_SOLUTION");
+    const db = getDb();
+    const row = (
+      await db.select().from(solutions).where(eq(solutions.slug, args.slug)).limit(1)
+    )[0];
+    if (!row) {
+      emitError(new NotFoundError("solution", args.slug));
+      process.exit(23);
+    }
+    await editSolution(
+      row.id,
+      {
+        ...(args.description !== undefined && { description: args.description }),
+        ...(args.title !== undefined && { title: args.title }),
+      },
+      db,
+    );
+    recordMutation("EDIT_SOLUTION");
+    emit({ ok: true, id: row.id }, OkWithIdOutput, `edited ${row.id}`);
+  },
+});
+
 export const solutionCommand = defineCommand({
   meta: { name: "solution", description: "Solutions." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, ship: shipCmd, rename: renameCmd },
+  subCommands: {
+    add: addCmd,
+    list: listCmd,
+    show: showCmd,
+    ship: shipCmd,
+    rename: renameCmd,
+    edit: editCmd,
+  },
 });

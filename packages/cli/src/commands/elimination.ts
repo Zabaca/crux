@@ -7,6 +7,7 @@ import { NotFoundError, createElimination } from "@crux/core/transitions";
 import { eq, inArray } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
+import { problemArg, hintCtx } from "../ctx-defaults.js";
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -28,7 +29,7 @@ async function nextEliminationId(): Promise<string> {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Eliminate one or more Solutions from a Problem." },
   args: {
-    problem: { type: "string", required: true },
+    problem: { type: "string", required: false },
     solutions: { type: "string", required: true, description: "comma-separated solution slugs" },
     rationale: { type: "string", required: true },
     context: { type: "string" },
@@ -36,9 +37,11 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    const prVal = problemArg(args.problem);
     guardAction("ADD_ELIMINATION");
+    hintCtx(undefined, prVal);
     const parsed = EliminationInput.parse({
-      problemSlug: args.problem,
+      problemSlug: prVal,
       solutions: asList(args.solutions),
       rationale: args.rationale,
       context: args.context,

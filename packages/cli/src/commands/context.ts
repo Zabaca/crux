@@ -19,6 +19,7 @@ import { ContextOutput } from "@crux/core/validation";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { recordQuery } from "../record-query.js";
+import { wsArg, hintCtx } from "../ctx-defaults.js";
 
 const SEED_VERSION = "2026-04-21";
 
@@ -45,7 +46,7 @@ export const contextCommand = defineCommand({
     description: "Emit a JSON digest of the workstream for session reload.",
   },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
+    workstream: { type: "string", required: false, alias: "w" },
     "show-archived": {
       type: "boolean",
       description: "Include archived Observations in the unlinked-observations section.",
@@ -64,7 +65,9 @@ export const contextCommand = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    recordQuery("CONTEXT_SHOW", args.workstream);
+    const wsVal = wsArg(args.workstream);
+    hintCtx(wsVal);
+    recordQuery("CONTEXT_SHOW", wsVal);
     const showArchived = Boolean(args["show-archived"]);
 
     const VALID_TIERS = new Set(["now", "next", "later", "unscheduled", "done", "abandoned"]);
@@ -90,11 +93,11 @@ export const contextCommand = defineCommand({
     const includeExtras = Boolean(args.all);
     const db = getDb();
     const wsRow = (
-      await db.select().from(workstreams).where(eq(workstreams.slug, args.workstream)).limit(1)
+      await db.select().from(workstreams).where(eq(workstreams.slug, wsVal)).limit(1)
     )[0];
     if (!wsRow)
-      throw new NotFoundError(`workstream not found: ${args.workstream}`, {
-        slug: args.workstream,
+      throw new NotFoundError(`workstream not found: ${wsVal}`, {
+        slug: wsVal,
       });
 
     const allProblemsRaw = await db
