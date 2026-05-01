@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
+import { MutationToolbar } from "@/components/mutation-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,11 @@ export default async function Home() {
   return (
     <>
       <SyncViewState workstreamSlug={null} />
-      <PageShell title="Workstreams" subtitle="All Crux workstreams in this database.">
+      <PageShell
+        title="Workstreams"
+        subtitle="All Crux workstreams in this database."
+        actions={<MutationToolbar view="workstream_list" />}
+      >
         {wss.length === 0 ? (
           <EmptyState>
             No workstreams. Run <code>bun run seed</code> to seed WS-crux.

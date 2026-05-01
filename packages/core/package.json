@@ -14,7 +14,9 @@
     "./validation": "./src/validation/index.ts",
     "./config": "./src/config/user.ts",
     "./view-state": "./src/view-state/index.ts",
-    "./actions": "./src/actions/index.ts"
+    "./actions": "./src/actions/index.ts",
+    "./actions/allowed": "./src/actions/allowed.ts",
+    "./actions/schemas": "./src/actions/schemas.ts"
   },
   "dependencies": {
     "chokidar": "^5.0.0",

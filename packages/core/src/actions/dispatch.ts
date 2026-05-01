@@ -59,7 +59,7 @@ export type DispatchResult = {
  */
 export async function dispatch(
   rawAction: unknown,
-  options: { path?: string } = {},
+  options: { path?: string; enforceAllow?: boolean } = {},
 ): Promise<DispatchResult> {
   // Parse + validate action shape
   const action = ActionSchema.parse(rawAction) as Action;
@@ -67,8 +67,9 @@ export async function dispatch(
   // Load current meta (revision, lastAction, recentQueries) + view state value
   const meta = loadViewMeta(options.path);
 
-  // Enforce allowed list when collab mode is on
-  const collabMode = process.env.CRUX_COLLAB === "1";
+  // Enforce allowed list when explicitly requested OR when collab mode is on.
+  // CLI keeps env-flag gating; UI passes enforceAllow=true unconditionally.
+  const collabMode = options.enforceAllow === true || process.env.CRUX_COLLAB === "1";
   if (collabMode) {
     if (!isActionAllowed(action.kind, meta.value)) {
       const allowed = getAllowedActions(meta.value);

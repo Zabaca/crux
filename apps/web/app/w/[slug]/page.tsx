@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
+import { MutationToolbar } from "@/components/mutation-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +87,7 @@ export default async function WorkstreamPage({ params }: { params: Promise<{ slu
         title={ws.title}
         subtitle={ws.description ?? undefined}
         actions={
-          <div className="flex flex-col items-end gap-1 text-xs text-muted-foreground">
+          <div className="flex flex-col items-end gap-2 text-xs text-muted-foreground">
             <div className="flex gap-2">
               <Link
                 href={`/w/${ws.slug}/queues/intake`}
@@ -101,6 +102,7 @@ export default async function WorkstreamPage({ params }: { params: Promise<{ slu
                 Ideas queue
               </Link>
             </div>
+            <MutationToolbar view="workstream_dashboard" context={{ workstreamSlug: ws.slug }} />
           </div>
         }
       >

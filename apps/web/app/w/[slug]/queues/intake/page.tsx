@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ArchiveToggle } from "@/components/archive-toggle";
 import { SyncViewState } from "@/components/sync-view-state";
+import { MutationToolbar } from "@/components/mutation-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,10 @@ export default async function IntakePage({
         title="Unlinked intake"
         subtitle="Observations not yet cited by any problem as evidence."
         actions={
-          <ArchiveToggle basePath={`/w/${ws.slug}/queues/intake`} showArchived={showArchived} />
+          <div className="flex flex-col items-end gap-2">
+            <ArchiveToggle basePath={`/w/${ws.slug}/queues/intake`} showArchived={showArchived} />
+            <MutationToolbar view="intake_queue" context={{ workstreamSlug: slug }} />
+          </div>
         }
       >
         <Section title={`${obs.length} observation${obs.length === 1 ? "" : "s"}`}>

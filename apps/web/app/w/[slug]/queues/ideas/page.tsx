@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ArchiveToggle } from "@/components/archive-toggle";
 import { SyncViewState } from "@/components/sync-view-state";
+import { MutationToolbar } from "@/components/mutation-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,10 @@ export default async function IdeasPage({
         title="Unpromoted ideas"
         subtitle="Ideas not yet referenced by any solution as originating-idea."
         actions={
-          <ArchiveToggle basePath={`/w/${ws.slug}/queues/ideas`} showArchived={showArchived} />
+          <div className="flex flex-col items-end gap-2">
+            <ArchiveToggle basePath={`/w/${ws.slug}/queues/ideas`} showArchived={showArchived} />
+            <MutationToolbar view="ideas_queue" context={{ workstreamSlug: slug }} />
+          </div>
         }
       >
         <Section title={`${ideas.length} idea${ideas.length === 1 ? "" : "s"}`}>

@@ -25,7 +25,7 @@ The wrapper lazily runs `bun install` on first use, so no separate deps check ne
 
 ## Collab mode (CRUX_COLLAB=1)
 
-When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-state–aware action permissions. Mutations not allowed in the current view state will hard-reject with exit code 25 (`[ACTION_NOT_ALLOWED]`). The web UI auto-refreshes on any dispatched mutation via SSE.
+When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-state–aware action permissions. Mutations not allowed in the current view state will hard-reject with exit code 25 (`[ACTION_NOT_ALLOWED]`). The web UI auto-refreshes on any dispatched mutation via SSE. The web UI dispatches via `POST /api/action`; same `dispatch()`, same allow-list (always enforced for UI calls).
 
 **Per-view allowed mutations:**
 

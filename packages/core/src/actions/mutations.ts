@@ -34,6 +34,8 @@ import {
   renameWorkstream,
   renameProblem,
   renameSolution,
+  renameIdea,
+  renameTheme,
   NotFoundError,
   type RoadmapTier,
 } from "../transitions/index.js";
@@ -242,7 +244,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
           chosenSolutionId: chosenSol.id,
           rationale: p.rationale,
           rejectedSolutionIds: rejectedIds,
-          createdById: user.id,
+          decidedById: user.id,
         },
         db,
       );
@@ -328,7 +330,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
         observationId: p.observation,
         problemId: prob.id,
         note: p.note,
-        linkedById: user.id,
+        createdById: user.id,
       });
       return { ok: true, id };
     }
@@ -358,7 +360,6 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
         slug: p.slug,
         workstreamId: ws.id,
         title: p.title,
-        createdById: user.id,
       });
       return { ok: true, id };
     }
@@ -381,6 +382,26 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
       if (!obsRows[0]) throw new NotFoundError(`observation not found: ${p.id}`, { id: p.id });
       await db.update(observations).set({ content: p.content }).where(eq(observations.id, p.id));
       return { ok: true, id: p.id };
+    }
+    case "RENAME_IDEA": {
+      const p = action.payload;
+      const r = await renameIdea(
+        p.oldSlug,
+        p.newSlug,
+        { title: p.title, description: p.description },
+        db,
+      );
+      return { ok: true, ...r };
+    }
+    case "RENAME_THEME": {
+      const p = action.payload;
+      const r = await renameTheme(
+        p.oldSlug,
+        p.newSlug,
+        { title: p.title, description: p.description },
+        db,
+      );
+      return { ok: true, ...r };
     }
     default: {
       const _exhaustive: never = action;
