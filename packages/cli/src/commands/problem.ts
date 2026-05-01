@@ -29,6 +29,7 @@ import {
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { guardAction } from "../collab.js";
+import { recordQuery } from "../record-query.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -110,6 +111,7 @@ const showCmd = defineCommand({
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    recordQuery("PROBLEM_SHOW", args.slug);
     const db = getDb();
     const p = await resolveProblem(args.slug);
 

@@ -34,6 +34,7 @@ export async function GET() {
           context: snap.context,
           revision: meta.revision,
           lastAction: meta.lastAction,
+          recentQueries: meta.recentQueries,
         });
       } catch {
         send({
@@ -42,6 +43,7 @@ export async function GET() {
           context: { workstreamSlug: null, problemSlug: null },
           revision: 0,
           lastAction: null,
+          recentQueries: [],
         });
       }
 
@@ -55,6 +57,7 @@ export async function GET() {
             context: snap.context,
             revision: meta.revision,
             lastAction: meta.lastAction,
+            recentQueries: meta.recentQueries,
           });
         } catch {
           // ignore transient errors

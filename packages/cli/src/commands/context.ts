@@ -21,6 +21,7 @@ import { NotFoundError } from "@crux/core/transitions";
 import { ContextOutput } from "@crux/core/validation";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { recordQuery } from "../record-query.js";
 
 const SEED_VERSION = "2026-04-21";
 
@@ -68,6 +69,7 @@ export const contextCommand = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    recordQuery("CONTEXT_SHOW", args.workstream);
     const showArchived = Boolean(args["show-archived"]);
 
     const VALID_TIERS = new Set(["now", "next", "later", "unscheduled", "done", "abandoned"]);
