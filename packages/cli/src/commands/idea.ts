@@ -212,6 +212,7 @@ const renameCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("RENAME_IDEA");
     const r = await renameIdea(
       args.oldSlug,
       args.newSlug,

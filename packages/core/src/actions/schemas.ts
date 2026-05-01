@@ -182,6 +182,24 @@ export const RenameObservationAction = z.object({
   kind: z.literal("RENAME_OBSERVATION"),
   payload: z.object({ id: z.string(), content: z.string() }),
 });
+export const RenameIdeaAction = z.object({
+  kind: z.literal("RENAME_IDEA"),
+  payload: z.object({
+    oldSlug: z.string(),
+    newSlug: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+  }),
+});
+export const RenameThemeAction = z.object({
+  kind: z.literal("RENAME_THEME"),
+  payload: z.object({
+    oldSlug: z.string(),
+    newSlug: z.string(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+  }),
+});
 
 export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddProblemAction,
@@ -207,6 +225,8 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   RenameProblemAction,
   RenameSolutionAction,
   RenameObservationAction,
+  RenameIdeaAction,
+  RenameThemeAction,
 ]);
 
 export type MutationAction = z.infer<typeof MutationActionSchema>;
@@ -254,6 +274,8 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "RENAME_PROBLEM",
   "RENAME_SOLUTION",
   "RENAME_OBSERVATION",
+  "RENAME_IDEA",
+  "RENAME_THEME",
 ];
 
 export function isViewAction(action: Action): action is ViewAction {

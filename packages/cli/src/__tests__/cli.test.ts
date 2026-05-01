@@ -546,4 +546,35 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
     expect(result.ok).toBe(true);
     expect(result.id).toBe("PRB-direct-prob");
   });
+
+  test("RENAME_IDEA from workstream_list throws ActionNotAllowedError", async () => {
+    let thrown: unknown;
+    try {
+      await runCmd(ideaCommand as AnyCmd, "rename", {
+        oldSlug: "x",
+        newSlug: "y",
+        json: false,
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ActionNotAllowedError);
+    expect((thrown as ActionNotAllowedError).attempted).toBe("RENAME_IDEA");
+  });
+
+  test("RENAME_THEME from workstream_list throws ActionNotAllowedError", async () => {
+    const { themeCommand } = await import("../commands/theme.js");
+    let thrown: unknown;
+    try {
+      await runCmd(themeCommand as AnyCmd, "rename", {
+        oldSlug: "x",
+        newSlug: "y",
+        json: false,
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ActionNotAllowedError);
+    expect((thrown as ActionNotAllowedError).attempted).toBe("RENAME_THEME");
+  });
 });

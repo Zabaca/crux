@@ -22,7 +22,7 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
   },
   workstream_dashboard: {
     allowedView: ["OPEN_PROBLEM", "SELECT_INTAKE", "SELECT_IDEAS", "BACK"],
-    allowedMutation: ["ADD_PROBLEM", "ADD_OBSERVATION", "ADD_IDEA"],
+    allowedMutation: ["ADD_PROBLEM", "ADD_OBSERVATION", "ADD_IDEA", "ADD_THEME", "RENAME_THEME"],
     globals: GLOBALS,
   },
   problem_detail: {
@@ -50,7 +50,7 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
   },
   ideas_queue: {
     allowedView: ["BACK"],
-    allowedMutation: ["ARCHIVE_IDEA", "ADD_IDEA"],
+    allowedMutation: ["ARCHIVE_IDEA", "ADD_IDEA", "RENAME_IDEA"],
     globals: GLOBALS,
   },
 };

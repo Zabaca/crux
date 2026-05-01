@@ -134,6 +134,7 @@ const renameCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("RENAME_THEME");
     const r = await renameTheme(
       args.oldSlug,
       args.newSlug,
