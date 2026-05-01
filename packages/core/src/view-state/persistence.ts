@@ -12,6 +12,35 @@ type PersistedViewSnapshot = ReturnType<
   ReturnType<typeof createActor<typeof viewMachine>>["getPersistedSnapshot"]
 >;
 
+/** Sidecar fields stored alongside the XState persisted snapshot. */
+export type RecentQuery = {
+  kind: string;
+  slug?: string;
+  ts: number;
+};
+
+export type LastAction = {
+  kind: string;
+  ts: number;
+};
+
+/**
+ * ViewMeta: the full view-state.json shape.
+ * XState fields are nested under `xstate`; sidecar fields are top-level.
+ * When loading legacy files (no revision/lastAction/recentQueries), we default.
+ */
+export type ViewMeta = {
+  /** XState persisted snapshot (opaque) */
+  xstate?: PersistedViewSnapshot;
+  /** Derived from xstate snapshot: current machine value */
+  value: unknown;
+  /** Derived from xstate snapshot: current machine context */
+  context: { workstreamSlug: string | null; problemSlug: string | null };
+  revision: number;
+  lastAction: LastAction | null;
+  recentQueries: RecentQuery[];
+};
+
 /**
  * Resolve the path where the view-state JSON lives.
  *
@@ -66,6 +95,88 @@ function getPersistedSnapshotFrom(snapshot: ViewSnapshot): PersistedViewSnapshot
   const persisted = actor.getPersistedSnapshot();
   actor.stop();
   return persisted;
+}
+
+/**
+ * Load the full ViewMeta from disk (migrate-tolerant: defaults revision:0, lastAction:null, recentQueries:[]).
+ */
+export function loadViewMeta(path?: string): ViewMeta {
+  const resolvedPath = path ?? resolveViewStatePath();
+  if (!existsSync(resolvedPath)) {
+    const snap = loadState(resolvedPath);
+    return {
+      value: snap.value,
+      context: snap.context,
+      revision: 0,
+      lastAction: null,
+      recentQueries: [],
+    };
+  }
+  const raw = readFileSync(resolvedPath, "utf8");
+  let parsed: Record<string, unknown>;
+  try {
+    parsed = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    const snap = loadState(resolvedPath);
+    return {
+      value: snap.value,
+      context: snap.context,
+      revision: 0,
+      lastAction: null,
+      recentQueries: [],
+    };
+  }
+  // Load xstate part
+  const snap = loadState(resolvedPath);
+  return {
+    value: snap.value,
+    context: snap.context,
+    revision: typeof parsed.revision === "number" ? parsed.revision : 0,
+    lastAction: (parsed.lastAction as LastAction | null) ?? null,
+    recentQueries: Array.isArray(parsed.recentQueries)
+      ? (parsed.recentQueries as RecentQuery[])
+      : [],
+  };
+}
+
+/**
+ * Save ViewMeta to disk. Merges sidecar fields into the XState persisted snapshot JSON.
+ */
+export function saveViewMeta(meta: ViewMeta, path?: string): void {
+  const resolvedPath = path ?? resolveViewStatePath();
+  // Load the current xstate snapshot from disk to preserve it
+  let xstateJson: PersistedViewSnapshot | undefined;
+  if (existsSync(resolvedPath)) {
+    try {
+      const raw = readFileSync(resolvedPath, "utf8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      // Strip sidecar fields, keep XState fields
+      const {
+        revision: _r,
+        lastAction: _la,
+        recentQueries: _rq,
+        value: _v,
+        context: _c,
+        ...rest
+      } = parsed;
+      void _r;
+      void _la;
+      void _rq;
+      void _v;
+      void _c;
+      xstateJson = rest as PersistedViewSnapshot;
+    } catch {
+      // fallback
+    }
+  }
+  const payload = {
+    ...xstateJson,
+    revision: meta.revision,
+    lastAction: meta.lastAction,
+    recentQueries: meta.recentQueries,
+  };
+  mkdirSync(dirname(resolvedPath), { recursive: true });
+  writeFileSync(resolvedPath, JSON.stringify(payload, null, 2), "utf8");
 }
 
 /** Error thrown when a view event is refused by a guard or illegal in the current state. */
