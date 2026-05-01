@@ -4,13 +4,18 @@ import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { stateToPath, type ViewSnapshotJson } from "@/lib/state-to-path";
 
-/** The 5 view-action kind strings — must stay in sync with ViewActionKind. */
+/**
+ * Kinds the listener treats as navigation (ViewAction-like).
+ * Must stay in sync with ViewActionKind in @crux/core/actions.
+ * RESET is included so `crux view reset` re-routes the tab to the initial path.
+ */
 const VIEW_ACTION_KINDS = new Set([
   "SELECT_WORKSTREAM",
   "OPEN_PROBLEM",
   "SELECT_INTAKE",
   "SELECT_IDEAS",
   "BACK",
+  "RESET",
 ]);
 
 type LastAction = { kind: string; ts: number } | null;

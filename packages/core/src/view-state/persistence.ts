@@ -131,15 +131,28 @@ function atomicWrite(path: string, payload: Record<string, unknown>): void {
 /**
  * Write the XState snapshot to disk. Merges into the existing file so sidecar
  * fields (revision, lastAction, recentQueries) survive the write.
+ *
+ * If `opts.lastActionKind` is provided, also stamps a fresh
+ * `lastAction: { kind, ts }` and bumps `revision++` — used by sendViewEvent so
+ * the SSE listener can branch ViewAction vs MutationAction. Without it,
+ * existing sidecar fields are carried through unchanged.
  */
-export function saveState(path: string, snapshot: ViewSnapshot): void {
+export function saveState(
+  path: string,
+  snapshot: ViewSnapshot,
+  opts: { lastActionKind?: string } = {},
+): void {
   const persisted = getPersistedSnapshotFrom(snapshot) as unknown as Record<string, unknown>;
   const existing = readRawOrEmpty(path);
-  // Preserve sidecar fields explicitly; everything else (XState fields) gets overwritten
+  const stampLastAction = typeof opts.lastActionKind === "string";
   const merged: Record<string, unknown> = {
     ...persisted,
-    revision: existing.revision ?? 0,
-    lastAction: existing.lastAction ?? null,
+    revision: stampLastAction
+      ? (typeof existing.revision === "number" ? existing.revision : 0) + 1
+      : (existing.revision ?? 0),
+    lastAction: stampLastAction
+      ? { kind: opts.lastActionKind, ts: Date.now() }
+      : (existing.lastAction ?? null),
     recentQueries: existing.recentQueries ?? [],
   };
   atomicWrite(path, merged);
@@ -303,7 +316,7 @@ export async function sendViewEvent(
     );
   }
 
-  saveState(path, next);
+  saveState(path, next, { lastActionKind: event.type });
   return next;
 }
 
@@ -313,7 +326,7 @@ export function resetState(path: string = resolveViewStatePath()): ViewSnapshot 
   actor.start();
   const snap = actor.getSnapshot();
   actor.stop();
-  saveState(path, snap);
+  saveState(path, snap, { lastActionKind: "RESET" });
   return snap;
 }
 

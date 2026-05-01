@@ -228,3 +228,98 @@ describe("persistence merge: saveState preserves sidecar fields", () => {
     expect((afterStep3.lastAction as { kind: string }).kind).toBe("ADD_WORKSTREAM");
   });
 });
+
+describe("saveState lastActionKind option: stamps lastAction + bumps revision", () => {
+  function makeSnap() {
+    const actor = createActor(viewMachine);
+    actor.start();
+    const s = actor.getSnapshot();
+    actor.stop();
+    return s;
+  }
+
+  test("saveState with lastActionKind on empty file → revision=1, lastAction.kind set", () => {
+    const snap = makeSnap();
+    saveState(viewStatePath, snap, { lastActionKind: "SELECT_WORKSTREAM" });
+    const after = readRaw();
+    expect(after.revision).toBe(1);
+    expect((after.lastAction as { kind: string }).kind).toBe("SELECT_WORKSTREAM");
+    expect(typeof (after.lastAction as { ts: number }).ts).toBe("number");
+  });
+
+  test("ViewEvent then Mutation: file has lastAction.kind = mutation kind (mutation overwrites)", () => {
+    const snap = makeSnap();
+    // Step 1: simulate sendViewEvent
+    saveState(viewStatePath, snap, { lastActionKind: "SELECT_WORKSTREAM" });
+    expect((readRaw().lastAction as { kind: string }).kind).toBe("SELECT_WORKSTREAM");
+    expect(readRaw().revision).toBe(1);
+
+    // Step 2: simulate recordMutation via saveViewMeta
+    saveViewMeta(
+      {
+        value: {} as unknown,
+        context: { workstreamSlug: null, problemSlug: null },
+        revision: 2,
+        lastAction: { kind: "ADD_SOLUTION", ts: 5000 },
+        recentQueries: [],
+      },
+      viewStatePath,
+    );
+
+    const after = readRaw();
+    expect(after.revision).toBe(2);
+    expect((after.lastAction as { kind: string }).kind).toBe("ADD_SOLUTION");
+    // XState fields still present
+    expect(after.value).toBeDefined();
+    expect(after.context).toBeDefined();
+  });
+
+  test("Mutation then ViewEvent: file has lastAction.kind = view event type (view overwrites)", () => {
+    const snap = makeSnap();
+    // Initialize with XState fields first
+    saveState(viewStatePath, snap);
+
+    // Step 1: simulate recordMutation
+    saveViewMeta(
+      {
+        value: {} as unknown,
+        context: { workstreamSlug: null, problemSlug: null },
+        revision: 1,
+        lastAction: { kind: "ADD_SOLUTION", ts: 1000 },
+        recentQueries: [],
+      },
+      viewStatePath,
+    );
+    expect((readRaw().lastAction as { kind: string }).kind).toBe("ADD_SOLUTION");
+    expect(readRaw().revision).toBe(1);
+
+    // Step 2: simulate sendViewEvent BACK
+    saveState(viewStatePath, snap, { lastActionKind: "BACK" });
+
+    const after = readRaw();
+    expect((after.lastAction as { kind: string }).kind).toBe("BACK");
+    // revision bumped from existing 1 → 2
+    expect(after.revision).toBe(2);
+    // recentQueries preserved
+    expect(after.recentQueries).toEqual([]);
+  });
+
+  test("saveState without lastActionKind preserves existing lastAction (no overwrite)", () => {
+    const snap = makeSnap();
+    saveViewMeta(
+      {
+        value: {} as unknown,
+        context: { workstreamSlug: null, problemSlug: null },
+        revision: 7,
+        lastAction: { kind: "ADD_PROBLEM", ts: 99 },
+        recentQueries: [],
+      },
+      viewStatePath,
+    );
+    // Plain saveState (no opts) — must not stamp anything
+    saveState(viewStatePath, snap);
+    const after = readRaw();
+    expect(after.revision).toBe(7);
+    expect((after.lastAction as { kind: string }).kind).toBe("ADD_PROBLEM");
+  });
+});
