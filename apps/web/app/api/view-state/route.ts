@@ -1,9 +1,11 @@
 import {
   loadState,
+  loadViewMeta,
   resolveViewStatePath,
   sendViewEvent,
   watchViewStateFile,
 } from "@crux/core/view-state";
+import { VIEW_ACTION_KINDS } from "@crux/core/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -25,23 +27,40 @@ export async function GET() {
       // but tagged "init" so the listener doesn't navigate on connect.
       try {
         const snap = loadState(path);
-        send({ type: "init", value: snap.value, context: snap.context });
+        const meta = loadViewMeta(path);
+        send({
+          type: "init",
+          value: snap.value,
+          context: snap.context,
+          revision: meta.revision,
+          lastAction: meta.lastAction,
+        });
       } catch {
         send({
           type: "init",
           value: { viewing: "workstream_list" },
           context: { workstreamSlug: null, problemSlug: null },
+          revision: 0,
+          lastAction: null,
         });
       }
 
       const handle = watchViewStateFile(path, () => {
         try {
           const snap = loadState(path);
-          send({ type: "change", value: snap.value, context: snap.context });
+          const meta = loadViewMeta(path);
+          send({
+            type: "change",
+            value: snap.value,
+            context: snap.context,
+            revision: meta.revision,
+            lastAction: meta.lastAction,
+          });
         } catch {
           // ignore transient errors
         }
       });
+      void VIEW_ACTION_KINDS; // used in listener branching, kept here for import
 
       // Heartbeat to keep the connection alive through proxies.
       const heartbeat = setInterval(() => {
