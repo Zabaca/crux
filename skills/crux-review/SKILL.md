@@ -1,6 +1,6 @@
 ---
 name: crux-review
-description: Synthesis pass over captured Crux state — walk unlinked Observations and unpromoted Ideas, link them as Evidence to existing Problems or shape new Problems, and file Solutions, Eliminations, Decisions, and Outcomes. Use when the user explicitly opens a review (e.g. /crux:review, "let's review what we've captured", "promote that into a problem", "let's commit a decision"). Default intake stays in /crux.
+description: Synthesis pass over captured Crux state — walk unlinked Observations, link them as Evidence to existing Problems or shape new Problems. Use when the user explicitly opens a review (e.g. /crux:review, "let's review what we've captured", "promote that into a problem", "let's commit a decision"). Default intake stays in /crux.
 ---
 
 # Crux — review / synthesis mode

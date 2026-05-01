@@ -66,24 +66,6 @@ export const UserInitInput = z.object({
 
 // --- Pass 2 ---
 
-export const IdeaInput = z.object({
-  workstream: slug,
-  slug,
-  title: z.string().min(1),
-  description: z.string().optional(),
-  tags: z.array(z.string()).optional(),
-  hypothesizedProblemArea: z.string().optional(),
-});
-
-export const IdeaPromoteInput = z.object({
-  ideaSlug: slug,
-  problemSlug: slug,
-  solutionSlug: slug,
-  title: z.string().min(1),
-  description: z.string().optional(),
-  effort: z.enum(["S", "M", "L", "XL"]).optional(),
-});
-
 export const EliminationInput = z.object({
   problemSlug: slug,
   solutions: z.array(slug).min(1),
@@ -99,26 +81,7 @@ export const OutcomeInput = z.object({
   followUpProblems: z.array(slug).optional(),
 });
 
-export const ThemeInput = z.object({
-  workstream: slug,
-  slug,
-  title: z.string().min(1),
-  description: z.string().optional(),
-  timeframe: z.string().optional(),
-});
-
-export const ThemeAttachInput = z.object({
-  themeSlug: slug,
-  solutionSlug: slug,
-});
-
 export const ObservationArchiveInput = z.object({
   observationId: z.string().min(1),
-  rationale: z.string().min(1),
-});
-
-export const IdeaArchiveInput = z.object({
-  workstream: slug,
-  slug,
   rationale: z.string().min(1),
 });

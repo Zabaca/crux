@@ -9,7 +9,7 @@ export function SyncViewState({
 }: {
   workstreamSlug: string | null;
   problemSlug?: string | null;
-  queue?: "intake" | "ideas" | null;
+  queue?: "intake" | null;
 }) {
   useEffect(() => {
     fetch("/api/view-state", {

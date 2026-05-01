@@ -59,30 +59,6 @@ export const observations = sqliteTable("observations", {
   archiveRationale: text("archive_rationale"),
 });
 
-export const ideas = sqliteTable("ideas", {
-  id: text("id").primaryKey(), // IDEA-<slug>
-  slug: text("slug").notNull().unique(),
-  workstreamId: text("workstream_id")
-    .notNull()
-    .references(() => workstreams.id),
-  reporterId: text("reporter_id")
-    .notNull()
-    .references(() => users.id),
-  title: text("title").notNull(),
-  description: text("description"),
-  hypothesizedProblemArea: text("hypothesized_problem_area"),
-  tags: text("tags"),
-  createdAt: integer("created_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer("updated_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  archivedAt: integer("archived_at"),
-  archivedById: text("archived_by_id").references(() => users.id),
-  archiveRationale: text("archive_rationale"),
-});
-
 export const problems = sqliteTable("problems", {
   id: text("id").primaryKey(), // PRB-<slug>
   slug: text("slug").notNull().unique(),
@@ -139,8 +115,6 @@ export const solutions = sqliteTable("solutions", {
   status: text("status").notNull().default("proposed"),
   /** S | M | L | XL — rough effort hint, nullable. */
   effort: text("effort"),
-  /** If this solution was promoted from an Idea, point back at it. */
-  originatingIdeaId: text("originating_idea_id").references(() => ideas.id),
   createdById: text("created_by_id")
     .notNull()
     .references(() => users.id),
@@ -255,31 +229,4 @@ export const outcomeFollowUpProblems = sqliteTable(
       .references(() => problems.id),
   },
   (t) => ({ pk: primaryKey({ columns: [t.outcomeId, t.problemId] }) }),
-);
-
-export const themes = sqliteTable("themes", {
-  id: text("id").primaryKey(), // THM-<slug>
-  slug: text("slug").notNull().unique(),
-  workstreamId: text("workstream_id")
-    .notNull()
-    .references(() => workstreams.id),
-  title: text("title").notNull(),
-  description: text("description"),
-  timeframe: text("timeframe"),
-  createdAt: integer("created_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-});
-
-export const themeSolutions = sqliteTable(
-  "theme_solutions",
-  {
-    themeId: text("theme_id")
-      .notNull()
-      .references(() => themes.id),
-    solutionId: text("solution_id")
-      .notNull()
-      .references(() => solutions.id),
-  },
-  (t) => ({ pk: primaryKey({ columns: [t.themeId, t.solutionId] }) }),
 );

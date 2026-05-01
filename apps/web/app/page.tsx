@@ -5,7 +5,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
-import { MutationToolbar } from "@/components/mutation-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -14,22 +13,18 @@ export default async function Home() {
   return (
     <>
       <SyncViewState workstreamSlug={null} />
-      <PageShell
-        title="Workstreams"
-        subtitle="All Crux workstreams in this database."
-        actions={<MutationToolbar view="workstream_list" />}
-      >
+      <PageShell title="Workstreams" subtitle="All Crux workstreams in this database.">
         {wss.length === 0 ? (
           <EmptyState>
             No workstreams. Run <code>bun run seed</code> to seed WS-crux.
           </EmptyState>
         ) : (
           <ul className="space-y-3">
-            {wss.map(({ workstream: ws, openProblemCount, totalProblemCount }) => (
+            {wss.map(({ workstream: ws, tierCounts }) => (
               <li key={ws.id}>
                 <Link href={`/w/${ws.slug}`} className="block">
                   <Card className="hover:border-primary/40 transition-colors">
-                    <CardContent className="flex items-start justify-between gap-4 p-5">
+                    <CardContent className="p-5">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <span className="font-mono text-xs text-muted-foreground">{ws.slug}</span>
@@ -41,15 +36,39 @@ export default async function Home() {
                             {ws.description}
                           </p>
                         ) : null}
-                      </div>
-                      <div className="text-right text-xs text-muted-foreground space-y-1">
-                        <div>
-                          <span className="text-foreground font-mono text-base">
-                            {openProblemCount}
-                          </span>{" "}
-                          open
-                        </div>
-                        <div>{totalProblemCount} total</div>
+                        {(tierCounts.now > 0 ||
+                          tierCounts.next > 0 ||
+                          tierCounts.later > 0 ||
+                          tierCounts.unscheduled > 0) && (
+                          <div className="flex gap-3 text-xs text-muted-foreground pt-1">
+                            {tierCounts.now > 0 && (
+                              <span>
+                                <span className="font-mono text-foreground">{tierCounts.now}</span>{" "}
+                                now
+                              </span>
+                            )}
+                            {tierCounts.next > 0 && (
+                              <span>
+                                <span className="font-mono text-foreground">{tierCounts.next}</span>{" "}
+                                next
+                              </span>
+                            )}
+                            {tierCounts.later > 0 && (
+                              <span>
+                                <span className="font-mono text-foreground">
+                                  {tierCounts.later}
+                                </span>{" "}
+                                later
+                              </span>
+                            )}
+                            {tierCounts.unscheduled > 0 && (
+                              <span>
+                                <span className="font-mono">{tierCounts.unscheduled}</span>{" "}
+                                unscheduled
+                              </span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </CardContent>
                   </Card>

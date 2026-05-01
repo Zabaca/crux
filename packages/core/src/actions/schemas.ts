@@ -23,10 +23,6 @@ export const SelectIntakeAction = z.object({
   kind: z.literal("SELECT_INTAKE"),
   payload: z.object({}).optional(),
 });
-export const SelectIdeasAction = z.object({
-  kind: z.literal("SELECT_IDEAS"),
-  payload: z.object({}).optional(),
-});
 export const BackAction = z.object({
   kind: z.literal("BACK"),
   payload: z.object({}).optional(),
@@ -36,7 +32,6 @@ export const ViewActionSchema = z.discriminatedUnion("kind", [
   SelectWorkstreamAction,
   OpenProblemAction,
   SelectIntakeAction,
-  SelectIdeasAction,
   BackAction,
 ]);
 
@@ -84,15 +79,6 @@ export const ShipSolutionAction = z.object({
   kind: z.literal("SHIP_SOLUTION"),
   payload: z.object({ slug: z.string() }),
 });
-export const PromoteIdeaAction = z.object({
-  kind: z.literal("PROMOTE_IDEA"),
-  payload: z.object({
-    slug: z.string(),
-    workstream: z.string(),
-    problem: z.string(),
-    title: z.string(),
-  }),
-});
 export const AddDecisionAction = z.object({
   kind: z.literal("ADD_DECISION"),
   payload: z.object({
@@ -118,19 +104,6 @@ export const ArchiveObservationAction = z.object({
   kind: z.literal("ARCHIVE_OBSERVATION"),
   payload: z.object({ id: z.string() }),
 });
-export const AddIdeaAction = z.object({
-  kind: z.literal("ADD_IDEA"),
-  payload: z.object({
-    workstream: z.string(),
-    slug: z.string(),
-    title: z.string(),
-    description: z.string().optional(),
-  }),
-});
-export const ArchiveIdeaAction = z.object({
-  kind: z.literal("ARCHIVE_IDEA"),
-  payload: z.object({ slug: z.string() }),
-});
 export const AddEvidenceAction = z.object({
   kind: z.literal("ADD_EVIDENCE"),
   payload: z.object({ observation: z.string(), problem: z.string(), note: z.string().optional() }),
@@ -138,14 +111,6 @@ export const AddEvidenceAction = z.object({
 export const AddEliminationAction = z.object({
   kind: z.literal("ADD_ELIMINATION"),
   payload: z.object({ solution: z.string(), rationale: z.string() }),
-});
-export const AddThemeAction = z.object({
-  kind: z.literal("ADD_THEME"),
-  payload: z.object({ workstream: z.string(), slug: z.string(), title: z.string() }),
-});
-export const AttachThemeAction = z.object({
-  kind: z.literal("ATTACH_THEME"),
-  payload: z.object({ theme: z.string(), solution: z.string() }),
 });
 export const AddWorkstreamAction = z.object({
   kind: z.literal("ADD_WORKSTREAM"),
@@ -182,24 +147,6 @@ export const RenameObservationAction = z.object({
   kind: z.literal("RENAME_OBSERVATION"),
   payload: z.object({ id: z.string(), content: z.string() }),
 });
-export const RenameIdeaAction = z.object({
-  kind: z.literal("RENAME_IDEA"),
-  payload: z.object({
-    oldSlug: z.string(),
-    newSlug: z.string(),
-    title: z.string().optional(),
-    description: z.string().optional(),
-  }),
-});
-export const RenameThemeAction = z.object({
-  kind: z.literal("RENAME_THEME"),
-  payload: z.object({
-    oldSlug: z.string(),
-    newSlug: z.string(),
-    title: z.string().optional(),
-    description: z.string().optional(),
-  }),
-});
 
 export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddProblemAction,
@@ -209,24 +156,17 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AbandonProblemAction,
   AddSolutionAction,
   ShipSolutionAction,
-  PromoteIdeaAction,
   AddDecisionAction,
   AddOutcomeAction,
   AddObservationAction,
   ArchiveObservationAction,
-  AddIdeaAction,
-  ArchiveIdeaAction,
   AddEvidenceAction,
   AddEliminationAction,
-  AddThemeAction,
-  AttachThemeAction,
   AddWorkstreamAction,
   RenameWorkstreamAction,
   RenameProblemAction,
   RenameSolutionAction,
   RenameObservationAction,
-  RenameIdeaAction,
-  RenameThemeAction,
 ]);
 
 export type MutationAction = z.infer<typeof MutationActionSchema>;
@@ -246,7 +186,6 @@ export const VIEW_ACTION_KINDS: ViewActionKind[] = [
   "SELECT_WORKSTREAM",
   "OPEN_PROBLEM",
   "SELECT_INTAKE",
-  "SELECT_IDEAS",
   "BACK",
 ];
 
@@ -258,24 +197,17 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ABANDON_PROBLEM",
   "ADD_SOLUTION",
   "SHIP_SOLUTION",
-  "PROMOTE_IDEA",
   "ADD_DECISION",
   "ADD_OUTCOME",
   "ADD_OBSERVATION",
   "ARCHIVE_OBSERVATION",
-  "ADD_IDEA",
-  "ARCHIVE_IDEA",
   "ADD_EVIDENCE",
   "ADD_ELIMINATION",
-  "ADD_THEME",
-  "ATTACH_THEME",
   "ADD_WORKSTREAM",
   "RENAME_WORKSTREAM",
   "RENAME_PROBLEM",
   "RENAME_SOLUTION",
   "RENAME_OBSERVATION",
-  "RENAME_IDEA",
-  "RENAME_THEME",
 ];
 
 export function isViewAction(action: Action): action is ViewAction {

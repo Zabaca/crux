@@ -75,7 +75,7 @@ const DigestProblemEntry = z
 /**
  * context --json must emit workstream + seed_version at top level.
  * Tier bucket fields (now, next, later, unscheduled, done, abandoned) and
- * top-level lists (recent_observations_unlinked, unpromoted_ideas, themes)
+ * top-level lists (recent_observations_unlinked)
  * are optional — only emitted when the corresponding --tier or --all flag is set.
  * Regression guard: OBS-030 (a) fired when entries were nested under {problem:{...}}.
  */
@@ -89,8 +89,6 @@ export const ContextOutput = z
     done: z.array(DigestProblemEntry).optional(),
     abandoned: z.array(DigestProblemEntry).optional(),
     recent_observations_unlinked: z.array(z.unknown()).optional(),
-    unpromoted_ideas: z.array(z.unknown()).optional(),
-    themes: z.array(z.unknown()).optional(),
     seed_version: z.string(),
   })
   .passthrough();
@@ -104,14 +102,3 @@ export const ViewStateOutput = z.object({ value: z.unknown() }).passthrough();
 
 /** view path — distinct shape: { path: string } */
 export const ViewPathOutput = z.object({ path: z.string() });
-
-// ---------------------------------------------------------------------------
-// Theme attach
-// ---------------------------------------------------------------------------
-
-/** theme attach — { ok: true, themeId, solutionId } */
-export const ThemeAttachOutput = z.object({
-  ok: z.literal(true),
-  themeId: z.string(),
-  solutionId: z.string(),
-});

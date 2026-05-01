@@ -1,15 +1,11 @@
 ---
 name: crux
-description: Capture observations and ideas mid-conversation through the `crux` CLI — cheap, low-friction intake. Synthesis (problems, solutions, decisions) is deferred to `/crux:review`. Use during discovery/design conversations whenever something worth remembering surfaces; do not use for implementation-only work.
+description: Capture observations mid-conversation through the `crux` CLI — cheap, low-friction intake. Use during discovery/design conversations whenever something worth remembering surfaces; do not use for implementation-only work.
 ---
 
 # Crux — intake mode
 
-Crux is a product-thinking residue tool. This skill is the **default intake mode**: capture Observations and Ideas as they surface, cheaply, without trying to synthesize them into Problems on the spot.
-
-Synthesis — promoting Observations into Evidence on Problems, creating new Problems, ruling out or committing to Solutions — is the job of a separate review pass. Run `/crux:review` when the user is ready to do that work.
-
-Mixing intake and synthesis raises capture friction and produces premature problem statements. Keep them apart.
+Crux is a product-thinking residue tool. This skill is the **default intake mode**: capture Observations as they surface, cheaply, without trying to synthesize them into Problems on the spot.
 
 ## How to invoke the CLI
 
@@ -32,12 +28,11 @@ When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-stat
 | View | Allowed mutations |
 |---|---|
 | `workstream_list` | ADD_WORKSTREAM, RENAME_WORKSTREAM |
-| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION, ADD_IDEA |
+| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION |
 | `problem_detail` | ADD_SOLUTION, ADD_EVIDENCE, ADD_DECISION, ADD_ELIMINATION, ADD_OUTCOME, SCHEDULE_PROBLEM, ABANDON_PROBLEM, RENAME_PROBLEM, SHIP_SOLUTION |
 | `intake_queue` | ARCHIVE_OBSERVATION, ADD_OBSERVATION |
-| `ideas_queue` | ARCHIVE_IDEA, ADD_IDEA |
 
-**Global (always allowed):** ADD_OBSERVATION, ADD_IDEA, BACK.
+**Global (always allowed):** ADD_OBSERVATION, BACK.
 
 Use `crux view get` to inspect current state and allowed actions:
 
@@ -51,10 +46,9 @@ When CRUX_COLLAB is absent (default), all commands fall through to direct mode w
 ## When to invoke (intake)
 
 - User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add`.
-- User floats a solution-space hunch without a matching Problem yet → `crux idea add`.
-- An existing Observation or Idea was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."` / `crux idea archive <slug> -w <ws> --rationale "..."`. Terminal.
+- An existing Observation was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."`. Terminal.
 
-That's the full intake surface. Anything else — Problems, Evidence, Solutions, Eliminations, Decisions, Outcomes, scheduling — belongs in `/crux:review`.
+That's the full intake surface.
 
 ## When NOT to invoke
 
@@ -108,37 +102,18 @@ crux context -w <slug>
 This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--tier` or `--all` to opt into more:
 
 - `--tier=now,next` — specific buckets, comma-separated. Valid values: `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
-- `--all` — all six tier buckets plus `recent_observations_unlinked`, `unpromoted_ideas`, and `themes`. Use for full review (`/crux:review`).
+- `--all` — all six tier buckets plus `recent_observations_unlinked`.
 
 For intake mode, anchor on:
 
 - `now[]` — active Problems; avoid filing Observations that duplicate in-flight work.
-- If you need to check unlinked observations or ideas, run with `--all` instead.
+- If you need to check unlinked observations, run with `--all` instead.
 
 If no workstream is in context and you can't infer one from cwd, ask before inventing.
 
-## Propose-then-file, don't silently file
-
-When you decide something should be captured, propose it in **prose** first — entity type, content summary, key fields (workstream, source-type, tags). What the user reviews is substance, not shell syntax. Example:
-
-> I'd file an **Observation** (external, tagged `dogfood,intake`) — _"GitHub issue #1: observations have no correction path..."_
-
-Don't lead with the CLI invocation. Invoke once user approves.
-
-Skip the preview only when user explicitly authorized batch capture ("just file the observations from this conversation").
-
-## Observation vs Idea
-
-- **Observation** = problem-space, source-grounded (user report, metric, reading, internal experience).
-- **Idea** = solution-space hunch without a matching Problem yet.
-
-If it comes from a source, Observation. If it's a vague "what if we just…", Idea.
-
-**Do not link Observations to Problems here.** Even when an Observation obviously supports an existing Problem, file it standalone in intake mode. The link gets made deliberately during `/crux:review` so the user reviews the synthesis. Premature linking buries weak evidence under strong-looking trails.
-
 ## Archive (intake hygiene)
 
-Observations and Ideas are never deleted — origin trail is permanent — but misfiles happen. Use archive when:
+Observations are never deleted — origin trail is permanent — but misfiles happen. Use archive when:
 
 - Typo, test row, wrong workstream
 - Obvious duplicate of existing row
@@ -149,7 +124,6 @@ Archive is terminal — no un-archive. Archived rows hide from default queues bu
 ## Slugs and titles
 
 - Workstream slug: kebab-case area name — `crux`, `farm-app`, `client-acme`.
-- Idea slug: descriptive hunch — `auto-link-strong-evidence`, `notion-mirror`. Not outcomes.
 - Titles are one sentence. Descriptions are the paragraph.
 
 ## Attribution
@@ -157,12 +131,6 @@ Archive is terminal — no un-archive. Archived rows hide from default queues bu
 `reporter_id` comes from `~/.config/crux/config.toml`. If a command fails with "no user configured," run `crux user init`.
 
 **You (Claude) are not a User.** Everything you file is attributed to the human. Preserve the "Claude noticed this" vs "user said this" distinction in tags/phrasing, not in the reporter field.
-
-## Handoff to review
-
-When the user says they want to review observations, promote ideas, shape Problems, file Solutions, or commit a Decision, switch to `/crux:review`. That skill owns the full synthesis surface (problem add/schedule/abandon, evidence link, solution add, elimination, decision, outcome).
-
-Signal phrases that should hand off: "let's review what we've captured," "promote that into a problem," "file a decision," "rule that out," "what should we work on next."
 
 ## View control bus
 

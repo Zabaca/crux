@@ -6,12 +6,10 @@ import {
   eliminations,
   eliminationSolutions,
   evidence,
-  ideas,
   observations,
   outcomes,
   problems,
   solutions,
-  themes,
   workstreams,
 } from "@crux/core/db/schema";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
@@ -21,7 +19,6 @@ import { solutionStatusRank, statusRank } from "./sort";
 export type Workstream = typeof workstreams.$inferSelect;
 export type Problem = typeof problems.$inferSelect;
 export type Observation = typeof observations.$inferSelect;
-export type Idea = typeof ideas.$inferSelect;
 export type Solution = typeof solutions.$inferSelect;
 export type Evidence = typeof evidence.$inferSelect;
 export type Decision = typeof decisions.$inferSelect;
@@ -32,15 +29,18 @@ export type Outcome = typeof outcomes.$inferSelect;
 export async function listWorkstreams() {
   const d = db();
   const wss = await d.select().from(workstreams).orderBy(workstreams.title);
-  // Per-workstream open-problem count.
+  // Per-workstream tier counts.
   const counts = await Promise.all(
     wss.map(async (ws) => {
       const probs = await d
         .select({ id: problems.id, status: problems.status })
         .from(problems)
         .where(eq(problems.workstreamId, ws.id));
-      const open = probs.filter((p) => p.status !== "done" && p.status !== "abandoned").length;
-      return { workstream: ws, openProblemCount: open, totalProblemCount: probs.length };
+      const now = probs.filter((p) => p.status === "now").length;
+      const next = probs.filter((p) => p.status === "next").length;
+      const later = probs.filter((p) => p.status === "later").length;
+      const unscheduled = probs.filter((p) => p.status === null).length;
+      return { workstream: ws, tierCounts: { now, next, later, unscheduled } };
     }),
   );
   return counts;
@@ -305,13 +305,6 @@ export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: st
     await d.select().from(outcomes).where(eq(outcomes.solutionId, s.id)).limit(1)
   )[0];
 
-  // Originating idea (if any).
-  let originatingIdea = null;
-  if (s.originatingIdeaId) {
-    originatingIdea =
-      (await d.select().from(ideas).where(eq(ideas.id, s.originatingIdeaId)).limit(1))[0] ?? null;
-  }
-
   return {
     solution: s,
     problem: p,
@@ -320,7 +313,6 @@ export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: st
     rejectingDecisions,
     eliminations: elimsTouching,
     outcome: outcome ?? null,
-    originatingIdea,
   };
 }
 
@@ -367,29 +359,4 @@ export async function getUnlinkedObservations(workstreamId: string, showArchived
   const unlinked = all.filter((o) => !linkedIds.has(o.id)).map(withArchive);
   unlinked.sort((a, b) => b.createdAt - a.createdAt);
   return unlinked;
-}
-
-export async function getUnpromotedIdeas(workstreamId: string, showArchived: boolean) {
-  const d = db();
-  const wsIdeas = await d
-    .select()
-    .from(ideas)
-    .where(
-      showArchived
-        ? eq(ideas.workstreamId, workstreamId)
-        : and(eq(ideas.workstreamId, workstreamId), isNull(ideas.archivedAt)),
-    );
-  const promoted = new Set(
-    (await d.select({ ideaId: solutions.originatingIdeaId }).from(solutions))
-      .map((r) => r.ideaId)
-      .filter((x): x is string => Boolean(x)),
-  );
-  const unpromoted = wsIdeas.filter((i) => !promoted.has(i.id)).map(withArchive);
-  unpromoted.sort((a, b) => b.createdAt - a.createdAt);
-  return unpromoted;
-}
-
-export async function getThemes(workstreamId: string) {
-  const d = db();
-  return await d.select().from(themes).where(eq(themes.workstreamId, workstreamId));
 }

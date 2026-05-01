@@ -14,17 +14,15 @@
  */
 import { eq, sql } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
-import { ideas, problems, solutions, themes, workstreams } from "../db/schema.js";
+import { problems, solutions, workstreams } from "../db/schema.js";
 import { NotFoundError, TransitionError } from "./errors.js";
 
-type EntityKind = "workstream" | "problem" | "solution" | "idea" | "theme";
+type EntityKind = "workstream" | "problem" | "solution";
 
 const PREFIX: Record<EntityKind, string> = {
   workstream: "WS-",
   problem: "PRB-",
   solution: "SOL-",
-  idea: "IDEA-",
-  theme: "THM-",
 };
 
 /**
@@ -35,9 +33,7 @@ const PREFIX: Record<EntityKind, string> = {
 const REFERRERS: Record<EntityKind, ReadonlyArray<{ table: string; columns: string[] }>> = {
   workstream: [
     { table: "observations", columns: ["workstream_id"] },
-    { table: "ideas", columns: ["workstream_id"] },
     { table: "problems", columns: ["workstream_id"] },
-    { table: "themes", columns: ["workstream_id"] },
   ],
   problem: [
     { table: "evidence", columns: ["problem_id"] },
@@ -52,10 +48,7 @@ const REFERRERS: Record<EntityKind, ReadonlyArray<{ table: string; columns: stri
     { table: "decisions", columns: ["chosen_solution_id"] },
     { table: "decision_rejected_solutions", columns: ["solution_id"] },
     { table: "outcomes", columns: ["solution_id"] },
-    { table: "theme_solutions", columns: ["solution_id"] },
   ],
-  idea: [{ table: "solutions", columns: ["originating_idea_id"] }],
-  theme: [{ table: "theme_solutions", columns: ["theme_id"] }],
 };
 
 /**
@@ -94,10 +87,6 @@ async function lookupBySlug(kind: EntityKind, slug: string, db: CruxDb) {
       return (await db.select().from(problems).where(eq(problems.slug, slug)).limit(1))[0];
     case "solution":
       return (await db.select().from(solutions).where(eq(solutions.slug, slug)).limit(1))[0];
-    case "idea":
-      return (await db.select().from(ideas).where(eq(ideas.slug, slug)).limit(1))[0];
-    case "theme":
-      return (await db.select().from(themes).where(eq(themes.slug, slug)).limit(1))[0];
   }
 }
 
@@ -109,10 +98,6 @@ function tableNameFor(kind: EntityKind): string {
       return "problems";
     case "solution":
       return "solutions";
-    case "idea":
-      return "ideas";
-    case "theme":
-      return "themes";
   }
 }
 
@@ -187,10 +172,7 @@ export async function renameEntity(
       if (updates.description !== undefined) {
         setFragments.push(sql`description = ${updates.description}`);
       }
-      // Bump updated_at on tables that have it (themes does not).
-      if (kind !== "theme") {
-        setFragments.push(sql`updated_at = ${now}`);
-      }
+      setFragments.push(sql`updated_at = ${now}`);
       if (setFragments.length > 0) {
         const setClause = sql.join(setFragments, sql`, `);
         await tx.run(sql`UPDATE ${sql.raw(table)} SET ${setClause} WHERE id = ${oldId}`);
@@ -239,9 +221,3 @@ export const renameSolution = (
   updates: RenameUpdates,
   db: CruxDb,
 ) => renameEntity("solution", oldSlug, newSlug, updates, db);
-
-export const renameIdea = (oldSlug: string, newSlug: string, updates: RenameUpdates, db: CruxDb) =>
-  renameEntity("idea", oldSlug, newSlug, updates, db);
-
-export const renameTheme = (oldSlug: string, newSlug: string, updates: RenameUpdates, db: CruxDb) =>
-  renameEntity("theme", oldSlug, newSlug, updates, db);

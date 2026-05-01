@@ -4,12 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { MutationToolbar } from "./mutation-toolbar";
 
-type ViewLeaf =
-  | "workstream_list"
-  | "workstream_dashboard"
-  | "problem_detail"
-  | "intake_queue"
-  | "ideas_queue";
+type ViewLeaf = "workstream_list" | "workstream_dashboard" | "problem_detail" | "intake_queue";
 
 type Context = {
   workstreamSlug?: string | null;
@@ -84,12 +79,6 @@ export function RightDrawer() {
                 className="block text-xs rounded border px-2 py-1 hover:bg-accent text-center transition-colors"
               >
                 Intake queue
-              </Link>
-              <Link
-                href={`/w/${context.workstreamSlug}/queues/ideas`}
-                className="block text-xs rounded border px-2 py-1 hover:bg-accent text-center transition-colors"
-              >
-                Ideas queue
               </Link>
             </div>
           )}

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { ViewStateListener } from "@/components/view-state-listener";
 import { NotifyButton } from "@/components/notify-button";
-import { RecentQueriesPanel } from "@/components/recent-queries-panel";
+import { RightDrawer } from "@/components/right-drawer";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <ViewStateListener />
         {children}
         <NotifyButton />
-        <RecentQueriesPanel />
+        <RightDrawer />
       </body>
     </html>
   );

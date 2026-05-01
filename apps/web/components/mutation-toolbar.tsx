@@ -4,12 +4,7 @@ import { useState } from "react";
 import { getAllowedActions } from "@crux/core/actions/allowed";
 import { ActionDialog, type FieldSpec } from "./action-dialog";
 
-type ViewLeaf =
-  | "workstream_list"
-  | "workstream_dashboard"
-  | "problem_detail"
-  | "intake_queue"
-  | "ideas_queue";
+type ViewLeaf = "workstream_list" | "workstream_dashboard" | "problem_detail" | "intake_queue";
 
 type Context = {
   workstreamSlug?: string | null;
@@ -53,17 +48,6 @@ const SPECS: Spec[] = [
       { name: "workstream", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
       { name: "content", type: "textarea", required: true },
       { name: "source", label: "source (optional)" },
-    ],
-  },
-  {
-    kind: "ADD_IDEA",
-    label: "Add idea",
-    title: "Add idea",
-    fields: (ctx) => [
-      { name: "workstream", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
-      { name: "slug", required: true },
-      { name: "title", required: true },
-      { name: "description", type: "textarea" },
     ],
   },
   {
@@ -181,32 +165,10 @@ const SPECS: Spec[] = [
     fields: () => [{ name: "slug", label: "solution slug", required: true }],
   },
   {
-    kind: "PROMOTE_IDEA",
-    label: "Promote idea",
-    title: "Promote idea to solution",
-    fields: (ctx) => [
-      { name: "workstream", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
-      { name: "slug", label: "idea slug", required: true },
-      {
-        name: "problem",
-        label: "problem slug",
-        required: true,
-        defaultValue: ctx.problemSlug ?? "",
-      },
-      { name: "title", required: true },
-    ],
-  },
-  {
     kind: "ARCHIVE_OBSERVATION",
     label: "Archive observation",
     title: "Archive observation",
     fields: () => [{ name: "id", label: "observation id (e.g. OBS-001)", required: true }],
-  },
-  {
-    kind: "ARCHIVE_IDEA",
-    label: "Archive idea",
-    title: "Archive idea",
-    fields: () => [{ name: "slug", label: "idea slug", required: true }],
   },
   {
     kind: "RENAME_WORKSTREAM",
@@ -231,17 +193,6 @@ const SPECS: Spec[] = [
         defaultValue: ctx.problemSlug ?? "",
         hidden: ctx.problemSlug != null,
       },
-      { name: "newSlug", required: true },
-      { name: "title" },
-      { name: "description", type: "textarea" },
-    ],
-  },
-  {
-    kind: "RENAME_IDEA",
-    label: "Rename idea",
-    title: "Rename idea",
-    fields: () => [
-      { name: "oldSlug", required: true },
       { name: "newSlug", required: true },
       { name: "title" },
       { name: "description", type: "textarea" },

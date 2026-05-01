@@ -15,7 +15,6 @@ import { tmpdir } from "node:os";
 import { setDb } from "@crux/core/db";
 import { createTestDb, type CruxTestDb } from "@crux/core/db/test-utils";
 import { users } from "@crux/core/db/schema";
-import { slugifyName } from "@crux/core/config";
 import { setCaptureWriter, setJsonMode, emit } from "../output.js";
 import { OkWithIdOutput, ProblemShowOutput, ContextOutput } from "@crux/core/validation";
 import { ActionNotAllowedError } from "@crux/core/actions";
@@ -26,7 +25,6 @@ import { problemCommand } from "../commands/problem.js";
 import { observationCommand } from "../commands/observation.js";
 import { evidenceCommand } from "../commands/evidence.js";
 import { contextCommand } from "../commands/context.js";
-import { ideaCommand } from "../commands/idea.js";
 import { solutionCommand } from "../commands/solution.js";
 
 // ---------------------------------------------------------------------------
@@ -294,50 +292,6 @@ describe("regression OBS-030 (b): problem show includes solutions and latest_dec
 });
 
 // ---------------------------------------------------------------------------
-// Regression OBS-030 (c): idea promote uses slugifyName(title) not idea slug
-// ---------------------------------------------------------------------------
-
-describe("regression OBS-030 (c): idea promote slugs the title, not the idea slug", () => {
-  test("promoted solution slug equals slugifyName(title)", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "reg-c",
-      title: "Reg C",
-      json: false,
-    });
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "reg-c",
-      slug: "prob-c",
-      title: "Prob C",
-      description: "desc",
-      json: false,
-    });
-    await runCmd(ideaCommand as AnyCmd, "add", {
-      workstream: "reg-c",
-      slug: "my-idea",
-      title: "My Idea",
-      json: false,
-    });
-
-    const solutionTitle = "Some Great Solution";
-    const expectedSlug = slugifyName(solutionTitle); // "some-great-solution"
-
-    const result = await capture<{ ok: boolean; id: string }>(() =>
-      runCmd(ideaCommand as AnyCmd, "promote", {
-        slug: "my-idea",
-        workstream: "reg-c",
-        problem: "prob-c",
-        title: solutionTitle,
-        json: false,
-      }),
-    );
-
-    expect(result.ok).toBe(true);
-    expect(result.id).toBe(`SOL-${expectedSlug}`);
-    // The solution slug must NOT be the idea slug "my-idea".
-    expect(result.id).not.toBe("SOL-my-idea");
-  });
-});
-
 // ---------------------------------------------------------------------------
 // Schema validation: emit() rejects malformed payloads at construction time
 // ---------------------------------------------------------------------------
@@ -415,13 +369,12 @@ describe("context --tier / --all flag behaviour", () => {
     expect(ctx.unscheduled).toBeUndefined();
     expect(ctx.abandoned).toBeUndefined();
     expect(ctx.recent_observations_unlinked).toBeUndefined();
-    expect(ctx.unpromoted_ideas).toBeUndefined();
     // Workstream and seed_version always present.
     expect(ctx.workstream).toBeDefined();
     expect(typeof ctx.seed_version).toBe("string");
   });
 
-  test("--all invocation emits all six tier buckets + recent_observations_unlinked + unpromoted_ideas", async () => {
+  test("--all invocation emits all six tier buckets + recent_observations_unlinked", async () => {
     await runCmd(workstreamCommand as AnyCmd, "add", {
       slug: "tier-all",
       title: "Tier All WS",
@@ -452,7 +405,6 @@ describe("context --tier / --all flag behaviour", () => {
     expect(Array.isArray(ctx.abandoned)).toBe(true);
     // Top-level extras present.
     expect(Array.isArray(ctx.recent_observations_unlinked)).toBe(true);
-    expect(Array.isArray(ctx.unpromoted_ideas)).toBe(true);
   });
 });
 
@@ -544,21 +496,6 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
     );
     expect(result.ok).toBe(true);
     expect(result.id).toBe("PRB-direct-prob");
-  });
-
-  test("RENAME_IDEA from workstream_list throws ActionNotAllowedError", async () => {
-    let thrown: unknown;
-    try {
-      await runCmd(ideaCommand as AnyCmd, "rename", {
-        oldSlug: "x",
-        newSlug: "y",
-        json: false,
-      });
-    } catch (e) {
-      thrown = e;
-    }
-    expect(thrown).toBeInstanceOf(ActionNotAllowedError);
-    expect((thrown as ActionNotAllowedError).attempted).toBe("RENAME_IDEA");
   });
 });
 

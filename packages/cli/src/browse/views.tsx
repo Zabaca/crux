@@ -7,9 +7,7 @@ import {
   getObservationDetail,
   listOpenProblems,
   listUnlinkedObservations,
-  listUnpromotedIdeas,
   listWorkstreams,
-  type Idea,
   type Observation,
   type ObservationDetail,
   type ProblemDetail,
@@ -86,17 +84,14 @@ export function WorkstreamDashboard({
   showArchived,
   onOpenProblem,
   onOpenIntake: _onOpenIntake,
-  onOpenIdeas: _onOpenIdeas,
 }: {
   workstream: Workstream;
   showArchived: boolean;
   onOpenProblem: (problemId: string) => void;
   onOpenIntake: () => void;
-  onOpenIdeas: () => void;
 }): React.ReactElement {
   const [rows, setRows] = useState<ProblemSummary[] | null>(null);
   const [intakeCount, setIntakeCount] = useState<number | null>(null);
-  const [ideasCount, setIdeasCount] = useState<number | null>(null);
   const [highlighted, setHighlighted] = useState<DashboardEntry | null>(null);
 
   useEffect(() => {
@@ -106,10 +101,9 @@ export function WorkstreamDashboard({
       if (!highlighted && open[0]) setHighlighted({ kind: "problem", problem: open[0] });
     });
     listUnlinkedObservations(workstream.id, showArchived).then((os) => setIntakeCount(os.length));
-    listUnpromotedIdeas(workstream.id, showArchived).then((is) => setIdeasCount(is.length));
   }, [workstream.id, showArchived]);
 
-  if (!rows || intakeCount === null || ideasCount === null) {
+  if (!rows || intakeCount === null) {
     return <Text color="gray">loading dashboard…</Text>;
   }
 
@@ -147,7 +141,6 @@ export function WorkstreamDashboard({
           )}
           <Box marginTop={1} flexDirection="column">
             <Text color="gray"> Intake queue ({intakeCount} unlinked)</Text>
-            <Text color="gray"> Ideas queue ({ideasCount} unpromoted)</Text>
           </Box>
         </Box>
         <Box
@@ -508,52 +501,6 @@ export function IntakeQueueView({
             ))}
         </Box>
       ) : null}
-    </Box>
-  );
-}
-
-// ---------- Ideas queue ----------
-
-export function IdeasQueueView({
-  workstream,
-  showArchived,
-}: {
-  workstream: Workstream;
-  showArchived: boolean;
-}): React.ReactElement {
-  const [rows, setRows] = useState<Idea[] | null>(null);
-
-  useEffect(() => {
-    listUnpromotedIdeas(workstream.id, showArchived).then(setRows);
-  }, [workstream.id, showArchived]);
-
-  if (!rows) return <Text color="gray">loading ideas…</Text>;
-
-  return (
-    <Box flexDirection="column">
-      <Text bold>
-        Ideas queue — {workstream.slug}
-        {showArchived ? "  (show-archived)" : ""}
-      </Text>
-      {rows.length === 0 ? (
-        <Box marginTop={1}>
-          <Empty label="no unpromoted ideas" />
-        </Box>
-      ) : (
-        rows.map((i) => (
-          <Box key={i.id} flexDirection="column" marginTop={1}>
-            <Box>
-              <Text bold>{i.slug}</Text>
-              <ArchivedTag archive={i.archive} />
-            </Box>
-            <Text>{i.title}</Text>
-            {i.description ? <Text color="gray">{truncate(i.description, 160)}</Text> : null}
-            {i.hypothesizedProblemArea ? (
-              <Text color="gray">problem area: {i.hypothesizedProblemArea}</Text>
-            ) : null}
-          </Box>
-        ))
-      )}
     </Box>
   );
 }

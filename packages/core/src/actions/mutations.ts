@@ -12,14 +12,10 @@ import {
   problems,
   solutions,
   observations,
-  ideas,
-  themes,
   eliminations,
-  eliminationSolutions,
   outcomes,
-  outcomeFollowUpProblems,
 } from "../db/schema.js";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   scheduleProblem,
   unscheduleProblem,
@@ -30,12 +26,9 @@ import {
   createDecision,
   recordOutcome,
   archiveObservation,
-  archiveIdea,
   renameWorkstream,
   renameProblem,
   renameSolution,
-  renameIdea,
-  renameTheme,
   NotFoundError,
   type RoadmapTier,
 } from "../transitions/index.js";
@@ -200,29 +193,6 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
       );
       return { ok: true, ...r };
     }
-    case "PROMOTE_IDEA": {
-      const p = action.payload;
-      const ws = await resolveWs(p.workstream);
-      const ideaRows = await db
-        .select()
-        .from(ideas)
-        .where(and(eq(ideas.workstreamId, ws.id), eq(ideas.slug, p.slug)))
-        .limit(1);
-      if (!ideaRows[0]) throw new NotFoundError(`idea not found: ${p.slug}`, { slug: p.slug });
-      const prob = await resolveProblem(p.problem);
-      const { slugifyName } = await import("../config/user.js");
-      const solutionSlug = slugifyName(p.title);
-      const id = `SOL-${solutionSlug}`;
-      await db.insert(solutions).values({
-        id,
-        slug: solutionSlug,
-        problemId: prob.id,
-        title: p.title,
-        originatingIdeaId: ideaRows[0].id,
-        createdById: user.id,
-      });
-      return { ok: true, id, originatingIdeaId: ideaRows[0].id };
-    }
     case "ADD_DECISION": {
       const p = action.payload;
       const prob = await resolveProblem(p.problem);
@@ -286,28 +256,6 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
       await archiveObservation(p.id, "", user.id, db);
       return { ok: true, id: p.id };
     }
-    case "ADD_IDEA": {
-      const p = action.payload;
-      const ws = await resolveWs(p.workstream);
-      const id = `IDEA-${p.slug}`;
-      await db.insert(ideas).values({
-        id,
-        slug: p.slug,
-        workstreamId: ws.id,
-        reporterId: user.id,
-        title: p.title,
-        description: p.description,
-      });
-      return { ok: true, id };
-    }
-    case "ARCHIVE_IDEA": {
-      const p = action.payload;
-      // Need workstream context — try to find idea by slug across all workstreams
-      const ideaRows = await db.select().from(ideas).where(eq(ideas.slug, p.slug)).limit(1);
-      if (!ideaRows[0]) throw new NotFoundError(`idea not found: ${p.slug}`, { slug: p.slug });
-      const { id } = await archiveIdea(ideaRows[0].workstreamId, p.slug, "", user.id, db);
-      return { ok: true, id };
-    }
     case "ADD_EVIDENCE": {
       const p = action.payload;
       const prob = await resolveProblem(p.problem);
@@ -351,27 +299,6 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
       );
       return { ok: true, id };
     }
-    case "ADD_THEME": {
-      const p = action.payload;
-      const ws = await resolveWs(p.workstream);
-      const id = `THM-${p.slug}`;
-      await db.insert(themes).values({
-        id,
-        slug: p.slug,
-        workstreamId: ws.id,
-        title: p.title,
-      });
-      return { ok: true, id };
-    }
-    case "ATTACH_THEME": {
-      const p = action.payload;
-      const themeRows = await db.select().from(themes).where(eq(themes.slug, p.theme)).limit(1);
-      if (!themeRows[0]) throw new NotFoundError(`theme not found: ${p.theme}`, { slug: p.theme });
-      const sol = await resolveSolution(p.solution);
-      const { themeSolutions } = await import("../db/schema.js");
-      await db.insert(themeSolutions).values({ themeId: themeRows[0].id, solutionId: sol.id });
-      return { ok: true, themeId: themeRows[0].id, solutionId: sol.id };
-    }
     case "RENAME_OBSERVATION": {
       const p = action.payload;
       const obsRows = await db
@@ -382,26 +309,6 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
       if (!obsRows[0]) throw new NotFoundError(`observation not found: ${p.id}`, { id: p.id });
       await db.update(observations).set({ content: p.content }).where(eq(observations.id, p.id));
       return { ok: true, id: p.id };
-    }
-    case "RENAME_IDEA": {
-      const p = action.payload;
-      const r = await renameIdea(
-        p.oldSlug,
-        p.newSlug,
-        { title: p.title, description: p.description },
-        db,
-      );
-      return { ok: true, ...r };
-    }
-    case "RENAME_THEME": {
-      const p = action.payload;
-      const r = await renameTheme(
-        p.oldSlug,
-        p.newSlug,
-        { title: p.title, description: p.description },
-        db,
-      );
-      return { ok: true, ...r };
     }
     default: {
       const _exhaustive: never = action;

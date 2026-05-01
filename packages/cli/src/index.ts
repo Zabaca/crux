@@ -9,11 +9,9 @@ import { evidenceCommand } from "./commands/evidence.js";
 import { solutionCommand } from "./commands/solution.js";
 import { decisionCommand } from "./commands/decision.js";
 import { contextCommand } from "./commands/context.js";
-import { ideaCommand } from "./commands/idea.js";
 import { eliminationCommand } from "./commands/elimination.js";
 import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
-import { themeCommand } from "./commands/theme.js";
 import { initCommand } from "./commands/init.js";
 import { browseCommand } from "./commands/browse.js";
 import { viewCommand } from "./commands/view.js";
@@ -33,11 +31,9 @@ const main = defineCommand({
     evidence: evidenceCommand,
     solution: solutionCommand,
     decision: decisionCommand,
-    idea: ideaCommand,
     elimination: eliminationCommand,
     abandonment: abandonmentCommand,
     outcome: outcomeCommand,
-    theme: themeCommand,
     context: contextCommand,
     browse: browseCommand,
     view: viewCommand,

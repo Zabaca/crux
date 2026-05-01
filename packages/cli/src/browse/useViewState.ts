@@ -12,8 +12,7 @@ export type MachineView =
   | { kind: "workstream_list" }
   | { kind: "workstream_dashboard"; workstreamSlug: string }
   | { kind: "problem_detail"; workstreamSlug: string; problemSlug: string }
-  | { kind: "intake_queue"; workstreamSlug: string }
-  | { kind: "ideas_queue"; workstreamSlug: string };
+  | { kind: "intake_queue"; workstreamSlug: string };
 
 export function snapshotToView(snapshot: ReturnType<typeof loadState>): MachineView {
   const value = formatStateValue(snapshot.value);
@@ -27,9 +26,6 @@ export function snapshotToView(snapshot: ReturnType<typeof loadState>): MachineV
   }
   if (value.endsWith("intake_queue") && ctx.workstreamSlug) {
     return { kind: "intake_queue", workstreamSlug: ctx.workstreamSlug };
-  }
-  if (value.endsWith("ideas_queue") && ctx.workstreamSlug) {
-    return { kind: "ideas_queue", workstreamSlug: ctx.workstreamSlug };
   }
   if (value.endsWith("workstream_dashboard") && ctx.workstreamSlug) {
     return { kind: "workstream_dashboard", workstreamSlug: ctx.workstreamSlug };

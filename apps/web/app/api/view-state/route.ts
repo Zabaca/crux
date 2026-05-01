@@ -105,7 +105,7 @@ export async function POST(req: Request) {
     const { workstreamSlug, problemSlug, queue } = (await req.json()) as {
       workstreamSlug: string | null;
       problemSlug: string | null;
-      queue?: "intake" | "ideas" | null;
+      queue?: "intake" | null;
     };
 
     const current = loadState();
@@ -116,11 +116,7 @@ export async function POST(req: Request) {
       if (current.context.workstreamSlug !== slug) {
         if (!leaf.includes("workstream_list")) await sendViewEvent({ type: "BACK" });
         await sendViewEvent({ type: "SELECT_WORKSTREAM", slug });
-      } else if (
-        leaf.includes("problem_detail") ||
-        leaf.includes("intake_queue") ||
-        leaf.includes("ideas_queue")
-      ) {
+      } else if (leaf.includes("problem_detail") || leaf.includes("intake_queue")) {
         await sendViewEvent({ type: "BACK" });
       }
     };
@@ -130,9 +126,9 @@ export async function POST(req: Request) {
         await sendViewEvent({ type: "SELECT_WORKSTREAM", slug: workstreamSlug });
       }
       await sendViewEvent({ type: "OPEN_PROBLEM", slug: problemSlug });
-    } else if (queue && workstreamSlug) {
+    } else if (queue === "intake" && workstreamSlug) {
       await ensureAtDashboard(workstreamSlug);
-      await sendViewEvent({ type: queue === "intake" ? "SELECT_INTAKE" : "SELECT_IDEAS" });
+      await sendViewEvent({ type: "SELECT_INTAKE" });
     } else if (workstreamSlug) {
       await ensureAtDashboard(workstreamSlug);
     } else {

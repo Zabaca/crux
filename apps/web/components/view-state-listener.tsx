@@ -13,7 +13,6 @@ const VIEW_ACTION_KINDS = new Set([
   "SELECT_WORKSTREAM",
   "OPEN_PROBLEM",
   "SELECT_INTAKE",
-  "SELECT_IDEAS",
   "BACK",
   "RESET",
 ]);

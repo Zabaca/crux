@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant, statusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
-import { MutationToolbar } from "@/components/mutation-toolbar";
 
 export const dynamic = "force-dynamic";
 
@@ -35,15 +34,9 @@ export default async function ProblemPage({
         title={problem.title}
         subtitle={problem.slug}
         actions={
-          <div className="flex flex-col items-end gap-2">
-            <Badge variant={roadmapStatusVariant(problem.status)}>
-              {problem.status ?? "unscheduled"}
-            </Badge>
-            <MutationToolbar
-              view="problem_detail"
-              context={{ workstreamSlug: slug, problemSlug }}
-            />
-          </div>
+          <Badge variant={roadmapStatusVariant(problem.status)}>
+            {problem.status ?? "unscheduled"}
+          </Badge>
         }
       >
         <Section title="Description">

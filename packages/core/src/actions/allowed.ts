@@ -2,7 +2,7 @@
  * Per-view action allow-lists.
  *
  * Returns { allowedView, allowedMutation, globals } for the current state leaf.
- * Globals are actions permitted in every view (ADD_OBSERVATION, ADD_IDEA, BACK).
+ * Globals are actions permitted in every view (ADD_OBSERVATION, BACK).
  */
 import type { ViewActionKind, MutationActionKind } from "./schemas.js";
 
@@ -14,12 +14,10 @@ export type AllowedActions = {
 
 const GLOBALS: (ViewActionKind | MutationActionKind)[] = [
   "ADD_OBSERVATION",
-  "ADD_IDEA",
   "BACK",
   "SELECT_WORKSTREAM",
   "OPEN_PROBLEM",
   "SELECT_INTAKE",
-  "SELECT_IDEAS",
 ];
 
 const VIEW_ALLOWED: Record<string, AllowedActions> = {
@@ -29,11 +27,10 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
     globals: GLOBALS,
   },
   workstream_dashboard: {
-    allowedView: ["OPEN_PROBLEM", "SELECT_INTAKE", "SELECT_IDEAS", "BACK"],
+    allowedView: ["OPEN_PROBLEM", "SELECT_INTAKE", "BACK"],
     allowedMutation: [
       "ADD_PROBLEM",
       "ADD_OBSERVATION",
-      "ADD_IDEA",
       "SCHEDULE_PROBLEM",
       "UNSCHEDULE_PROBLEM",
       "MARK_PROBLEM_DONE",
@@ -56,18 +53,12 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
       "ABANDON_PROBLEM",
       "RENAME_PROBLEM",
       "SHIP_SOLUTION",
-      "PROMOTE_IDEA",
     ],
     globals: GLOBALS,
   },
   intake_queue: {
     allowedView: ["BACK"],
     allowedMutation: ["ARCHIVE_OBSERVATION", "ADD_OBSERVATION"],
-    globals: GLOBALS,
-  },
-  ideas_queue: {
-    allowedView: ["BACK"],
-    allowedMutation: ["ARCHIVE_IDEA", "ADD_IDEA", "RENAME_IDEA"],
     globals: GLOBALS,
   },
 };

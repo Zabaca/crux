@@ -8,7 +8,6 @@ import {
   type Workstream,
 } from "./queries.js";
 import {
-  IdeasQueueView,
   IntakeQueueView,
   ObservationDetailView,
   ProblemDetailView,
@@ -36,8 +35,7 @@ type View =
       parent: "problem" | "intake";
       problemId?: string;
     }
-  | { kind: "intake"; workstream: Workstream }
-  | { kind: "ideas"; workstream: Workstream };
+  | { kind: "intake"; workstream: Workstream };
 
 export function App({ initialSlug }: { initialSlug?: string }): React.ReactElement {
   const { exit } = useApp();
@@ -104,11 +102,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         setView({ kind: "intake", workstream: ws });
         return;
       }
-      if (machineView.kind === "ideas_queue") {
-        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
-        if (cancelled || !ws) return;
-        setView({ kind: "ideas", workstream: ws });
-      }
     })();
     return () => {
       cancelled = true;
@@ -159,7 +152,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         }
         return;
       case "intake":
-      case "ideas":
         setView({ kind: "dashboard", workstream: v.workstream });
         return;
     }
@@ -197,7 +189,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
           { key: "esc", label: "back" },
           archivedHint,
           { key: "i", label: "intake" },
-          { key: "d", label: "ideas" },
           { key: "q", label: "quit" },
         ];
       case "problem":
@@ -226,8 +217,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
           archivedHint,
           { key: "q", label: "quit" },
         ];
-      case "ideas":
-        return [{ key: "esc", label: "back" }, archivedHint, { key: "q", label: "quit" }];
     }
   }
 
@@ -255,7 +244,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
             showArchived={showArchived}
             onOpenProblem={(problemId) => void openProblem(problemId)}
             onOpenIntake={() => setView({ kind: "intake", workstream: view.workstream })}
-            onOpenIdeas={() => setView({ kind: "ideas", workstream: view.workstream })}
           />
         );
       case "problem":
@@ -302,8 +290,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
             }
           />
         );
-      case "ideas":
-        return <IdeasQueueView workstream={view.workstream} showArchived={showArchived} />;
     }
   }
 }

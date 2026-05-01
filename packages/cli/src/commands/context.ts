@@ -7,14 +7,11 @@ import {
   eliminations,
   eliminationSolutions,
   evidence,
-  ideas,
   observations,
   outcomes,
   outcomeFollowUpProblems,
   problems,
   solutions,
-  themes,
-  themeSolutions,
   workstreams,
 } from "@crux/core/db/schema";
 import { NotFoundError } from "@crux/core/transitions";
@@ -51,8 +48,7 @@ export const contextCommand = defineCommand({
     workstream: { type: "string", required: true, alias: "w" },
     "show-archived": {
       type: "boolean",
-      description:
-        "Include archived Observations and Ideas in the unlinked-observations and unpromoted-ideas sections.",
+      description: "Include archived Observations in the unlinked-observations section.",
     },
     tier: {
       type: "string",
@@ -62,8 +58,7 @@ export const contextCommand = defineCommand({
     },
     all: {
       type: "boolean",
-      description:
-        "Emit all tier buckets plus recent_observations_unlinked, unpromoted_ideas, and themes.",
+      description: "Emit all tier buckets plus recent_observations_unlinked.",
     },
     json: { type: "boolean" },
   },
@@ -255,48 +250,6 @@ export const contextCommand = defineCommand({
         return { ...o, archive };
       });
 
-    // Unpromoted ideas: ideas in this workstream with no Solution referencing them.
-    // Archived are hidden by default; --show-archived reveals them.
-    const wsIdeas = await db
-      .select()
-      .from(ideas)
-      .where(
-        showArchived
-          ? eq(ideas.workstreamId, wsRow.id)
-          : and(eq(ideas.workstreamId, wsRow.id), isNull(ideas.archivedAt)),
-      );
-    const promotedIdeaIds = new Set(
-      (await db.select({ ideaId: solutions.originatingIdeaId }).from(solutions))
-        .map((r) => r.ideaId)
-        .filter((x): x is string => Boolean(x)),
-    );
-    const unpromotedIdeas = wsIdeas
-      .filter((i) => !promotedIdeaIds.has(i.id))
-      .map((i) => {
-        const archive = i.archivedAt
-          ? {
-              rationale: i.archiveRationale,
-              archivedById: i.archivedById,
-              archivedAt: i.archivedAt,
-            }
-          : null;
-        return { ...i, archive };
-      });
-
-    // Themes with attached solutions.
-    const wsThemes = await db.select().from(themes).where(eq(themes.workstreamId, wsRow.id));
-    const themeIds = wsThemes.map((t) => t.id);
-    const themeJoins = themeIds.length
-      ? await db.select().from(themeSolutions).where(inArray(themeSolutions.themeId, themeIds))
-      : [];
-    const solByTheme = new Map<string, string[]>();
-    for (const j of themeJoins) {
-      const list = solByTheme.get(j.themeId) ?? [];
-      list.push(j.solutionId);
-      solByTheme.set(j.themeId, list);
-    }
-    const themesInlined = wsThemes.map((t) => ({ ...t, solutionIds: solByTheme.get(t.id) ?? [] }));
-
     const output: Record<string, unknown> = {
       workstream: wsRow,
       seed_version: SEED_VERSION,
@@ -312,8 +265,6 @@ export const contextCommand = defineCommand({
       output.abandoned = digestProblems.filter((p) => p.status === "abandoned");
     if (includeExtras) {
       output.recent_observations_unlinked = unlinked;
-      output.unpromoted_ideas = unpromotedIdeas;
-      output.themes = themesInlined;
     }
     emit(output, ContextOutput);
   },

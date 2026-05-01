@@ -52,11 +52,6 @@ describe("CRUX_COLLAB flag — allowed list logic", () => {
     expect(isActionAllowed("BACK", { viewing: "workstream_list" })).toBe(true);
     expect(isActionAllowed("BACK", { viewing: "problem_detail" })).toBe(true);
   });
-
-  test("ADD_IDEA is always allowed (global)", () => {
-    expect(isActionAllowed("ADD_IDEA", { viewing: "workstream_list" })).toBe(true);
-    expect(isActionAllowed("ADD_IDEA", { viewing: "intake_queue" })).toBe(true);
-  });
 });
 
 describe("ActionSchema validation", () => {

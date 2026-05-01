@@ -4,14 +4,12 @@ import { setup, assign } from "xstate";
 const SelectWorkstreamEvent = z.object({ type: z.literal("SELECT_WORKSTREAM"), slug: z.string() });
 const OpenProblemEvent = z.object({ type: z.literal("OPEN_PROBLEM"), slug: z.string() });
 const SelectIntakeEvent = z.object({ type: z.literal("SELECT_INTAKE") });
-const SelectIdeasEvent = z.object({ type: z.literal("SELECT_IDEAS") });
 const BackEvent = z.object({ type: z.literal("BACK") });
 
 export const ViewEventSchema = z.discriminatedUnion("type", [
   SelectWorkstreamEvent,
   OpenProblemEvent,
   SelectIntakeEvent,
-  SelectIdeasEvent,
   BackEvent,
 ]);
 
@@ -28,7 +26,6 @@ export const VIEW_EVENT_PAYLOAD_HINTS: Record<ViewEvent["type"], Record<string, 
   SELECT_WORKSTREAM: { slug: "string" },
   OPEN_PROBLEM: { slug: "string" },
   SELECT_INTAKE: null,
-  SELECT_IDEAS: null,
   BACK: null,
 };
 
@@ -89,10 +86,6 @@ export const viewMachine = setup({
           target: ".intake_queue",
           guard: "workstreamSelected",
         },
-        SELECT_IDEAS: {
-          target: ".ideas_queue",
-          guard: "workstreamSelected",
-        },
       },
       states: {
         workstream_list: {},
@@ -113,11 +106,6 @@ export const viewMachine = setup({
           },
         },
         intake_queue: {
-          on: {
-            BACK: { target: "workstream_dashboard" },
-          },
-        },
-        ideas_queue: {
           on: {
             BACK: { target: "workstream_dashboard" },
           },

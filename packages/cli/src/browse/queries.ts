@@ -6,7 +6,6 @@ import {
   eliminations,
   eliminationSolutions,
   evidence,
-  ideas,
   observations,
   outcomes,
   outcomeFollowUpProblems,
@@ -37,7 +36,6 @@ export type Decision = typeof decisions.$inferSelect & { rejectedSolutionIds: st
 export type Elimination = typeof eliminations.$inferSelect & { eliminatedSolutionIds: string[] };
 export type Abandonment = typeof abandonments.$inferSelect;
 export type Outcome = typeof outcomes.$inferSelect & { followUpProblemIds: string[] };
-export type Idea = typeof ideas.$inferSelect & { archive: ArchiveBlock };
 
 const STATUS_RANK: Record<string, number> = {
   now: 0,
@@ -383,26 +381,6 @@ export async function listUnlinkedObservations(
   return allObs
     .filter((o) => !linked.has(o.id))
     .map((o) => ({ ...o, archive: toArchive(o) }))
-    .sort((a, b) => b.createdAt - a.createdAt);
-}
-
-export async function listUnpromotedIdeas(
-  workstreamId: string,
-  showArchived: boolean,
-): Promise<Idea[]> {
-  const db = getDb();
-  const where = showArchived
-    ? eq(ideas.workstreamId, workstreamId)
-    : and(eq(ideas.workstreamId, workstreamId), isNull(ideas.archivedAt));
-  const wsIdeas = await db.select().from(ideas).where(where);
-  const promoted = new Set(
-    (await db.select({ ideaId: solutions.originatingIdeaId }).from(solutions))
-      .map((r) => r.ideaId)
-      .filter((x): x is string => Boolean(x)),
-  );
-  return wsIdeas
-    .filter((i) => !promoted.has(i.id))
-    .map((i) => ({ ...i, archive: toArchive(i) }))
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
