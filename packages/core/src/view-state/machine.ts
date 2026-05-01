@@ -41,6 +41,8 @@ export const viewMachine = setup({
     // Overridden at use-site via machine.provide({ guards }).
     workstreamExists: (_args: { context: ViewContext; event: ViewEvent }) => false,
     problemExistsInWorkstream: (_args: { context: ViewContext; event: ViewEvent }) => false,
+    workstreamSelected: ({ context }: { context: ViewContext; event: ViewEvent }) =>
+      context.workstreamSlug !== null,
   },
   actions: {
     setWorkstream: assign({
@@ -68,25 +70,34 @@ export const viewMachine = setup({
   states: {
     viewing: {
       initial: "workstream_list",
-      states: {
-        workstream_list: {
-          on: {
-            SELECT_WORKSTREAM: {
-              target: "workstream_dashboard",
-              guard: "workstreamExists",
-              actions: "setWorkstream",
-            },
-          },
+      // Global navigation: any nav event allowed from any child state.
+      // BACK stays state-local since each state has its own back target.
+      on: {
+        SELECT_WORKSTREAM: {
+          target: ".workstream_dashboard",
+          guard: "workstreamExists",
+          actions: "setWorkstream",
+          reenter: true,
         },
+        OPEN_PROBLEM: {
+          target: ".problem_detail",
+          guard: "problemExistsInWorkstream",
+          actions: "setProblem",
+          reenter: true,
+        },
+        SELECT_INTAKE: {
+          target: ".intake_queue",
+          guard: "workstreamSelected",
+        },
+        SELECT_IDEAS: {
+          target: ".ideas_queue",
+          guard: "workstreamSelected",
+        },
+      },
+      states: {
+        workstream_list: {},
         workstream_dashboard: {
           on: {
-            OPEN_PROBLEM: {
-              target: "problem_detail",
-              guard: "problemExistsInWorkstream",
-              actions: "setProblem",
-            },
-            SELECT_INTAKE: { target: "intake_queue" },
-            SELECT_IDEAS: { target: "ideas_queue" },
             BACK: {
               target: "workstream_list",
               actions: "clearAll",

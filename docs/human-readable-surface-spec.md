@@ -26,7 +26,7 @@ Each is "as a maintainer" unless noted; "open" means "navigate to / drill into."
 - **Read-only.** No mutations. Both surfaces are inspection-only for v1.
 - **Archive semantics.** Match `crux context`: archived hidden from `recent_observations_unlinked` and `unpromoted_ideas` by default; archived Observations linked as Evidence remain visible under their Problem with archive metadata inline.
 - **Empty states.** Every list view must render a sensible empty state ("no open problems," "no unlinked observations," etc.) — not a blank panel.
-- **Order.** Open Problems sorted by `priorityTier` (P0 first, null last) then `createdAt` ascending. Evidence sorted by `createdAt` ascending. Solutions sorted by status (`chosen`, `shipped`, `evaluated`, `proposed`, `rejected`) then `createdAt`.
+- **Order.** Problems sorted by roadmap `status` (`now` → `next` → `later` → null/unscheduled → `done` → `abandoned`) then `createdAt` ascending. Evidence sorted by `createdAt` ascending. Solutions sorted by status (`chosen`, `shipped`, `evaluated`, `proposed`, `rejected`) then `createdAt`.
 
 ## Out of scope (v1)
 
@@ -35,7 +35,7 @@ Each is "as a maintainer" unless noted; "open" means "navigate to / drill into."
 - Search within a workstream.
 - Graph visualization (just linked navigation, not a visual graph).
 - Auth or multi-user.
-- Real-time updates / live reload (poll / refresh-on-demand is fine).
+- Real-time data updates. Mutation events (marking done, adding outcomes, etc.) do not push to open surfaces — a manual browser refresh is required after data changes. Navigation via the view-state machine (`crux view send`) does update surfaces live.
 
 ## Surface-specific notes
 
@@ -71,7 +71,7 @@ For each surface independently:
 1. Seed `.crux.db` (`bun run seed`) and confirm the workstream overview lists `WS-crux`.
 2. Open `WS-crux` and confirm all open Problems appear, P0 first.
 3. Open `PRB-thinking-residue-gap`. Confirm: 11 Evidence entries with inlined Observations; 4 Solutions with statuses (`evaluated`, `chosen`, `rejected`, `rejected`); DEC-001 with chosen=`build-crux`, rejected=`status-quo`, full rationale + context; ELIM-001 with rationale; no Abandonment; no Outcome.
-4. Open `PRB-schema-change-destroys-residue`. Confirm: lifecycleStatus=committed, DEC-003 visible, SOL-delete-reset-and-harden-env shown shipped, OUT-001 visible with observed/expected/learnings.
+4. Open `PRB-schema-change-destroys-residue`. Confirm: status=done, DEC-003 visible, SOL-delete-reset-and-harden-env shown shipped, OUT-001 visible with observed/expected/learnings.
 5. Follow a Solution from `SOL-archive-with-rationale` and confirm it shows `PRB-observation-correction-gap` as parent + DEC-002 as choosing decision.
 6. Follow an Observation from `OBS-012` (issue #1 obs) and confirm it shows two Problems linked as Evidence (`observation-correction-gap`, `external-intake-gap`).
 7. Open the unlinked intake queue. Confirm: empty (or correct contents).

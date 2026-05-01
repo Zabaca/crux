@@ -84,8 +84,25 @@ describe("view machine", () => {
   test("illegal event is a no-op (no throw)", () => {
     const a = actorWith();
     const before = a.getSnapshot().value;
-    // OPEN_PROBLEM is not legal from workstream_list
-    a.send({ type: "OPEN_PROBLEM", slug: "anything" });
+    // BACK is not legal from workstream_list (no parent target)
+    a.send({ type: "BACK" });
     expect(a.getSnapshot().value).toEqual(before);
+  });
+
+  test("OPEN_PROBLEM is global: jumps from problem_detail to a new problem", () => {
+    const a = actorWith({ ws: true, prob: true });
+    a.send({ type: "SELECT_WORKSTREAM", slug: "crux" });
+    a.send({ type: "OPEN_PROBLEM", slug: "p1" });
+    expect(a.getSnapshot().value).toEqual({ viewing: "problem_detail" });
+    expect(a.getSnapshot().context.problemSlug).toBe("p1");
+    a.send({ type: "OPEN_PROBLEM", slug: "p2" });
+    expect(a.getSnapshot().value).toEqual({ viewing: "problem_detail" });
+    expect(a.getSnapshot().context.problemSlug).toBe("p2");
+  });
+
+  test("SELECT_INTAKE rejected when no workstream selected", () => {
+    const a = actorWith();
+    a.send({ type: "SELECT_INTAKE" });
+    expect(a.getSnapshot().value).toEqual({ viewing: "workstream_list" });
   });
 });

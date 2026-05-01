@@ -12,7 +12,15 @@ export type AllowedActions = {
   globals: (ViewActionKind | MutationActionKind)[];
 };
 
-const GLOBALS: (ViewActionKind | MutationActionKind)[] = ["ADD_OBSERVATION", "ADD_IDEA", "BACK"];
+const GLOBALS: (ViewActionKind | MutationActionKind)[] = [
+  "ADD_OBSERVATION",
+  "ADD_IDEA",
+  "BACK",
+  "SELECT_WORKSTREAM",
+  "OPEN_PROBLEM",
+  "SELECT_INTAKE",
+  "SELECT_IDEAS",
+];
 
 const VIEW_ALLOWED: Record<string, AllowedActions> = {
   workstream_list: {
