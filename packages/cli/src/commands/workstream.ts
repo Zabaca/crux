@@ -6,7 +6,7 @@ import { WorkstreamInput, OkWithIdOutput, RenameOutput } from "@crux/core/valida
 import { NotFoundError, renameWorkstream } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a workstream." },
@@ -33,6 +33,7 @@ const addCmd = defineCommand({
       description: parsed.description,
       ownerId: user.user.id,
     });
+    recordMutation("ADD_WORKSTREAM");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
@@ -89,6 +90,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
+    recordMutation("RENAME_WORKSTREAM");
     emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });

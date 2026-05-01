@@ -6,7 +6,7 @@ import { ObservationInput, ObservationArchiveInput, OkWithIdOutput } from "@crux
 import { NotFoundError, archiveObservation } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -69,6 +69,7 @@ const addCmd = defineCommand({
         sourceType: parsed.sourceType,
         tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
       });
+    recordMutation("ADD_OBSERVATION");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
@@ -128,6 +129,7 @@ const archiveCmd = defineCommand({
     });
     const user = requireUser();
     await archiveObservation(parsed.observationId, parsed.rationale, user.user.id, getDb());
+    recordMutation("ARCHIVE_OBSERVATION");
     emit(
       { ok: true, id: parsed.observationId },
       OkWithIdOutput,

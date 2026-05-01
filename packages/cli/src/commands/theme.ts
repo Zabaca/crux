@@ -11,7 +11,7 @@ import {
 import { NotFoundError, renameTheme } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -50,6 +50,7 @@ const addCmd = defineCommand({
       description: parsed.description,
       timeframe: parsed.timeframe,
     });
+    recordMutation("ADD_THEME");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
@@ -112,6 +113,7 @@ const attachCmd = defineCommand({
       .insert(themeSolutions)
       .values({ themeId: theme[0]!.id, solutionId: sol[0]!.id })
       .onConflictDoNothing();
+    recordMutation("ATTACH_THEME");
     emit(
       { ok: true, themeId: theme[0]!.id, solutionId: sol[0]!.id },
       ThemeAttachOutput,
@@ -141,6 +143,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
+    recordMutation("RENAME_THEME");
     emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });

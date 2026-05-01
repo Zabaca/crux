@@ -12,7 +12,7 @@ import {
 import { NotFoundError, archiveIdea, renameIdea } from "@crux/core/transitions";
 import { and, eq, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 
 function asTags(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -68,6 +68,7 @@ const addCmd = defineCommand({
         hypothesizedProblemArea: parsed.hypothesizedProblemArea,
         tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
       });
+    recordMutation("ADD_IDEA");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
@@ -163,6 +164,7 @@ const promoteCmd = defineCommand({
       originatingIdeaId: ideaRows[0]!.id,
       createdById: user.user.id,
     });
+    recordMutation("PROMOTE_IDEA");
     emit(
       { ok: true, id, originatingIdeaId: ideaRows[0]!.id },
       OkWithIdOutput,
@@ -194,6 +196,7 @@ const archiveCmd = defineCommand({
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
     const { id } = await archiveIdea(ws.id, parsed.slug, parsed.rationale, user.user.id, getDb());
+    recordMutation("ARCHIVE_IDEA");
     emit({ ok: true, id }, OkWithIdOutput, `archived ${id}`);
   },
 });
@@ -219,6 +222,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
+    recordMutation("RENAME_IDEA");
     emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });

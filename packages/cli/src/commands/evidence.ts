@@ -6,7 +6,7 @@ import { NotFoundError } from "@crux/core/transitions";
 import { OkWithIdOutput } from "@crux/core/validation";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 
 async function nextEvidenceId(): Promise<string> {
   const all = await getDb().select({ id: evidence.id }).from(evidence);
@@ -48,6 +48,7 @@ const linkCmd = defineCommand({
       note: args.note,
       createdById: user.user.id,
     });
+    recordMutation("ADD_EVIDENCE");
     emit({ ok: true, id }, OkWithIdOutput, `linked ${id}`);
   },
 });

@@ -6,7 +6,7 @@ import { OutcomeInput, OkWithIdOutput } from "@crux/core/validation";
 import { NotFoundError, recordOutcome } from "@crux/core/transitions";
 import { eq, inArray } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -82,6 +82,7 @@ const addCmd = defineCommand({
       },
       db,
     );
+    recordMutation("ADD_OUTCOME");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });

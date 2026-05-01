@@ -578,3 +578,81 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
     expect((thrown as ActionNotAllowedError).attempted).toBe("RENAME_THEME");
   });
 });
+
+// ---------------------------------------------------------------------------
+// recordMutation: revision bump + lastAction write on every mutation
+// ---------------------------------------------------------------------------
+
+describe("recordMutation: mutation success bumps revision and writes lastAction", () => {
+  const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
+  const ORIG_COLLAB = process.env.CRUX_COLLAB;
+  let viewStatePath: string;
+
+  beforeEach(() => {
+    // Each test gets its own view-state file
+    viewStatePath = join(xdgDir, `view-state-${Date.now()}-${Math.random()}.json`);
+    process.env.CRUX_VIEW_STATE_PATH = viewStatePath;
+    delete process.env.CRUX_COLLAB; // direct mode by default
+  });
+
+  afterEach(() => {
+    if (ORIG_VIEW_STATE !== undefined) process.env.CRUX_VIEW_STATE_PATH = ORIG_VIEW_STATE;
+    else delete process.env.CRUX_VIEW_STATE_PATH;
+    if (ORIG_COLLAB !== undefined) process.env.CRUX_COLLAB = ORIG_COLLAB;
+    else delete process.env.CRUX_COLLAB;
+  });
+
+  function readViewMeta(): { revision?: number; lastAction?: { kind: string; ts: number } | null } {
+    const fs = require("node:fs") as typeof import("node:fs");
+    if (!fs.existsSync(viewStatePath)) return {};
+    return JSON.parse(fs.readFileSync(viewStatePath, "utf8")) as {
+      revision?: number;
+      lastAction?: { kind: string; ts: number } | null;
+    };
+  }
+
+  test("ADD_WORKSTREAM bumps revision from 0 → 1 and writes lastAction.kind=ADD_WORKSTREAM", async () => {
+    expect(readViewMeta().revision ?? 0).toBe(0);
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "rev-test",
+      title: "Rev Test",
+      json: false,
+    });
+    const meta = readViewMeta();
+    expect(meta.revision).toBe(1);
+    expect(meta.lastAction?.kind).toBe("ADD_WORKSTREAM");
+    expect(typeof meta.lastAction?.ts).toBe("number");
+  });
+
+  test("two consecutive mutations increment revision (1 → 2)", async () => {
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "rev-two",
+      title: "Rev Two",
+      json: false,
+    });
+    expect(readViewMeta().revision).toBe(1);
+    await runCmd(problemCommand as AnyCmd, "add", {
+      workstream: "rev-two",
+      slug: "p1",
+      title: "P1",
+      description: "d",
+      json: false,
+    });
+    const meta = readViewMeta();
+    expect(meta.revision).toBe(2);
+    expect(meta.lastAction?.kind).toBe("ADD_PROBLEM");
+  });
+
+  test("CRUX_COLLAB=1 also bumps revision (unconditional, gated only on guardAction)", async () => {
+    process.env.CRUX_COLLAB = "1";
+    // ADD_WORKSTREAM is allowed from workstream_list (initial state)
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "collab-rev",
+      title: "Collab Rev",
+      json: false,
+    });
+    const meta = readViewMeta();
+    expect(meta.revision).toBe(1);
+    expect(meta.lastAction?.kind).toBe("ADD_WORKSTREAM");
+  });
+});

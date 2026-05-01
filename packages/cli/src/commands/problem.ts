@@ -28,7 +28,7 @@ import {
 } from "@crux/core/transitions";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction } from "../collab.js";
+import { guardAction, recordMutation } from "../collab.js";
 import { recordQuery } from "../record-query.js";
 
 async function resolveWorkstream(slug: string) {
@@ -74,6 +74,7 @@ const addCmd = defineCommand({
       description: parsed.description,
       createdById: user.user.id,
     });
+    recordMutation("ADD_PROBLEM");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
 });
@@ -181,6 +182,7 @@ const scheduleCmd = defineCommand({
     const tier = RoadmapTier.parse(args.tier);
     const p = await resolveProblem(args.slug);
     await scheduleProblem(p.id, tier, getDb());
+    recordMutation("SCHEDULE_PROBLEM");
     emit({ ok: true, id: p.id, status: tier }, OkWithStatusOutput, `scheduled ${p.id} → ${tier}`);
   },
 });
@@ -193,6 +195,7 @@ const unscheduleCmd = defineCommand({
     guardAction("UNSCHEDULE_PROBLEM");
     const p = await resolveProblem(args.slug);
     await unscheduleProblem(p.id, getDb());
+    recordMutation("UNSCHEDULE_PROBLEM");
     emit({ ok: true, id: p.id, status: null }, OkWithStatusOutput, `unscheduled ${p.id}`);
   },
 });
@@ -205,6 +208,7 @@ const doneCmd = defineCommand({
     guardAction("MARK_PROBLEM_DONE");
     const p = await resolveProblem(args.slug);
     await markProblemDone(p.id, getDb());
+    recordMutation("MARK_PROBLEM_DONE");
     emit({ ok: true, id: p.id, status: "done" }, OkWithStatusOutput, `done ${p.id}`);
   },
 });
@@ -222,6 +226,7 @@ const abandonCmd = defineCommand({
     const user = requireUser();
     const p = await resolveProblem(args.slug);
     await abandonProblem(p.id, args.rationale, user.user.id, getDb());
+    recordMutation("ABANDON_PROBLEM");
     emit({ ok: true, id: p.id, status: "abandoned" }, OkWithStatusOutput, `abandoned ${p.id}`);
   },
 });
@@ -247,6 +252,7 @@ const renameCmd = defineCommand({
       { title: args.title, description: args.description },
       getDb(),
     );
+    recordMutation("RENAME_PROBLEM");
     emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });
