@@ -70,12 +70,37 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
     return snap;
   }
   const raw = readFileSync(path, "utf8");
-  const parsed = JSON.parse(raw) as PersistedViewSnapshot;
-  const actor = createActor(viewMachine, { snapshot: parsed });
-  actor.start();
-  const snap = actor.getSnapshot();
-  actor.stop();
-  return snap;
+  let all: Record<string, unknown>;
+  try {
+    all = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    // Corrupt file — return initial state
+    const actor = createActor(viewMachine);
+    actor.start();
+    const snap = actor.getSnapshot();
+    actor.stop();
+    return snap;
+  }
+  // Strip sidecar fields before passing to XState — they confuse the state restoration.
+  const { revision: _r, lastAction: _la, recentQueries: _rq, ...xstateFields } = all;
+  void _r;
+  void _la;
+  void _rq;
+  const parsed = xstateFields as PersistedViewSnapshot;
+  try {
+    const actor = createActor(viewMachine, { snapshot: parsed });
+    actor.start();
+    const snap = actor.getSnapshot();
+    actor.stop();
+    return snap;
+  } catch {
+    // Snapshot incompatible — fall back to initial state
+    const actor = createActor(viewMachine);
+    actor.start();
+    const snap = actor.getSnapshot();
+    actor.stop();
+    return snap;
+  }
 }
 
 /**
@@ -97,16 +122,23 @@ function getPersistedSnapshotFrom(snapshot: ViewSnapshot): PersistedViewSnapshot
   return persisted;
 }
 
+/** Default ViewContext when no state is available. */
+const DEFAULT_CONTEXT: ViewMeta["context"] = { workstreamSlug: null, problemSlug: null };
+/** Default XState initial value (nested object from machine definition). */
+const DEFAULT_VALUE = { viewing: "workstream_list" };
+
 /**
  * Load the full ViewMeta from disk (migrate-tolerant: defaults revision:0, lastAction:null, recentQueries:[]).
+ *
+ * Extracts `value` and `context` directly from the raw JSON rather than via XState actor
+ * restoration to avoid XState errors on corrupt or sidecar-only files.
  */
 export function loadViewMeta(path?: string): ViewMeta {
   const resolvedPath = path ?? resolveViewStatePath();
   if (!existsSync(resolvedPath)) {
-    const snap = loadState(resolvedPath);
     return {
-      value: snap.value,
-      context: snap.context,
+      value: DEFAULT_VALUE,
+      context: DEFAULT_CONTEXT,
       revision: 0,
       lastAction: null,
       recentQueries: [],
@@ -117,20 +149,20 @@ export function loadViewMeta(path?: string): ViewMeta {
   try {
     parsed = JSON.parse(raw) as Record<string, unknown>;
   } catch {
-    const snap = loadState(resolvedPath);
     return {
-      value: snap.value,
-      context: snap.context,
+      value: DEFAULT_VALUE,
+      context: DEFAULT_CONTEXT,
       revision: 0,
       lastAction: null,
       recentQueries: [],
     };
   }
-  // Load xstate part
-  const snap = loadState(resolvedPath);
+  // Extract value and context directly from the raw JSON (XState persists them at top-level).
+  const value = parsed.value ?? DEFAULT_VALUE;
+  const context = (parsed.context as ViewMeta["context"] | undefined) ?? DEFAULT_CONTEXT;
   return {
-    value: snap.value,
-    context: snap.context,
+    value,
+    context,
     revision: typeof parsed.revision === "number" ? parsed.revision : 0,
     lastAction: (parsed.lastAction as LastAction | null) ?? null,
     recentQueries: Array.isArray(parsed.recentQueries)
