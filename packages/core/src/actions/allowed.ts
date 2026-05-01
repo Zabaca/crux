@@ -43,6 +43,7 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
     allowedView: ["BACK"],
     allowedMutation: [
       "ADD_SOLUTION",
+      "EDIT_SOLUTION",
       "ADD_EVIDENCE",
       "ADD_DECISION",
       "ADD_ELIMINATION",

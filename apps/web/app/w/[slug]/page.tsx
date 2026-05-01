@@ -80,7 +80,7 @@ export default async function WorkstreamPage({ params }: { params: Promise<{ slu
 
   return (
     <>
-      <SyncViewState workstreamSlug={slug} />
+      <SyncViewState workstreamId={ws.id} />
       <PageShell
         breadcrumbs={[{ href: "/", label: "Workstreams" }, { label: ws.slug }]}
         title={ws.title}

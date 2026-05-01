@@ -30,7 +30,7 @@ const addCmd = defineCommand({
   meta: { name: "add", description: "Eliminate one or more Solutions from a Problem." },
   args: {
     problem: { type: "string", required: false },
-    solutions: { type: "string", required: true, description: "comma-separated solution slugs" },
+    solutions: { type: "string", required: true, description: "comma-separated solution ids" },
     rationale: { type: "string", required: true },
     context: { type: "string" },
     json: { type: "boolean" },
@@ -47,24 +47,20 @@ const addCmd = defineCommand({
       context: args.context,
     });
     const db = getDb();
-    const pr = await db
-      .select()
-      .from(problems)
-      .where(eq(problems.slug, parsed.problemSlug))
-      .limit(1);
+    const pr = await db.select().from(problems).where(eq(problems.id, parsed.problemSlug)).limit(1);
     if (pr.length === 0)
       throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
-        slug: parsed.problemSlug,
+        id: parsed.problemSlug,
       });
     const solRows = await db
       .select()
       .from(solutions)
-      .where(inArray(solutions.slug, parsed.solutions));
-    const bySlug = new Map(solRows.map((r) => [r.slug, r]));
+      .where(inArray(solutions.id, parsed.solutions));
+    const byId = new Map(solRows.map((r) => [r.id, r]));
     const solutionIds: string[] = [];
     for (const s of parsed.solutions) {
-      const row = bySlug.get(s);
-      if (!row) throw new NotFoundError(`solution not found: ${s}`, { slug: s });
+      const row = byId.get(s);
+      if (!row) throw new NotFoundError(`solution not found: ${s}`, { id: s });
       solutionIds.push(row.id);
     }
     const user = requireUser();
@@ -95,9 +91,9 @@ const listCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     if (args.problem) {
-      const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
+      const pr = await db.select().from(problems).where(eq(problems.id, args.problem)).limit(1);
       if (pr.length === 0)
-        throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+        throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
       emit(await db.select().from(eliminations).where(eq(eliminations.problemId, pr[0]!.id)));
       return;
     }

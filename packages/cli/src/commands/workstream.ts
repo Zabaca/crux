@@ -49,7 +49,7 @@ const listCmd = defineCommand({
 });
 
 const showCmd = defineCommand({
-  meta: { name: "show", description: "Show a workstream by slug." },
+  meta: { name: "show", description: "Show a workstream by id." },
   args: {
     workstream: { type: "string", required: true, alias: "w" },
     json: { type: "boolean" },
@@ -59,11 +59,11 @@ const showCmd = defineCommand({
     const rows = await getDb()
       .select()
       .from(workstreams)
-      .where(eq(workstreams.slug, args.workstream))
+      .where(eq(workstreams.id, args.workstream))
       .limit(1);
     if (rows.length === 0)
       throw new NotFoundError(`workstream not found: ${args.workstream}`, {
-        slug: args.workstream,
+        id: args.workstream,
       });
     emit(rows[0]!, `${rows[0]!.id}\t${rows[0]!.title}`);
   },

@@ -12,6 +12,7 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   const encoder = new TextEncoder();
   const path = resolveViewStatePath();
+  console.log("[view-state GET] Resolved path:", path);
 
   const stream = new ReadableStream({
     start(controller) {
@@ -28,6 +29,7 @@ export async function GET() {
       try {
         const snap = loadState(path);
         const meta = loadViewMeta(path);
+        console.log("[view-state GET init]", { value: snap.value, context: snap.context });
         send({
           type: "init",
           value: snap.value,
@@ -36,11 +38,12 @@ export async function GET() {
           lastAction: meta.lastAction,
           recentQueries: meta.recentQueries,
         });
-      } catch {
+      } catch (err) {
+        console.error("[view-state GET init error]", err);
         send({
           type: "init",
           value: { viewing: "workstream_list" },
-          context: { workstreamSlug: null, problemSlug: null },
+          context: { workstreamId: null, problemId: null },
           revision: 0,
           lastAction: null,
           recentQueries: [],
@@ -48,9 +51,11 @@ export async function GET() {
       }
 
       const handle = watchViewStateFile(path, () => {
+        console.log("[view-state WATCH] File changed");
         try {
           const snap = loadState(path);
           const meta = loadViewMeta(path);
+          console.log("[view-state WATCH change]", { value: snap.value, context: snap.context });
           send({
             type: "change",
             value: snap.value,
@@ -59,8 +64,8 @@ export async function GET() {
             lastAction: meta.lastAction,
             recentQueries: meta.recentQueries,
           });
-        } catch {
-          // ignore transient errors
+        } catch (err) {
+          console.error("[view-state WATCH error]", err);
         }
       });
       void VIEW_ACTION_KINDS; // used in listener branching, kept here for import
@@ -96,41 +101,41 @@ export async function GET() {
 }
 
 /**
- * Write-back: accept a target {workstreamSlug, problemSlug} from the web UI
+ * Write-back: accept a target {workstreamId, problemId} from the web UI
  * and apply the right event sequence so the view-state file stays in sync with
  * where the user actually is. Errors are swallowed — sync is best-effort.
  */
 export async function POST(req: Request) {
   try {
-    const { workstreamSlug, problemSlug, queue } = (await req.json()) as {
-      workstreamSlug: string | null;
-      problemSlug: string | null;
+    const { workstreamId, problemId, queue } = (await req.json()) as {
+      workstreamId: string | null;
+      problemId: string | null;
       queue?: "intake" | null;
     };
 
     const current = loadState();
     const leaf = JSON.stringify(current.value);
 
-    // Helper: ensure we're at workstream_dashboard for the given slug.
-    const ensureAtDashboard = async (slug: string) => {
-      if (current.context.workstreamSlug !== slug) {
+    // Helper: ensure we're at workstream_dashboard for the given id.
+    const ensureAtDashboard = async (id: string) => {
+      if (current.context.workstreamId !== id) {
         if (!leaf.includes("workstream_list")) await sendViewEvent({ type: "BACK" });
-        await sendViewEvent({ type: "SELECT_WORKSTREAM", slug });
+        await sendViewEvent({ type: "SELECT_WORKSTREAM", id });
       } else if (leaf.includes("problem_detail") || leaf.includes("intake_queue")) {
         await sendViewEvent({ type: "BACK" });
       }
     };
 
-    if (problemSlug && workstreamSlug) {
-      if (current.context.workstreamSlug !== workstreamSlug) {
-        await sendViewEvent({ type: "SELECT_WORKSTREAM", slug: workstreamSlug });
+    if (problemId && workstreamId) {
+      if (current.context.workstreamId !== workstreamId) {
+        await sendViewEvent({ type: "SELECT_WORKSTREAM", id: workstreamId });
       }
-      await sendViewEvent({ type: "OPEN_PROBLEM", slug: problemSlug });
-    } else if (queue === "intake" && workstreamSlug) {
-      await ensureAtDashboard(workstreamSlug);
+      await sendViewEvent({ type: "OPEN_PROBLEM", id: problemId });
+    } else if (queue === "intake" && workstreamId) {
+      await ensureAtDashboard(workstreamId);
       await sendViewEvent({ type: "SELECT_INTAKE" });
-    } else if (workstreamSlug) {
-      await ensureAtDashboard(workstreamSlug);
+    } else if (workstreamId) {
+      await ensureAtDashboard(workstreamId);
     } else {
       if (!leaf.includes("workstream_list")) await sendViewEvent({ type: "BACK" });
     }

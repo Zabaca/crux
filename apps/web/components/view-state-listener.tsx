@@ -40,34 +40,75 @@ export function ViewStateListener() {
   const pathname = usePathname();
 
   useEffect(() => {
+    console.log("[ViewStateListener] Connecting to SSE from pathname:", pathname);
     const es = new EventSource("/api/view-state");
+    let msgCount = 0;
+
+    es.onopen = () => {
+      console.log("[ViewStateListener] SSE connection established");
+    };
+
     es.onmessage = (ev) => {
+      msgCount++;
+      const logPrefix = `[VSL#${msgCount}]`;
+      console.log(`${logPrefix} Message received, data length: ${ev.data.length}`);
       try {
         const msg = JSON.parse(ev.data) as ViewStateMessage;
-        if (msg.type !== "change") return;
+        const viewing = (msg.value as any)?.viewing;
+        console.log(`${logPrefix} Parsed:`, {
+          type: msg.type,
+          viewing,
+          wsId: msg.context.workstreamId,
+          probId: msg.context.problemId,
+          lastKind: msg.lastAction?.kind,
+        });
+        console.log(`${logPrefix} Full lastAction:`, msg.lastAction);
+
+        if (msg.type !== "change") {
+          console.log(`${logPrefix} ⚠️  Type is "${msg.type}", ignoring (only process "change")`);
+          return;
+        }
 
         const lastKind = msg.lastAction?.kind;
+        const isNavAction = !lastKind || VIEW_ACTION_KINDS.has(lastKind);
+        console.log(`${logPrefix} Decision: lastKind="${lastKind}" → isNavAction=${isNavAction}`);
 
-        if (!lastKind || VIEW_ACTION_KINDS.has(lastKind)) {
-          // Navigation-only action or legacy: push to derived path
+        if (!lastKind) {
+          console.log(`${logPrefix}   (no lastAction, treating as nav by default)`);
+        } else if (VIEW_ACTION_KINDS.has(lastKind)) {
+          console.log(
+            `${logPrefix}   (lastKind in VIEW_ACTION_KINDS: ${Array.from(VIEW_ACTION_KINDS).join(", ")})`,
+          );
+        } else {
+          console.log(`${logPrefix}   (lastKind NOT in VIEW_ACTION_KINDS, is MutationAction)`);
+        }
+
+        if (isNavAction) {
           const target = stateToPath(msg);
+          console.log(`${logPrefix} 📍 stateToPath returned: "${target}"`);
+          console.log(`${logPrefix} 📍 current pathname: "${pathname}"`);
           if (target !== pathname) {
+            console.log(`${logPrefix} ✅ Paths differ → router.push("${target}")`);
             router.push(target);
           } else {
+            console.log(`${logPrefix} ⏸️  Paths same → router.replace("${target}")`);
             router.replace(target);
           }
         } else {
-          // MutationAction: refresh current page data without navigating
+          console.log(`${logPrefix} 🔄 MutationAction → router.refresh()`);
           router.refresh();
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error(`${logPrefix} ❌ Error:`, err);
       }
     };
-    es.onerror = () => {
-      // Let the browser auto-reconnect; no console spam.
+
+    es.onerror = (err) => {
+      console.error("[ViewStateListener] SSE connection error:", err);
     };
+
     return () => {
+      console.log("[ViewStateListener] Closing SSE connection");
       es.close();
     };
   }, [router, pathname]);

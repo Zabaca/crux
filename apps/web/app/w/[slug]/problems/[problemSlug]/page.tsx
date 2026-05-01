@@ -24,7 +24,7 @@ export default async function ProblemPage({
 
   return (
     <>
-      <SyncViewState workstreamSlug={slug} problemSlug={problemSlug} />
+      <SyncViewState workstreamId={ws.id} problemId={problem.id} />
       <PageShell
         breadcrumbs={[
           { href: "/", label: "Workstreams" },

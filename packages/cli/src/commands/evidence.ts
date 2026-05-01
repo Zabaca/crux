@@ -20,7 +20,7 @@ const linkCmd = defineCommand({
   meta: { name: "link", description: "Link an observation to a problem as evidence." },
   args: {
     observation: { type: "positional", required: true, description: "OBS-###" },
-    problem: { type: "positional", required: false, description: "problem slug" },
+    problem: { type: "positional", required: false, description: "problem id" },
     note: { type: "string" },
     json: { type: "boolean" },
   },
@@ -40,8 +40,8 @@ const linkCmd = defineCommand({
       throw new NotFoundError(`observation not found: ${args.observation}`, {
         id: args.observation,
       });
-    const pr = await db.select().from(problems).where(eq(problems.slug, prVal)).limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found: ${prVal}`, { slug: prVal });
+    const pr = await db.select().from(problems).where(eq(problems.id, prVal)).limit(1);
+    if (pr.length === 0) throw new NotFoundError(`problem not found: ${prVal}`, { id: prVal });
     const id = await nextEvidenceId();
     await db.insert(evidence).values({
       id,
@@ -56,7 +56,7 @@ const linkCmd = defineCommand({
 });
 
 const listCmd = defineCommand({
-  meta: { name: "list", description: "List evidence, optionally filtered by problem slug." },
+  meta: { name: "list", description: "List evidence, optionally filtered by problem id." },
   args: {
     problem: { type: "positional", required: false },
     json: { type: "boolean" },
@@ -65,9 +65,9 @@ const listCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     if (args.problem) {
-      const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
+      const pr = await db.select().from(problems).where(eq(problems.id, args.problem)).limit(1);
       if (pr.length === 0)
-        throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+        throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
       emit(await db.select().from(evidence).where(eq(evidence.problemId, pr[0]!.id)));
       return;
     }

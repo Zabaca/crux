@@ -6,10 +6,10 @@ import { eq, inArray } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
 
-async function resolveWorkstream(slug: string) {
-  const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
+async function resolveWorkstream(id: string) {
+  const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new NotFoundError(`workstream not found: ${slug}`, { slug });
+  if (!row) throw new NotFoundError(`workstream not found: ${id}`, { id });
   return row;
 }
 

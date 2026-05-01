@@ -3,22 +3,22 @@ import { isJsonMode } from "./output.js";
 
 export function wsArg(explicit: string | undefined): string {
   if (explicit) return explicit;
-  const slug = loadViewMeta().context.workstreamSlug;
-  if (!slug)
+  const id = loadViewMeta().context.workstreamId;
+  if (!id)
     throw new Error(
-      "no --workstream given and no workstream in view state; run: crux view send SELECT_WORKSTREAM <slug>",
+      'no --workstream given and no workstream in view state; run: crux view send SELECT_WORKSTREAM --payload \'{"id":"WS-<slug>"}\'',
     );
-  return slug;
+  return id;
 }
 
 export function problemArg(explicit: string | undefined): string {
   if (explicit) return explicit;
-  const slug = loadViewMeta().context.problemSlug;
-  if (!slug)
+  const id = loadViewMeta().context.problemId;
+  if (!id)
     throw new Error(
-      "no --problem given and no problem in view state; run: crux view send OPEN_PROBLEM <slug>",
+      'no --problem given and no problem in view state; run: crux view send OPEN_PROBLEM --payload \'{"id":"PRB-<slug>"}\'',
     );
-  return slug;
+  return id;
 }
 
 export function hintCtx(ws?: string, problem?: string): void {

@@ -93,11 +93,11 @@ export const contextCommand = defineCommand({
     const includeExtras = Boolean(args.all);
     const db = getDb();
     const wsRow = (
-      await db.select().from(workstreams).where(eq(workstreams.slug, wsVal)).limit(1)
+      await db.select().from(workstreams).where(eq(workstreams.id, wsVal)).limit(1)
     )[0];
     if (!wsRow)
       throw new NotFoundError(`workstream not found: ${wsVal}`, {
-        slug: wsVal,
+        id: wsVal,
       });
 
     const allProblemsRaw = await db

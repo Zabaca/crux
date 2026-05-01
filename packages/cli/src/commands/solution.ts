@@ -17,7 +17,7 @@ import { problemArg, hintCtx } from "../ctx-defaults.js";
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a solution candidate to a problem." },
   args: {
-    problem: { type: "string", required: false, description: "problem slug" },
+    problem: { type: "string", required: false, description: "problem id" },
     slug: { type: "string", required: true },
     title: { type: "string", required: true },
     description: { type: "string" },
@@ -36,14 +36,10 @@ const addCmd = defineCommand({
     });
     const user = requireUser();
     const db = getDb();
-    const pr = await db
-      .select()
-      .from(problems)
-      .where(eq(problems.slug, parsed.problemSlug))
-      .limit(1);
+    const pr = await db.select().from(problems).where(eq(problems.id, parsed.problemSlug)).limit(1);
     if (pr.length === 0)
       throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
-        slug: parsed.problemSlug,
+        id: parsed.problemSlug,
       });
     const id = `SOL-${parsed.slug}`;
     await db.insert(solutions).values({
@@ -60,7 +56,7 @@ const addCmd = defineCommand({
 });
 
 const listCmd = defineCommand({
-  meta: { name: "list", description: "List solutions, optionally filtered by problem slug." },
+  meta: { name: "list", description: "List solutions, optionally filtered by problem id." },
   args: {
     problem: { type: "positional", required: false },
     json: { type: "boolean" },
@@ -69,9 +65,9 @@ const listCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     if (args.problem) {
-      const pr = await db.select().from(problems).where(eq(problems.slug, args.problem)).limit(1);
+      const pr = await db.select().from(problems).where(eq(problems.id, args.problem)).limit(1);
       if (pr.length === 0)
-        throw new NotFoundError(`problem not found: ${args.problem}`, { slug: args.problem });
+        throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
       const rows = await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id));
       emit(rows, rows.map((r) => `${r.id}\t${r.status}\t${r.title}`).join("\n") || "(none)");
       return;
@@ -81,31 +77,27 @@ const listCmd = defineCommand({
 });
 
 const showCmd = defineCommand({
-  meta: { name: "show", description: "Show a solution by slug." },
-  args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
+  meta: { name: "show", description: "Show a solution by id." },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb()
-      .select()
-      .from(solutions)
-      .where(eq(solutions.slug, args.slug))
-      .limit(1);
+    const rows = await getDb().select().from(solutions).where(eq(solutions.id, args.id)).limit(1);
     if (rows.length === 0)
-      throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
+      throw new NotFoundError(`solution not found: ${args.id}`, { id: args.id });
     emit(rows[0]!);
   },
 });
 
 const shipCmd = defineCommand({
   meta: { name: "ship", description: "Flip a chosen Solution to shipped." },
-  args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     guardAction("SHIP_SOLUTION");
     const db = getDb();
-    const rows = await db.select().from(solutions).where(eq(solutions.slug, args.slug)).limit(1);
+    const rows = await db.select().from(solutions).where(eq(solutions.id, args.id)).limit(1);
     if (rows.length === 0)
-      throw new NotFoundError(`solution not found: ${args.slug}`, { slug: args.slug });
+      throw new NotFoundError(`solution not found: ${args.id}`, { id: args.id });
     await shipSolution(rows[0]!.id, db);
     recordMutation("SHIP_SOLUTION");
     emit(
@@ -145,7 +137,7 @@ const renameCmd = defineCommand({
 const editCmd = defineCommand({
   meta: { name: "edit", description: "Edit a solution's description or title." },
   args: {
-    slug: { type: "positional", required: true },
+    id: { type: "positional", required: true },
     description: { type: "string" },
     title: { type: "string" },
     json: { type: "boolean" },
@@ -158,9 +150,7 @@ const editCmd = defineCommand({
     }
     guardAction("EDIT_SOLUTION");
     const db = getDb();
-    const row = (
-      await db.select().from(solutions).where(eq(solutions.slug, args.slug)).limit(1)
-    )[0];
+    const row = (await db.select().from(solutions).where(eq(solutions.id, args.id)).limit(1))[0];
     if (!row) {
       emitError(new NotFoundError("solution", args.slug));
       process.exit(23);

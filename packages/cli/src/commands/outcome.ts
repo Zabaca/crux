@@ -28,11 +28,11 @@ async function nextOutcomeId(): Promise<string> {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Record an outcome for a shipped Solution." },
   args: {
-    solution: { type: "string", required: true, description: "solution slug" },
+    solution: { type: "string", required: true, description: "solution id" },
     "observed-impact": { type: "string", required: true },
     "expected-impact": { type: "string" },
     learnings: { type: "string" },
-    "follow-up-problems": { type: "string", description: "comma-separated problem slugs" },
+    "follow-up-problems": { type: "string", description: "comma-separated problem ids" },
     json: { type: "boolean" },
   },
   async run({ args }) {
@@ -49,22 +49,22 @@ const addCmd = defineCommand({
     const sol = await db
       .select()
       .from(solutions)
-      .where(eq(solutions.slug, parsed.solutionSlug))
+      .where(eq(solutions.id, parsed.solutionSlug))
       .limit(1);
     if (sol.length === 0)
       throw new NotFoundError(`solution not found: ${parsed.solutionSlug}`, {
-        slug: parsed.solutionSlug,
+        id: parsed.solutionSlug,
       });
     let followUpProblemIds: string[] = [];
     if (parsed.followUpProblems && parsed.followUpProblems.length > 0) {
       const rows = await db
         .select()
         .from(problems)
-        .where(inArray(problems.slug, parsed.followUpProblems));
-      const bySlug = new Map(rows.map((r) => [r.slug, r.id]));
+        .where(inArray(problems.id, parsed.followUpProblems));
+      const byId = new Map(rows.map((r) => [r.id, r.id]));
       for (const s of parsed.followUpProblems) {
-        const id = bySlug.get(s);
-        if (!id) throw new NotFoundError(`follow-up problem not found: ${s}`, { slug: s });
+        const id = byId.get(s);
+        if (!id) throw new NotFoundError(`follow-up problem not found: ${s}`, { id: s });
         followUpProblemIds.push(id);
       }
     }

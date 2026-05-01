@@ -12,7 +12,7 @@ export default async function Home() {
   const wss = await listWorkstreams();
   return (
     <>
-      <SyncViewState workstreamSlug={null} />
+      <SyncViewState workstreamId={null} />
       <PageShell title="Workstreams" subtitle="All Crux workstreams in this database.">
         {wss.length === 0 ? (
           <EmptyState>

@@ -35,7 +35,7 @@ export type ViewMeta = {
   /** Derived from xstate snapshot: current machine value */
   value: unknown;
   /** Derived from xstate snapshot: current machine context */
-  context: { workstreamSlug: string | null; problemSlug: string | null };
+  context: { workstreamId: string | null; problemId: string | null };
   revision: number;
   lastAction: LastAction | null;
   recentQueries: RecentQuery[];
@@ -86,7 +86,32 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
   void _r;
   void _la;
   void _rq;
-  const parsed = xstateFields as PersistedViewSnapshot;
+  let parsed = xstateFields as PersistedViewSnapshot;
+
+  // Migrate legacy context fields from slugs to IDs.
+  if (parsed.context && typeof parsed.context === "object") {
+    const ctx = parsed.context as Record<string, unknown>;
+    if ("workstreamSlug" in ctx || "problemSlug" in ctx) {
+      parsed = {
+        ...parsed,
+        context: {
+          workstreamId:
+            typeof ctx.workstreamId === "string"
+              ? ctx.workstreamId
+              : typeof ctx.workstreamSlug === "string"
+                ? `WS-${ctx.workstreamSlug}`
+                : null,
+          problemId:
+            typeof ctx.problemId === "string"
+              ? ctx.problemId
+              : typeof ctx.problemSlug === "string"
+                ? `PRB-${ctx.problemSlug}`
+                : null,
+        },
+      };
+    }
+  }
+
   try {
     const actor = createActor(viewMachine, { snapshot: parsed });
     actor.start();
@@ -168,7 +193,7 @@ function getPersistedSnapshotFrom(snapshot: ViewSnapshot): PersistedViewSnapshot
 }
 
 /** Default ViewContext when no state is available. */
-const DEFAULT_CONTEXT: ViewMeta["context"] = { workstreamSlug: null, problemSlug: null };
+const DEFAULT_CONTEXT: ViewMeta["context"] = { workstreamId: null, problemId: null };
 /** Default XState initial value (nested object from machine definition). */
 const DEFAULT_VALUE = { viewing: "workstream_list" };
 
@@ -177,6 +202,8 @@ const DEFAULT_VALUE = { viewing: "workstream_list" };
  *
  * Extracts `value` and `context` directly from the raw JSON rather than via XState actor
  * restoration to avoid XState errors on corrupt or sidecar-only files.
+ *
+ * Migrates legacy workstreamSlug/problemSlug to workstreamId/problemId on read.
  */
 export function loadViewMeta(path?: string): ViewMeta {
   const resolvedPath = path ?? resolveViewStatePath();
@@ -204,7 +231,22 @@ export function loadViewMeta(path?: string): ViewMeta {
   }
   // Extract value and context directly from the raw JSON (XState persists them at top-level).
   const value = parsed.value ?? DEFAULT_VALUE;
-  const context = (parsed.context as ViewMeta["context"] | undefined) ?? DEFAULT_CONTEXT;
+
+  // Migrate legacy slug-based context to ID-based context.
+  const rawContext = parsed.context as Record<string, unknown> | undefined;
+  const context: ViewMeta["context"] = rawContext
+    ? {
+        workstreamId:
+          (rawContext.workstreamId as string | null) ??
+          (typeof rawContext.workstreamSlug === "string"
+            ? `WS-${rawContext.workstreamSlug}`
+            : null),
+        problemId:
+          (rawContext.problemId as string | null) ??
+          (typeof rawContext.problemSlug === "string" ? `PRB-${rawContext.problemSlug}` : null),
+      }
+    : DEFAULT_CONTEXT;
+
   return {
     value,
     context,
@@ -272,10 +314,10 @@ export async function sendViewEvent(
   let problemExistsInWorkstream = false;
 
   if (event.type === "SELECT_WORKSTREAM") {
-    workstreamExists = await wsExists(event.slug);
+    workstreamExists = await wsExists(event.id);
   } else if (event.type === "OPEN_PROBLEM") {
-    const wsSlug = current.context.workstreamSlug;
-    problemExistsInWorkstream = wsSlug ? await probExists(wsSlug, event.slug) : false;
+    const wsId = current.context.workstreamId;
+    problemExistsInWorkstream = wsId ? await probExists(wsId, event.id) : false;
   }
 
   const machineWithGuards = viewMachine.provide({
@@ -300,13 +342,13 @@ export async function sendViewEvent(
   // If nothing changed and the event had a guard, we refused.
   if (sameState(current, next)) {
     if (event.type === "SELECT_WORKSTREAM" && !workstreamExists) {
-      throw new ViewEventRefusedError("GUARD_REJECTED", `workstream not found: ${event.slug}`);
+      throw new ViewEventRefusedError("GUARD_REJECTED", `workstream not found: ${event.id}`);
     }
     if (event.type === "OPEN_PROBLEM" && !problemExistsInWorkstream) {
-      const ws = current.context.workstreamSlug ?? "<none>";
+      const ws = current.context.workstreamId ?? "<none>";
       throw new ViewEventRefusedError(
         "GUARD_REJECTED",
-        `problem not found in workstream ${ws}: ${event.slug}`,
+        `problem not found in workstream ${ws}: ${event.id}`,
       );
     }
     // Truly illegal event in current state.
@@ -386,28 +428,20 @@ function sameState(a: ViewSnapshot, b: ViewSnapshot): boolean {
 
 // --- db-backed guard helpers ---
 
-async function wsExists(slug: string): Promise<boolean> {
+async function wsExists(id: string): Promise<boolean> {
   const rows = await getDb()
     .select({ id: workstreams.id })
     .from(workstreams)
-    .where(eq(workstreams.slug, slug))
+    .where(eq(workstreams.id, id))
     .limit(1);
   return rows.length > 0;
 }
 
-async function probExists(workstreamSlug: string, problemSlug: string): Promise<boolean> {
-  const db = getDb();
-  const wsRows = await db
-    .select({ id: workstreams.id })
-    .from(workstreams)
-    .where(eq(workstreams.slug, workstreamSlug))
-    .limit(1);
-  const ws = wsRows[0];
-  if (!ws) return false;
-  const pRows = await db
+async function probExists(workstreamId: string, problemId: string): Promise<boolean> {
+  const rows = await getDb()
     .select({ id: problems.id })
     .from(problems)
-    .where(and(eq(problems.workstreamId, ws.id), eq(problems.slug, problemSlug)))
+    .where(and(eq(problems.workstreamId, workstreamId), eq(problems.id, problemId)))
     .limit(1);
-  return pRows.length > 0;
+  return rows.length > 0;
 }

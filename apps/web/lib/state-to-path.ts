@@ -8,22 +8,33 @@
 
 export type ViewSnapshotJson = {
   value: unknown;
-  context: { workstreamSlug: string | null; problemSlug: string | null };
+  context: { workstreamId: string | null; problemId: string | null };
 };
 
 export function stateToPath(snapshot: ViewSnapshotJson): string {
   const leaf = formatValue(snapshot.value);
-  const ctx = snapshot.context ?? { workstreamSlug: null, problemSlug: null };
-  if (leaf.endsWith("problem_detail") && ctx.workstreamSlug && ctx.problemSlug) {
-    return `/w/${ctx.workstreamSlug}/problems/${ctx.problemSlug}`;
+  const ctx = snapshot.context ?? { workstreamId: null, problemId: null };
+
+  const wsSlug = ctx.workstreamId ? extractSlug(ctx.workstreamId) : null;
+  const probSlug = ctx.problemId ? extractSlug(ctx.problemId) : null;
+
+  console.log("[stateToPath]", { leaf, wsSlug, probSlug, context: ctx });
+
+  if (leaf.endsWith("problem_detail") && wsSlug && probSlug) {
+    return `/w/${wsSlug}/problems/${probSlug}`;
   }
-  if (leaf.endsWith("intake_queue") && ctx.workstreamSlug) {
-    return `/w/${ctx.workstreamSlug}/queues/intake`;
+  if (leaf.endsWith("intake_queue") && wsSlug) {
+    return `/w/${wsSlug}/queues/intake`;
   }
-  if (leaf.endsWith("workstream_dashboard") && ctx.workstreamSlug) {
-    return `/w/${ctx.workstreamSlug}`;
+  if (leaf.endsWith("workstream_dashboard") && wsSlug) {
+    return `/w/${wsSlug}`;
   }
   return "/";
+}
+
+function extractSlug(id: string): string {
+  const match = id.match(/^[A-Z]+-(.+)$/);
+  return match ? match[1] : id;
 }
 
 function formatValue(value: unknown): string {

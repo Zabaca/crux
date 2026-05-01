@@ -22,6 +22,7 @@ import {
   markProblemDone,
   abandonProblem,
   shipSolution,
+  editSolution,
   createElimination,
   createDecision,
   recordOutcome,
@@ -182,6 +183,11 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
       const sol = await resolveSolution(p.slug);
       await shipSolution(sol.id, db);
       return { ok: true, id: sol.id, status: "shipped" };
+    }
+    case "EDIT_SOLUTION": {
+      const { solutionId, description, title } = action.payload;
+      await editSolution(solutionId, { description, title }, db);
+      return { ok: true, id: solutionId };
     }
     case "RENAME_SOLUTION": {
       const p = action.payload;

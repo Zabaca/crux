@@ -3,12 +3,12 @@
 import { useEffect } from "react";
 
 export function SyncViewState({
-  workstreamSlug,
-  problemSlug,
+  workstreamId,
+  problemId,
   queue,
 }: {
-  workstreamSlug: string | null;
-  problemSlug?: string | null;
+  workstreamId: string | null;
+  problemId?: string | null;
   queue?: "intake" | null;
 }) {
   useEffect(() => {
@@ -16,12 +16,12 @@ export function SyncViewState({
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        workstreamSlug,
-        problemSlug: problemSlug ?? null,
+        workstreamId,
+        problemId: problemId ?? null,
         queue: queue ?? null,
       }),
     }).catch(() => {});
-  }, [workstreamSlug, problemSlug, queue]);
+  }, [workstreamId, problemId, queue]);
 
   return null;
 }

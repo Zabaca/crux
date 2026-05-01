@@ -4,11 +4,16 @@ import { useState } from "react";
 import { getAllowedActions } from "@crux/core/actions/allowed";
 import { ActionDialog, type FieldSpec } from "./action-dialog";
 
+function extractSlug(id: string): string {
+  const match = id.match(/^[A-Z]+-(.+)$/);
+  return match ? match[1] : id;
+}
+
 type ViewLeaf = "workstream_list" | "workstream_dashboard" | "problem_detail" | "intake_queue";
 
 type Context = {
-  workstreamSlug?: string | null;
-  problemSlug?: string | null;
+  workstreamId?: string | null;
+  problemId?: string | null;
 };
 
 type Spec = {
@@ -34,7 +39,7 @@ const SPECS: Spec[] = [
     label: "Add problem",
     title: "Add problem",
     fields: (ctx) => [
-      { name: "workstream", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
+      { name: "workstream", hidden: true, defaultValue: ctx.workstreamId ?? "" },
       { name: "slug", required: true },
       { name: "title", required: true },
       { name: "description", type: "textarea", required: true },
@@ -45,7 +50,7 @@ const SPECS: Spec[] = [
     label: "Add observation",
     title: "Add observation",
     fields: (ctx) => [
-      { name: "workstream", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
+      { name: "workstream", hidden: true, defaultValue: ctx.workstreamId ?? "" },
       { name: "content", type: "textarea", required: true },
       { name: "source", label: "source (optional)" },
     ],
@@ -55,7 +60,7 @@ const SPECS: Spec[] = [
     label: "Add solution",
     title: "Add solution",
     fields: (ctx) => [
-      { name: "problem", hidden: true, defaultValue: ctx.problemSlug ?? "" },
+      { name: "problem", hidden: true, defaultValue: ctx.problemId ?? "" },
       { name: "slug", required: true },
       { name: "title", required: true },
       { name: "description", type: "textarea" },
@@ -66,7 +71,7 @@ const SPECS: Spec[] = [
     label: "Add evidence",
     title: "Link observation as evidence",
     fields: (ctx) => [
-      { name: "problem", hidden: true, defaultValue: ctx.problemSlug ?? "" },
+      { name: "problem", hidden: true, defaultValue: ctx.problemId ?? "" },
       { name: "observation", label: "observation id (e.g. OBS-001)", required: true },
       { name: "note", type: "textarea" },
     ],
@@ -76,7 +81,7 @@ const SPECS: Spec[] = [
     label: "Record decision",
     title: "Record decision",
     fields: (ctx) => [
-      { name: "problem", hidden: true, defaultValue: ctx.problemSlug ?? "" },
+      { name: "problem", hidden: true, defaultValue: ctx.problemId ?? "" },
       { name: "chosen", label: "chosen solution slug", required: true },
       { name: "rationale", type: "textarea", required: true },
       { name: "rejected", label: "rejected slugs (comma-separated)" },
@@ -109,8 +114,8 @@ const SPECS: Spec[] = [
         name: "slug",
         label: "problem slug",
         required: true,
-        defaultValue: ctx.problemSlug ?? "",
-        hidden: ctx.problemSlug != null,
+        defaultValue: ctx.problemId ?? "",
+        hidden: ctx.problemId != null,
       },
       { name: "tier", label: "tier (now|next|later)", required: true },
     ],
@@ -124,8 +129,8 @@ const SPECS: Spec[] = [
         name: "slug",
         label: "problem slug",
         required: true,
-        defaultValue: ctx.problemSlug ?? "",
-        hidden: ctx.problemSlug != null,
+        defaultValue: ctx.problemId ?? "",
+        hidden: ctx.problemId != null,
       },
     ],
   },
@@ -138,8 +143,8 @@ const SPECS: Spec[] = [
         name: "slug",
         label: "problem slug",
         required: true,
-        defaultValue: ctx.problemSlug ?? "",
-        hidden: ctx.problemSlug != null,
+        defaultValue: ctx.problemId ?? "",
+        hidden: ctx.problemId != null,
       },
     ],
   },
@@ -152,8 +157,8 @@ const SPECS: Spec[] = [
         name: "slug",
         label: "problem slug",
         required: true,
-        defaultValue: ctx.problemSlug ?? "",
-        hidden: ctx.problemSlug != null,
+        defaultValue: ctx.problemId ?? "",
+        hidden: ctx.problemId != null,
       },
       { name: "rationale", type: "textarea", required: true },
     ],
@@ -175,7 +180,11 @@ const SPECS: Spec[] = [
     label: "Rename workstream",
     title: "Rename workstream",
     fields: (ctx) => [
-      { name: "oldSlug", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
+      {
+        name: "oldSlug",
+        hidden: true,
+        defaultValue: ctx.workstreamId ? extractSlug(ctx.workstreamId) : "",
+      },
       { name: "newSlug", required: true },
       { name: "title" },
       { name: "description", type: "textarea" },
@@ -190,8 +199,8 @@ const SPECS: Spec[] = [
         name: "oldSlug",
         label: "current problem slug",
         required: true,
-        defaultValue: ctx.problemSlug ?? "",
-        hidden: ctx.problemSlug != null,
+        defaultValue: ctx.problemId ? extractSlug(ctx.problemId) : "",
+        hidden: ctx.problemId != null,
       },
       { name: "newSlug", required: true },
       { name: "title" },

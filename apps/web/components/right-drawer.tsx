@@ -7,8 +7,8 @@ import { MutationToolbar } from "./mutation-toolbar";
 type ViewLeaf = "workstream_list" | "workstream_dashboard" | "problem_detail" | "intake_queue";
 
 type Context = {
-  workstreamSlug?: string | null;
-  problemSlug?: string | null;
+  workstreamId?: string | null;
+  problemId?: string | null;
 };
 
 type RecentQuery = {
@@ -20,7 +20,7 @@ type RecentQuery = {
 type ViewStateMessage = {
   type: "init" | "change";
   value: unknown;
-  context: { workstreamSlug: string | null; problemSlug: string | null };
+  context: { workstreamId: string | null; problemId: string | null };
   recentQueries?: RecentQuery[];
 };
 
@@ -37,24 +37,66 @@ function extractViewingLeaf(value: unknown): ViewLeaf {
 export function RightDrawer() {
   const [open, setOpen] = useState(true);
   const [viewing, setViewing] = useState<ViewLeaf>("workstream_list");
-  const [context, setContext] = useState<Context>({ workstreamSlug: null, problemSlug: null });
+  const [context, setContext] = useState<Context>({ workstreamId: null, problemId: null });
   const [queries, setQueries] = useState<RecentQuery[]>([]);
 
   useEffect(() => {
+    // Fetch current state as JSON first
+    const loadInitialState = async () => {
+      try {
+        const res = await fetch("/api/view-state-json");
+        const data = (await res.json()) as ViewStateMessage;
+        const viewing = extractViewingLeaf(data.value);
+        console.log("[RD] Initial state loaded:", {
+          viewing,
+          context: data.context,
+          recentQueriesCount: data.recentQueries?.length ?? 0,
+        });
+        setViewing(viewing);
+        setContext(data.context);
+        if (data.recentQueries) {
+          setQueries(data.recentQueries);
+        }
+      } catch (err) {
+        console.error("[RD] Failed to load initial state:", err);
+      }
+    };
+
+    loadInitialState();
+
+    // Then connect to SSE for live updates
+    console.log("[RD] Connecting to SSE for live updates");
     const es = new EventSource("/api/view-state");
+    es.onopen = () => {
+      console.log("[RD] ✅ SSE connection opened");
+    };
     es.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data) as ViewStateMessage;
-        setViewing(extractViewingLeaf(msg.value));
+        const viewing = extractViewingLeaf(msg.value);
+        console.log("[RD] SSE update:", {
+          type: msg.type,
+          viewing,
+          wsId: msg.context.workstreamId,
+          probId: msg.context.problemId,
+          recentQueriesCount: msg.recentQueries?.length ?? 0,
+        });
+        setViewing(viewing);
         setContext(msg.context);
         if (msg.recentQueries) {
           setQueries(msg.recentQueries);
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.error("[RD] SSE parse error:", err);
       }
     };
-    return () => es.close();
+    es.onerror = (err) => {
+      console.error("[RD] ❌ SSE connection error:", err);
+    };
+    return () => {
+      console.log("[RD] Closing SSE connection");
+      es.close();
+    };
   }, []);
 
   return (
@@ -71,11 +113,31 @@ export function RightDrawer() {
       {/* Panel body */}
       {open && (
         <div className="w-64 border-l bg-background flex flex-col h-full overflow-y-auto">
+          {/* State display section */}
+          <div className="flex-none p-4 border-b space-y-2 text-xs">
+            <div>
+              <span className="text-muted-foreground">Viewing:</span>
+              <div className="font-mono text-foreground mt-1">{viewing}</div>
+            </div>
+            {context.workstreamId && (
+              <div>
+                <span className="text-muted-foreground">Workstream:</span>
+                <div className="font-mono text-foreground mt-1">{context.workstreamId}</div>
+              </div>
+            )}
+            {context.problemId && (
+              <div>
+                <span className="text-muted-foreground">Problem:</span>
+                <div className="font-mono text-foreground mt-1">{context.problemId}</div>
+              </div>
+            )}
+          </div>
+
           {/* Queue buttons section */}
-          {context.workstreamSlug && (
+          {context.workstreamId && (
             <div className="flex-none p-4 border-b space-y-2">
               <Link
-                href={`/w/${context.workstreamSlug}/queues/intake`}
+                href={`/w/${context.workstreamId.replace(/^WS-/, "")}/queues/intake`}
                 className="block text-xs rounded border px-2 py-1 hover:bg-accent text-center transition-colors"
               >
                 Intake queue
@@ -92,11 +154,11 @@ export function RightDrawer() {
           </div>
 
           {/* Recent queries section */}
-          {queries.length > 0 && (
-            <div className="flex-1 p-4 overflow-y-auto">
-              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-                Recent Queries
-              </p>
+          <div className="flex-1 p-4 overflow-y-auto">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
+              Recent Queries
+            </p>
+            {queries.length > 0 ? (
               <ul className="space-y-1">
                 {queries.map((q, i) => (
                   <li key={i} className="flex items-center justify-between gap-2 text-xs">
@@ -108,8 +170,10 @@ export function RightDrawer() {
                   </li>
                 ))}
               </ul>
-            </div>
-          )}
+            ) : (
+              <p className="text-xs text-muted-foreground italic">No recent queries</p>
+            )}
+          </div>
         </div>
       )}
     </div>

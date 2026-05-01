@@ -32,17 +32,17 @@ import { guardAction, recordMutation } from "../collab.js";
 import { recordQuery } from "../record-query.js";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
 
-async function resolveWorkstream(slug: string) {
-  const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
+async function resolveWorkstream(id: string) {
+  const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new NotFoundError(`workstream not found: ${slug}`, { slug });
+  if (!row) throw new NotFoundError(`workstream not found: ${id}`, { id });
   return row;
 }
 
-async function resolveProblem(slug: string) {
-  const rows = await getDb().select().from(problems).where(eq(problems.slug, slug)).limit(1);
+async function resolveProblem(id: string) {
+  const rows = await getDb().select().from(problems).where(eq(problems.id, id)).limit(1);
   const row = rows[0];
-  if (!row) throw new NotFoundError(`problem not found: ${slug}`, { slug });
+  if (!row) throw new NotFoundError(`problem not found: ${id}`, { id });
   return row;
 }
 
@@ -113,13 +113,13 @@ const listCmd = defineCommand({
 });
 
 const showCmd = defineCommand({
-  meta: { name: "show", description: "Show a problem by slug." },
-  args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
+  meta: { name: "show", description: "Show a problem by id." },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    recordQuery("PROBLEM_SHOW", args.slug);
+    recordQuery("PROBLEM_SHOW", args.id);
     const db = getDb();
-    const p = await resolveProblem(args.slug);
+    const p = await resolveProblem(args.id);
 
     const sols = await db.select().from(solutions).where(eq(solutions.problemId, p.id));
     const solIds = sols.map((s) => s.id);
@@ -177,7 +177,7 @@ const showCmd = defineCommand({
 const scheduleCmd = defineCommand({
   meta: { name: "schedule", description: "Schedule a problem onto the roadmap." },
   args: {
-    slug: { type: "positional", required: true },
+    id: { type: "positional", required: true },
     tier: { type: "string", required: true, description: "now | next | later" },
     json: { type: "boolean" },
   },
@@ -185,7 +185,7 @@ const scheduleCmd = defineCommand({
     if (args.json) setJsonMode(true);
     guardAction("SCHEDULE_PROBLEM");
     const tier = RoadmapTier.parse(args.tier);
-    const p = await resolveProblem(args.slug);
+    const p = await resolveProblem(args.id);
     await scheduleProblem(p.id, tier, getDb());
     recordMutation("SCHEDULE_PROBLEM");
     emit({ ok: true, id: p.id, status: tier }, OkWithStatusOutput, `scheduled ${p.id} → ${tier}`);
@@ -194,11 +194,11 @@ const scheduleCmd = defineCommand({
 
 const unscheduleCmd = defineCommand({
   meta: { name: "unschedule", description: "Remove a problem from the roadmap (back to null)." },
-  args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     guardAction("UNSCHEDULE_PROBLEM");
-    const p = await resolveProblem(args.slug);
+    const p = await resolveProblem(args.id);
     await unscheduleProblem(p.id, getDb());
     recordMutation("UNSCHEDULE_PROBLEM");
     emit({ ok: true, id: p.id, status: null }, OkWithStatusOutput, `unscheduled ${p.id}`);
@@ -207,11 +207,11 @@ const unscheduleCmd = defineCommand({
 
 const doneCmd = defineCommand({
   meta: { name: "done", description: "Mark a problem done (chosen Solution must be shipped)." },
-  args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     guardAction("MARK_PROBLEM_DONE");
-    const p = await resolveProblem(args.slug);
+    const p = await resolveProblem(args.id);
     await markProblemDone(p.id, getDb());
     recordMutation("MARK_PROBLEM_DONE");
     emit({ ok: true, id: p.id, status: "done" }, OkWithStatusOutput, `done ${p.id}`);
@@ -221,7 +221,7 @@ const doneCmd = defineCommand({
 const abandonCmd = defineCommand({
   meta: { name: "abandon", description: "Abandon a problem (terminal)." },
   args: {
-    slug: { type: "positional", required: true },
+    id: { type: "positional", required: true },
     rationale: { type: "string", required: true },
     json: { type: "boolean" },
   },
@@ -229,7 +229,7 @@ const abandonCmd = defineCommand({
     if (args.json) setJsonMode(true);
     guardAction("ABANDON_PROBLEM");
     const user = requireUser();
-    const p = await resolveProblem(args.slug);
+    const p = await resolveProblem(args.id);
     await abandonProblem(p.id, args.rationale, user.user.id, getDb());
     recordMutation("ABANDON_PROBLEM");
     emit({ ok: true, id: p.id, status: "abandoned" }, OkWithStatusOutput, `abandoned ${p.id}`);

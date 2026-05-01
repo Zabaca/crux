@@ -58,3 +58,14 @@ export async function shipSolution(solutionId: string, db: CruxDb): Promise<void
     .set({ status: "shipped", updatedAt: Date.now() })
     .where(eq(solutions.id, solutionId));
 }
+
+export async function editSolution(
+  solutionId: string,
+  updates: { description?: string; title?: string },
+  db: CruxDb,
+): Promise<void> {
+  const set: Record<string, unknown> = { updatedAt: Date.now() };
+  if (updates.description !== undefined) set.description = updates.description;
+  if (updates.title !== undefined) set.title = updates.title;
+  await db.update(solutions).set(set).where(eq(solutions.id, solutionId));
+}

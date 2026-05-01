@@ -79,6 +79,14 @@ export const ShipSolutionAction = z.object({
   kind: z.literal("SHIP_SOLUTION"),
   payload: z.object({ slug: z.string() }),
 });
+export const EditSolutionAction = z.object({
+  kind: z.literal("EDIT_SOLUTION"),
+  payload: z.object({
+    solutionId: z.string(),
+    description: z.string().optional(),
+    title: z.string().optional(),
+  }),
+});
 export const AddDecisionAction = z.object({
   kind: z.literal("ADD_DECISION"),
   payload: z.object({
@@ -156,6 +164,7 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AbandonProblemAction,
   AddSolutionAction,
   ShipSolutionAction,
+  EditSolutionAction,
   AddDecisionAction,
   AddOutcomeAction,
   AddObservationAction,
@@ -197,6 +206,7 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ABANDON_PROBLEM",
   "ADD_SOLUTION",
   "SHIP_SOLUTION",
+  "EDIT_SOLUTION",
   "ADD_DECISION",
   "ADD_OUTCOME",
   "ADD_OBSERVATION",

@@ -60,39 +60,42 @@ const addCmd = defineCommand({
     const ws = await db
       .select()
       .from(workstreams)
-      .where(eq(workstreams.slug, parsed.workstream))
+      .where(eq(workstreams.id, parsed.workstream))
       .limit(1);
     if (ws.length === 0)
       throw new NotFoundError(`workstream not found: ${parsed.workstream}`, {
-        slug: parsed.workstream,
+        id: parsed.workstream,
       });
     const pr = await db
       .select()
       .from(problems)
-      .where(and(eq(problems.slug, parsed.problemSlug), eq(problems.workstreamId, ws[0]!.id)))
+      .where(and(eq(problems.id, parsed.problemSlug), eq(problems.workstreamId, ws[0]!.id)))
       .limit(1);
     if (pr.length === 0)
       throw new NotFoundError(`problem not found in workstream: ${parsed.problemSlug}`, {
-        slug: parsed.problemSlug,
+        id: parsed.problemSlug,
       });
 
     const chosenRow = await db
       .select()
       .from(solutions)
-      .where(eq(solutions.slug, parsed.chosen))
+      .where(eq(solutions.id, parsed.chosen))
       .limit(1);
     if (chosenRow.length === 0)
-      throw new NotFoundError(`solution not found: ${parsed.chosen}`, { slug: parsed.chosen });
+      throw new NotFoundError(`solution not found: ${parsed.chosen}`, { id: parsed.chosen });
 
-    const solsInProblem = parsed.rejected.length
-      ? await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id))
-      : [];
-    const rejectedIdMap = new Map(solsInProblem.map((r) => [r.slug, r.id]));
     const rejectedIds: string[] = [];
-    for (const slug of parsed.rejected) {
-      const id = rejectedIdMap.get(slug);
-      if (!id) throw new NotFoundError(`solution not found in problem: ${slug}`, { slug });
-      rejectedIds.push(id);
+    if (parsed.rejected.length) {
+      const solsInProblem = await db
+        .select()
+        .from(solutions)
+        .where(eq(solutions.problemId, pr[0]!.id));
+      const solIdMap = new Map(solsInProblem.map((r) => [r.id, r.id]));
+      for (const id of parsed.rejected) {
+        if (!solIdMap.has(id))
+          throw new NotFoundError(`solution not found in problem: ${id}`, { id });
+        rejectedIds.push(id);
+      }
     }
 
     const id = await nextDecisionId();

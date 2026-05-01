@@ -36,7 +36,7 @@ export default async function IntakePage({
 
   return (
     <>
-      <SyncViewState workstreamSlug={slug} queue="intake" />
+      <SyncViewState workstreamId={ws.id} queue="intake" />
       <PageShell
         breadcrumbs={[
           { href: "/", label: "Workstreams" },

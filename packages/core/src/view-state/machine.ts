@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { setup, assign } from "xstate";
 
-const SelectWorkstreamEvent = z.object({ type: z.literal("SELECT_WORKSTREAM"), slug: z.string() });
-const OpenProblemEvent = z.object({ type: z.literal("OPEN_PROBLEM"), slug: z.string() });
+const SelectWorkstreamEvent = z.object({ type: z.literal("SELECT_WORKSTREAM"), id: z.string() });
+const OpenProblemEvent = z.object({ type: z.literal("OPEN_PROBLEM"), id: z.string() });
 const SelectIntakeEvent = z.object({ type: z.literal("SELECT_INTAKE") });
 const BackEvent = z.object({ type: z.literal("BACK") });
 
@@ -16,15 +16,15 @@ export const ViewEventSchema = z.discriminatedUnion("type", [
 export type ViewEvent = z.infer<typeof ViewEventSchema>;
 
 export type ViewContext = {
-  workstreamSlug: string | null;
-  problemSlug: string | null;
+  workstreamId: string | null;
+  problemId: string | null;
 };
 
 // Keyed by ViewEvent["type"] so TypeScript errors if a new event is added
 // to the schema above without updating this map.
 export const VIEW_EVENT_PAYLOAD_HINTS: Record<ViewEvent["type"], Record<string, string> | null> = {
-  SELECT_WORKSTREAM: { slug: "string" },
-  OPEN_PROBLEM: { slug: "string" },
+  SELECT_WORKSTREAM: { id: "string" },
+  OPEN_PROBLEM: { id: "string" },
   SELECT_INTAKE: null,
   BACK: null,
 };
@@ -39,30 +39,30 @@ export const viewMachine = setup({
     workstreamExists: (_args: { context: ViewContext; event: ViewEvent }) => false,
     problemExistsInWorkstream: (_args: { context: ViewContext; event: ViewEvent }) => false,
     workstreamSelected: ({ context }: { context: ViewContext; event: ViewEvent }) =>
-      context.workstreamSlug !== null,
+      context.workstreamId !== null,
   },
   actions: {
     setWorkstream: assign({
-      workstreamSlug: ({ event }) => (event.type === "SELECT_WORKSTREAM" ? event.slug : null),
-      problemSlug: () => null,
+      workstreamId: ({ event }) => (event.type === "SELECT_WORKSTREAM" ? event.id : null),
+      problemId: () => null,
     }),
     setProblem: assign({
-      problemSlug: ({ event }) => (event.type === "OPEN_PROBLEM" ? event.slug : null),
+      problemId: ({ event }) => (event.type === "OPEN_PROBLEM" ? event.id : null),
     }),
     clearProblem: assign({
-      problemSlug: () => null,
+      problemId: () => null,
     }),
     clearAll: assign({
-      workstreamSlug: () => null,
-      problemSlug: () => null,
+      workstreamId: () => null,
+      problemId: () => null,
     }),
   },
 }).createMachine({
   id: "view",
   initial: "viewing",
   context: {
-    workstreamSlug: null,
-    problemSlug: null,
+    workstreamId: null,
+    problemId: null,
   },
   states: {
     viewing: {
