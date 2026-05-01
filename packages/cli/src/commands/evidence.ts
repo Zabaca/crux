@@ -6,6 +6,7 @@ import { NotFoundError } from "@crux/core/transitions";
 import { OkWithIdOutput } from "@crux/core/validation";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 async function nextEvidenceId(): Promise<string> {
   const all = await getDb().select({ id: evidence.id }).from(evidence);
@@ -24,6 +25,7 @@ const linkCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_EVIDENCE");
     const user = requireUser();
     const db = getDb();
     const obs = await db

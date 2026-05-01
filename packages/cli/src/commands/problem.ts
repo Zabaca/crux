@@ -28,6 +28,7 @@ import {
 } from "@crux/core/transitions";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -54,6 +55,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_PROBLEM");
     const parsed = ProblemInput.parse({
       workstream: args.workstream,
       slug: args.slug,
@@ -173,6 +175,7 @@ const scheduleCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("SCHEDULE_PROBLEM");
     const tier = RoadmapTier.parse(args.tier);
     const p = await resolveProblem(args.slug);
     await scheduleProblem(p.id, tier, getDb());
@@ -185,6 +188,7 @@ const unscheduleCmd = defineCommand({
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("UNSCHEDULE_PROBLEM");
     const p = await resolveProblem(args.slug);
     await unscheduleProblem(p.id, getDb());
     emit({ ok: true, id: p.id, status: null }, OkWithStatusOutput, `unscheduled ${p.id}`);
@@ -196,6 +200,7 @@ const doneCmd = defineCommand({
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("MARK_PROBLEM_DONE");
     const p = await resolveProblem(args.slug);
     await markProblemDone(p.id, getDb());
     emit({ ok: true, id: p.id, status: "done" }, OkWithStatusOutput, `done ${p.id}`);
@@ -211,6 +216,7 @@ const abandonCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ABANDON_PROBLEM");
     const user = requireUser();
     const p = await resolveProblem(args.slug);
     await abandonProblem(p.id, args.rationale, user.user.id, getDb());
@@ -232,6 +238,7 @@ const renameCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("RENAME_PROBLEM");
     const r = await renameProblem(
       args.oldSlug,
       args.newSlug,

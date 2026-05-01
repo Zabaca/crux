@@ -6,6 +6,7 @@ import { OutcomeInput, OkWithIdOutput } from "@crux/core/validation";
 import { NotFoundError, recordOutcome } from "@crux/core/transitions";
 import { eq, inArray } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -36,6 +37,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_OUTCOME");
     const parsed = OutcomeInput.parse({
       solutionSlug: args.solution,
       observedImpact: args["observed-impact"],

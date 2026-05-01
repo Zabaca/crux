@@ -18,6 +18,7 @@ import { users } from "@crux/core/db/schema";
 import { slugifyName } from "@crux/core/config";
 import { setCaptureWriter, setJsonMode, emit } from "../output.js";
 import { OkWithIdOutput, ProblemShowOutput, ContextOutput } from "@crux/core/validation";
+import { ActionNotAllowedError } from "@crux/core/actions";
 
 // Command modules — imported after the singleton helpers above.
 import { workstreamCommand } from "../commands/workstream.js";
@@ -453,5 +454,96 @@ describe("context --tier / --all flag behaviour", () => {
     expect(Array.isArray(ctx.recent_observations_unlinked)).toBe(true);
     expect(Array.isArray(ctx.unpromoted_ideas)).toBe(true);
     expect(Array.isArray(ctx.themes)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// CRUX_COLLAB=1: guardAction enforcement
+// ---------------------------------------------------------------------------
+
+describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstream_list", () => {
+  const ORIG_COLLAB = process.env.CRUX_COLLAB;
+  const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
+
+  beforeEach(async () => {
+    // Start from workstream_list (no view-state file = initial state = workstream_list)
+    process.env.CRUX_COLLAB = "1";
+    // Point view state to a non-existent file so initial state is workstream_list
+    process.env.CRUX_VIEW_STATE_PATH = join(xdgDir, "nonexistent-view-state.json");
+  });
+  afterEach(() => {
+    if (ORIG_COLLAB !== undefined) process.env.CRUX_COLLAB = ORIG_COLLAB;
+    else delete process.env.CRUX_COLLAB;
+    if (ORIG_VIEW_STATE !== undefined) process.env.CRUX_VIEW_STATE_PATH = ORIG_VIEW_STATE;
+    else delete process.env.CRUX_VIEW_STATE_PATH;
+  });
+
+  test("ADD_PROBLEM from workstream_list throws ActionNotAllowedError", async () => {
+    let thrown: unknown;
+    try {
+      await runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "any",
+        slug: "any",
+        title: "Any",
+        description: "any",
+        json: false,
+      });
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBeInstanceOf(ActionNotAllowedError);
+    expect((thrown as ActionNotAllowedError).attempted).toBe("ADD_PROBLEM");
+  });
+
+  test("ADD_OBSERVATION from workstream_list succeeds (global action)", async () => {
+    // First create the workstream directly without guard
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "collab-ws",
+      title: "Collab WS",
+      json: false,
+    });
+    // ADD_OBSERVATION is a global — must not throw from any view
+    // But ADD_WORKSTREAM is allowed from workstream_list, so this passes
+    const result = await capture<{ ok: boolean; id: string }>(() =>
+      runCmd(observationCommand as AnyCmd, "add", {
+        workstream: "collab-ws",
+        content: "Observed something",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.id).toMatch(/^OBS-/);
+  });
+
+  test("ADD_WORKSTREAM from workstream_list succeeds", async () => {
+    const result = await capture<{ ok: boolean; id: string }>(() =>
+      runCmd(workstreamCommand as AnyCmd, "add", {
+        slug: "new-ws",
+        title: "New WS",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.id).toBe("WS-new-ws");
+  });
+
+  test("CRUX_COLLAB absent — ADD_PROBLEM from workstream_list succeeds (direct mode)", async () => {
+    delete process.env.CRUX_COLLAB;
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "direct-ws",
+      title: "Direct WS",
+      json: false,
+    });
+    const result = await capture<{ ok: boolean; id: string }>(() =>
+      runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "direct-ws",
+        slug: "direct-prob",
+        title: "Direct Prob",
+        description: "desc",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+    expect(result.id).toBe("PRB-direct-prob");
   });
 });

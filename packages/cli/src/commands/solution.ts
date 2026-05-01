@@ -11,6 +11,7 @@ import {
 import { NotFoundError, renameSolution, shipSolution } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a solution candidate to a problem." },
@@ -23,6 +24,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_SOLUTION");
     const parsed = SolutionInput.parse({
       problemSlug: args.problem,
       slug: args.slug,
@@ -95,6 +97,7 @@ const shipCmd = defineCommand({
   args: { slug: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("SHIP_SOLUTION");
     const db = getDb();
     const rows = await db.select().from(solutions).where(eq(solutions.slug, args.slug)).limit(1);
     if (rows.length === 0)
@@ -122,6 +125,7 @@ const renameCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("RENAME_SOLUTION");
     const r = await renameSolution(
       args.oldSlug,
       args.newSlug,

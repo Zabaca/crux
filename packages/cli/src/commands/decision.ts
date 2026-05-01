@@ -6,6 +6,7 @@ import { DecisionInput, OkWithIdOutput } from "@crux/core/validation";
 import { NotFoundError, createDecision } from "@crux/core/transitions";
 import { and, eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 async function nextDecisionId(): Promise<string> {
   const all = await getDb().select({ id: decisions.id }).from(decisions);
@@ -41,6 +42,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_DECISION");
     const parsed = DecisionInput.parse({
       workstream: args.workstream,
       problemSlug: args.problem,

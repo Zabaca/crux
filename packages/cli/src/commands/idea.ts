@@ -12,6 +12,7 @@ import {
 import { NotFoundError, archiveIdea, renameIdea } from "@crux/core/transitions";
 import { and, eq, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 function asTags(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -43,6 +44,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_IDEA");
     const parsed = IdeaInput.parse({
       workstream: args.workstream,
       slug: args.slug,
@@ -122,6 +124,7 @@ const promoteCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("PROMOTE_IDEA");
     const parsed = IdeaPromoteInput.parse({
       ideaSlug: args.slug,
       problemSlug: args.problem,
@@ -182,6 +185,7 @@ const archiveCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ARCHIVE_IDEA");
     const parsed = IdeaArchiveInput.parse({
       workstream: args.workstream,
       slug: args.slug,

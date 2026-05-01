@@ -11,6 +11,7 @@ import {
 import { NotFoundError, renameTheme } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { guardAction } from "../collab.js";
 
 async function resolveWorkstream(slug: string) {
   const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
@@ -31,6 +32,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ADD_THEME");
     const parsed = ThemeInput.parse({
       workstream: args.workstream,
       slug: args.slug,
@@ -91,6 +93,7 @@ const attachCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
+    guardAction("ATTACH_THEME");
     const parsed = ThemeAttachInput.parse({ themeSlug: args.slug, solutionSlug: args.solution });
     const db = getDb();
     const theme = await db.select().from(themes).where(eq(themes.slug, parsed.themeSlug)).limit(1);
