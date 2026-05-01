@@ -104,13 +104,45 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
 }
 
 /**
- * Write the snapshot to disk. Atomic-ish: writes a tmp file then renames.
+ * Read the current raw JSON at `path`, returning {} on missing/corrupt.
+ * Used by both saveState and saveViewMeta to merge new fields against existing.
+ */
+function readRawOrEmpty(path: string): Record<string, unknown> {
+  if (!existsSync(path)) return {};
+  try {
+    return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Atomic-ish write: tmp file + rename.
+ */
+function atomicWrite(path: string, payload: Record<string, unknown>): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
+  writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
+  // node:fs.renameSync handles cross-tmp on same fs; we mkdir parent first
+  const fs = require("node:fs") as typeof import("node:fs");
+  fs.renameSync(tmp, path);
+}
+
+/**
+ * Write the XState snapshot to disk. Merges into the existing file so sidecar
+ * fields (revision, lastAction, recentQueries) survive the write.
  */
 export function saveState(path: string, snapshot: ViewSnapshot): void {
-  const persisted = getPersistedSnapshotFrom(snapshot);
-  const json = JSON.stringify(persisted, null, 2);
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, json, "utf8");
+  const persisted = getPersistedSnapshotFrom(snapshot) as unknown as Record<string, unknown>;
+  const existing = readRawOrEmpty(path);
+  // Preserve sidecar fields explicitly; everything else (XState fields) gets overwritten
+  const merged: Record<string, unknown> = {
+    ...persisted,
+    revision: existing.revision ?? 0,
+    lastAction: existing.lastAction ?? null,
+    recentQueries: existing.recentQueries ?? [],
+  };
+  atomicWrite(path, merged);
 }
 
 function getPersistedSnapshotFrom(snapshot: ViewSnapshot): PersistedViewSnapshot {
@@ -172,43 +204,23 @@ export function loadViewMeta(path?: string): ViewMeta {
 }
 
 /**
- * Save ViewMeta to disk. Merges sidecar fields into the XState persisted snapshot JSON.
+ * Save ViewMeta to disk. Merges sidecar fields (revision, lastAction, recentQueries)
+ * over the existing JSON so XState fields (value, context, status, historyValue,
+ * children) survive the write.
+ *
+ * Caller's `meta.value` / `meta.context` are NOT written here — those belong to the
+ * XState write path (saveState via sendViewEvent). This function only owns sidecar.
  */
 export function saveViewMeta(meta: ViewMeta, path?: string): void {
   const resolvedPath = path ?? resolveViewStatePath();
-  // Load the current xstate snapshot from disk to preserve it
-  let xstateJson: PersistedViewSnapshot | undefined;
-  if (existsSync(resolvedPath)) {
-    try {
-      const raw = readFileSync(resolvedPath, "utf8");
-      const parsed = JSON.parse(raw) as Record<string, unknown>;
-      // Strip sidecar fields, keep XState fields
-      const {
-        revision: _r,
-        lastAction: _la,
-        recentQueries: _rq,
-        value: _v,
-        context: _c,
-        ...rest
-      } = parsed;
-      void _r;
-      void _la;
-      void _rq;
-      void _v;
-      void _c;
-      xstateJson = rest as PersistedViewSnapshot;
-    } catch {
-      // fallback
-    }
-  }
-  const payload = {
-    ...xstateJson,
+  const existing = readRawOrEmpty(resolvedPath);
+  const merged: Record<string, unknown> = {
+    ...existing,
     revision: meta.revision,
     lastAction: meta.lastAction,
     recentQueries: meta.recentQueries,
   };
-  mkdirSync(dirname(resolvedPath), { recursive: true });
-  writeFileSync(resolvedPath, JSON.stringify(payload, null, 2), "utf8");
+  atomicWrite(resolvedPath, merged);
 }
 
 /** Error thrown when a view event is refused by a guard or illegal in the current state. */
