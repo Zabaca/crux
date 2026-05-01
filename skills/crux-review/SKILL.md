@@ -14,8 +14,10 @@ Run this when the user has signaled they're ready to review accumulated state an
 `crux` refers to `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Use the explicit path; not on `$PATH`.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --json --all
+${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --all
 ```
+
+**JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias.
 
 If first-run init hasn't happened this session (Bun, deps, db, config, team, web UI), run the init steps from the `/crux` skill first, then come back here.
 
@@ -24,7 +26,7 @@ If first-run init hasn't happened this session (Bun, deps, db, config, team, web
 Synthesis without fresh context produces drift. Run before the first action:
 
 ```sh
-crux context -w <slug> --json --all
+crux context -w <slug> --all
 ```
 
 Anchor on:

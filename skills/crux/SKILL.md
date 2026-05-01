@@ -16,10 +16,37 @@ Mixing intake and synthesis raises capture friction and produces premature probl
 `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --json
+${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug>
 ```
 
+**JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
+
 The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
+
+## Collab mode (CRUX_COLLAB=1)
+
+When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-state–aware action permissions. Mutations not allowed in the current view state will hard-reject with exit code 25 (`[ACTION_NOT_ALLOWED]`). The web UI auto-refreshes on any dispatched mutation via SSE.
+
+**Per-view allowed mutations:**
+
+| View | Allowed mutations |
+|---|---|
+| `workstream_list` | ADD_WORKSTREAM, RENAME_WORKSTREAM |
+| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION, ADD_IDEA |
+| `problem_detail` | ADD_SOLUTION, ADD_EVIDENCE, ADD_DECISION, ADD_ELIMINATION, ADD_OUTCOME, SCHEDULE_PROBLEM, ABANDON_PROBLEM, RENAME_PROBLEM, SHIP_SOLUTION |
+| `intake_queue` | ARCHIVE_OBSERVATION, ADD_OBSERVATION |
+| `ideas_queue` | ARCHIVE_IDEA, ADD_IDEA |
+
+**Global (always allowed):** ADD_OBSERVATION, ADD_IDEA, BACK.
+
+Use `crux view get` to inspect current state and allowed actions:
+
+```sh
+${CLAUDE_PLUGIN_ROOT}/bin/crux view get
+# → { value, context, revision, lastAction, allowedActions[], globalActions[] }
+```
+
+When CRUX_COLLAB is absent (default), all commands fall through to direct mode without view-state checks.
 
 ## When to invoke (intake)
 
@@ -75,7 +102,7 @@ Before the first `crux` command in a session, run these checks in order. Steady 
 When user names a workstream, run before adding state:
 
 ```sh
-crux context -w <slug> --json
+crux context -w <slug>
 ```
 
 This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--tier` or `--all` to opt into more:
