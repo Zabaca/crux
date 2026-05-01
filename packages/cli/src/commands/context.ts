@@ -53,11 +53,44 @@ export const contextCommand = defineCommand({
       description:
         "Include archived Observations and Ideas in the unlinked-observations and unpromoted-ideas sections.",
     },
+    tier: {
+      type: "string",
+      alias: "t",
+      description:
+        "Comma-separated tier buckets to include: now,next,later,unscheduled,done,abandoned. Defaults to 'now'.",
+    },
+    all: {
+      type: "boolean",
+      description:
+        "Emit all tier buckets plus recent_observations_unlinked, unpromoted_ideas, and themes.",
+    },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const showArchived = Boolean(args["show-archived"]);
+
+    const VALID_TIERS = new Set(["now", "next", "later", "unscheduled", "done", "abandoned"]);
+    let requestedTiers: Set<string>;
+    if (args.all) {
+      requestedTiers = new Set(VALID_TIERS);
+    } else if (args.tier) {
+      const parts = (args.tier as string)
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      for (const p of parts) {
+        if (!VALID_TIERS.has(p)) {
+          throw new Error(
+            `Invalid tier value: "${p}". Valid values: ${[...VALID_TIERS].join(", ")}`,
+          );
+        }
+      }
+      requestedTiers = new Set(parts);
+    } else {
+      requestedTiers = new Set(["now"]);
+    }
+    const includeExtras = Boolean(args.all);
     const db = getDb();
     const wsRow = (
       await db.select().from(workstreams).where(eq(workstreams.slug, args.workstream)).limit(1)
@@ -262,21 +295,24 @@ export const contextCommand = defineCommand({
     }
     const themesInlined = wsThemes.map((t) => ({ ...t, solutionIds: solByTheme.get(t.id) ?? [] }));
 
-    emit(
-      {
-        workstream: wsRow,
-        now: digestProblems.filter((p) => p.status === "now"),
-        next: digestProblems.filter((p) => p.status === "next"),
-        later: digestProblems.filter((p) => p.status === "later"),
-        unscheduled: digestProblems.filter((p) => p.status == null),
-        done: digestProblems.filter((p) => p.status === "done"),
-        abandoned: digestProblems.filter((p) => p.status === "abandoned"),
-        recent_observations_unlinked: unlinked,
-        unpromoted_ideas: unpromotedIdeas,
-        themes: themesInlined,
-        seed_version: SEED_VERSION,
-      },
-      ContextOutput,
-    );
+    const output: Record<string, unknown> = {
+      workstream: wsRow,
+      seed_version: SEED_VERSION,
+    };
+    if (requestedTiers.has("now")) output.now = digestProblems.filter((p) => p.status === "now");
+    if (requestedTiers.has("next")) output.next = digestProblems.filter((p) => p.status === "next");
+    if (requestedTiers.has("later"))
+      output.later = digestProblems.filter((p) => p.status === "later");
+    if (requestedTiers.has("unscheduled"))
+      output.unscheduled = digestProblems.filter((p) => p.status == null);
+    if (requestedTiers.has("done")) output.done = digestProblems.filter((p) => p.status === "done");
+    if (requestedTiers.has("abandoned"))
+      output.abandoned = digestProblems.filter((p) => p.status === "abandoned");
+    if (includeExtras) {
+      output.recent_observations_unlinked = unlinked;
+      output.unpromoted_ideas = unpromotedIdeas;
+      output.themes = themesInlined;
+    }
+    emit(output, ContextOutput);
   },
 });

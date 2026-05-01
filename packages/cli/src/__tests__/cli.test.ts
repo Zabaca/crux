@@ -169,6 +169,7 @@ describe("smoke: workstream → problem → observation → evidence link → co
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
         workstream: "smoke",
+        tier: "unscheduled",
         json: false,
       }),
     );
@@ -204,6 +205,7 @@ describe("regression OBS-030 (a): context problem entries spread slug/title/stat
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
         workstream: "reg-a",
+        tier: "unscheduled",
         json: false,
       }),
     );
@@ -350,18 +352,106 @@ describe("schema validation: emit() rejects malformed payloads", () => {
     expect(() => emit(bareRow, ProblemShowOutput)).toThrow();
   });
 
-  test("ContextOutput rejects payload missing 'unscheduled' bucket", () => {
-    // If context accidentally nests problems rather than spreading them, schema throws.
+  test("ContextOutput rejects payload missing required fields (workstream + seed_version)", () => {
+    // Omitting seed_version must throw — it is still required.
     const malformed = {
       workstream: { slug: "ws" },
       now: [],
-      next: [],
-      later: [],
-      // 'unscheduled' deliberately omitted
-      done: [],
-      abandoned: [],
-      seed_version: "2026-04-30",
+      // seed_version deliberately omitted
     };
     expect(() => emit(malformed, ContextOutput)).toThrow();
+  });
+
+  test("ContextOutput accepts payload with only now bucket (tier buckets are optional)", () => {
+    // Default (now-only) shape must pass validation.
+    const nowOnly = {
+      workstream: { slug: "ws" },
+      now: [],
+      seed_version: "2026-04-30",
+    };
+    expect(() => emit(nowOnly, ContextOutput)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// SOL-context-now-only-default: --tier and --all flag behaviour
+// ---------------------------------------------------------------------------
+
+describe("context --tier / --all flag behaviour", () => {
+  test("default invocation emits only 'now' bucket; done/next/later/unscheduled/abandoned absent", async () => {
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "tier-default",
+      title: "Tier Default WS",
+      json: false,
+    });
+    // Add a problem and schedule it 'now'.
+    await runCmd(problemCommand as AnyCmd, "add", {
+      workstream: "tier-default",
+      slug: "prob-now",
+      title: "Now Problem",
+      description: "desc",
+      json: false,
+    });
+    await runCmd(problemCommand as AnyCmd, "schedule", {
+      slug: "prob-now",
+      tier: "now",
+      json: false,
+    });
+
+    const ctx = await capture<Record<string, unknown>>(() =>
+      runCmd(contextCommand as AnyCmd, "run", {
+        workstream: "tier-default",
+        json: false,
+        // no tier / no all — defaults to now-only
+      }),
+    );
+
+    expect(Array.isArray(ctx.now)).toBe(true);
+    expect(ctx.done).toBeUndefined();
+    expect(ctx.next).toBeUndefined();
+    expect(ctx.later).toBeUndefined();
+    expect(ctx.unscheduled).toBeUndefined();
+    expect(ctx.abandoned).toBeUndefined();
+    expect(ctx.recent_observations_unlinked).toBeUndefined();
+    expect(ctx.unpromoted_ideas).toBeUndefined();
+    expect(ctx.themes).toBeUndefined();
+    // Workstream and seed_version always present.
+    expect(ctx.workstream).toBeDefined();
+    expect(typeof ctx.seed_version).toBe("string");
+  });
+
+  test("--all invocation emits all six tier buckets + recent_observations_unlinked + unpromoted_ideas + themes", async () => {
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "tier-all",
+      title: "Tier All WS",
+      json: false,
+    });
+    await runCmd(problemCommand as AnyCmd, "add", {
+      workstream: "tier-all",
+      slug: "prob-all",
+      title: "All Problem",
+      description: "desc",
+      json: false,
+    });
+
+    const ctx = await capture<Record<string, unknown>>(() =>
+      runCmd(contextCommand as AnyCmd, "run", {
+        workstream: "tier-all",
+        all: true,
+        json: false,
+      }),
+    );
+
+    // All six tier buckets present.
+    expect(Array.isArray(ctx.now)).toBe(true);
+    expect(Array.isArray(ctx.next)).toBe(true);
+    expect(Array.isArray(ctx.later)).toBe(true);
+    expect(Array.isArray(ctx.unscheduled)).toBe(true);
+    expect(Array.isArray(ctx.done)).toBe(true);
+    expect(Array.isArray(ctx.abandoned)).toBe(true);
+    // Top-level extras present.
+    expect(Array.isArray(ctx.recent_observations_unlinked)).toBe(true);
+    expect(Array.isArray(ctx.unpromoted_ideas)).toBe(true);
+    expect(Array.isArray(ctx.themes)).toBe(true);
   });
 });

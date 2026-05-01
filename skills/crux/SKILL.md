@@ -78,11 +78,15 @@ When user names a workstream, run before adding state:
 crux context -w <slug> --json
 ```
 
+This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--tier` or `--all` to opt into more:
+
+- `--tier=now,next` — specific buckets, comma-separated. Valid values: `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
+- `--all` — all six tier buckets plus `recent_observations_unlinked`, `unpromoted_ideas`, and `themes`. Use for full review (`/crux:review`).
+
 For intake mode, anchor on:
 
-- `recent_observations_unlinked[]` — what's been captured but not yet promoted; avoid duplicates.
-- `unpromoted_ideas[]` — same, for solution-space hunches.
-- `now[]`, `next[]`, `later[]`, `unscheduled[]` — read-only awareness of open Problems. **Do not link Evidence here** — that's review-mode work. Use them only to phrase Observation tags better and to recognize when a thought duplicates known terrain.
+- `now[]` — active Problems; avoid filing Observations that duplicate in-flight work.
+- If you need to check unlinked observations or ideas, run with `--all` instead.
 
 If no workstream is in context and you can't infer one from cwd, ask before inventing.
 

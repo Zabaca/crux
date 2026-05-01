@@ -73,18 +73,24 @@ const DigestProblemEntry = z
   .passthrough();
 
 /**
- * context --json must emit workstream + all six tier buckets at top level.
+ * context --json must emit workstream + seed_version at top level.
+ * Tier bucket fields (now, next, later, unscheduled, done, abandoned) and
+ * top-level lists (recent_observations_unlinked, unpromoted_ideas, themes)
+ * are optional — only emitted when the corresponding --tier or --all flag is set.
  * Regression guard: OBS-030 (a) fired when entries were nested under {problem:{...}}.
  */
 export const ContextOutput = z
   .object({
     workstream: z.object({ slug: z.string() }).passthrough(),
-    now: z.array(DigestProblemEntry),
-    next: z.array(DigestProblemEntry),
-    later: z.array(DigestProblemEntry),
-    unscheduled: z.array(DigestProblemEntry),
-    done: z.array(DigestProblemEntry),
-    abandoned: z.array(DigestProblemEntry),
+    now: z.array(DigestProblemEntry).optional(),
+    next: z.array(DigestProblemEntry).optional(),
+    later: z.array(DigestProblemEntry).optional(),
+    unscheduled: z.array(DigestProblemEntry).optional(),
+    done: z.array(DigestProblemEntry).optional(),
+    abandoned: z.array(DigestProblemEntry).optional(),
+    recent_observations_unlinked: z.array(z.unknown()).optional(),
+    unpromoted_ideas: z.array(z.unknown()).optional(),
+    themes: z.array(z.unknown()).optional(),
     seed_version: z.string(),
   })
   .passthrough();
