@@ -7,7 +7,7 @@
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 
 // These must be imported before the command modules so that the singleton
@@ -27,6 +27,7 @@ import { observationCommand } from "../commands/observation.js";
 import { evidenceCommand } from "../commands/evidence.js";
 import { contextCommand } from "../commands/context.js";
 import { ideaCommand } from "../commands/idea.js";
+import { solutionCommand } from "../commands/solution.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -415,13 +416,12 @@ describe("context --tier / --all flag behaviour", () => {
     expect(ctx.abandoned).toBeUndefined();
     expect(ctx.recent_observations_unlinked).toBeUndefined();
     expect(ctx.unpromoted_ideas).toBeUndefined();
-    expect(ctx.themes).toBeUndefined();
     // Workstream and seed_version always present.
     expect(ctx.workstream).toBeDefined();
     expect(typeof ctx.seed_version).toBe("string");
   });
 
-  test("--all invocation emits all six tier buckets + recent_observations_unlinked + unpromoted_ideas + themes", async () => {
+  test("--all invocation emits all six tier buckets + recent_observations_unlinked + unpromoted_ideas", async () => {
     await runCmd(workstreamCommand as AnyCmd, "add", {
       slug: "tier-all",
       title: "Tier All WS",
@@ -453,7 +453,6 @@ describe("context --tier / --all flag behaviour", () => {
     // Top-level extras present.
     expect(Array.isArray(ctx.recent_observations_unlinked)).toBe(true);
     expect(Array.isArray(ctx.unpromoted_ideas)).toBe(true);
-    expect(Array.isArray(ctx.themes)).toBe(true);
   });
 });
 
@@ -561,21 +560,168 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
     expect(thrown).toBeInstanceOf(ActionNotAllowedError);
     expect((thrown as ActionNotAllowedError).attempted).toBe("RENAME_IDEA");
   });
+});
 
-  test("RENAME_THEME from workstream_list throws ActionNotAllowedError", async () => {
-    const { themeCommand } = await import("../commands/theme.js");
+// ---------------------------------------------------------------------------
+// Problem status mutations from workstream_dashboard
+// ---------------------------------------------------------------------------
+
+describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", () => {
+  const ORIG_COLLAB = process.env.CRUX_COLLAB;
+  const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
+  let viewStatePath: string;
+
+  beforeEach(async () => {
+    viewStatePath = join(xdgDir, `view-state-problem-ops-${Date.now()}-${Math.random()}.json`);
+    process.env.CRUX_VIEW_STATE_PATH = viewStatePath;
+    // Ensure directory exists
+    mkdirSync(dirname(viewStatePath), { recursive: true });
+
+    // Create workstream and problem first (in direct mode, no guard)
+    delete process.env.CRUX_COLLAB;
+    await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "ws-prob-ops",
+      title: "Prob Ops WS",
+      json: false,
+    });
+    await runCmd(problemCommand as AnyCmd, "add", {
+      workstream: "ws-prob-ops",
+      slug: "test-prob",
+      title: "Test Problem",
+      description: "For testing ops",
+      json: false,
+    });
+
+    // Write view-state file in workstream_dashboard state
+    const viewState = {
+      status: "active",
+      value: { viewing: "workstream_dashboard" },
+      historyValue: {},
+      context: { workstreamSlug: "ws-prob-ops", problemSlug: null },
+      children: {},
+      revision: 0,
+      lastAction: null,
+      recentQueries: [],
+    };
+    writeFileSync(viewStatePath, JSON.stringify(viewState, null, 2), "utf8");
+
+    // Enable collab mode for the mutation tests
+    process.env.CRUX_COLLAB = "1";
+  });
+
+  afterEach(() => {
+    // Clean up view-state file
+    if (viewStatePath) {
+      const fs = require("node:fs") as typeof import("node:fs");
+      if (fs.existsSync(viewStatePath)) {
+        fs.rmSync(viewStatePath, { force: true });
+      }
+    }
+    if (ORIG_COLLAB !== undefined) process.env.CRUX_COLLAB = ORIG_COLLAB;
+    else delete process.env.CRUX_COLLAB;
+    if (ORIG_VIEW_STATE !== undefined) process.env.CRUX_VIEW_STATE_PATH = ORIG_VIEW_STATE;
+    else delete process.env.CRUX_VIEW_STATE_PATH;
+  });
+
+  test("SCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
+    const result = await capture<{ ok: boolean }>(() =>
+      runCmd(problemCommand as AnyCmd, "schedule", {
+        slug: "test-prob",
+        tier: "now",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("UNSCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
+    // First schedule it
+    await runCmd(problemCommand as AnyCmd, "schedule", {
+      slug: "test-prob",
+      tier: "now",
+      json: false,
+    });
+    // Then unschedule
+    const result = await capture<{ ok: boolean }>(() =>
+      runCmd(problemCommand as AnyCmd, "unschedule", {
+        slug: "test-prob",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("MARK_PROBLEM_DONE from workstream_dashboard succeeds", async () => {
+    // Create and ship a solution (required to mark problem done)
+    delete process.env.CRUX_COLLAB;
+    const { decisionCommand } = await import("../commands/decision.js");
+    await runCmd(solutionCommand as AnyCmd, "add", {
+      problem: "test-prob",
+      slug: "test-sol",
+      title: "Test Solution",
+      json: false,
+    });
+    // Record decision to choose the solution
+    await runCmd(decisionCommand as AnyCmd, "add", {
+      workstream: "ws-prob-ops",
+      problem: "test-prob",
+      chosen: "test-sol",
+      rationale: "best option",
+      json: false,
+    });
+    // Ship the chosen solution
+    await runCmd(solutionCommand as AnyCmd, "ship", {
+      slug: "test-sol",
+      json: false,
+    });
+    // Re-enable collab mode
+    process.env.CRUX_COLLAB = "1";
+
+    const result = await capture<{ ok: boolean }>(() =>
+      runCmd(problemCommand as AnyCmd, "done", {
+        slug: "test-prob",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("ABANDON_PROBLEM from workstream_dashboard succeeds", async () => {
+    const result = await capture<{ ok: boolean }>(() =>
+      runCmd(problemCommand as AnyCmd, "abandon", {
+        slug: "test-prob",
+        rationale: "Test abandon",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("RENAME_PROBLEM from workstream_dashboard succeeds", async () => {
+    const result = await capture<{ ok: boolean }>(() =>
+      runCmd(problemCommand as AnyCmd, "rename", {
+        oldSlug: "test-prob",
+        newSlug: "renamed-prob",
+        json: false,
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  test("ADD_SOLUTION from workstream_dashboard throws ActionNotAllowedError", async () => {
     let thrown: unknown;
     try {
-      await runCmd(themeCommand as AnyCmd, "rename", {
-        oldSlug: "x",
-        newSlug: "y",
+      await runCmd(solutionCommand as AnyCmd, "add", {
+        problem: "test-prob",
+        slug: "sol-test",
+        title: "Test Solution",
         json: false,
       });
     } catch (e) {
       thrown = e;
     }
     expect(thrown).toBeInstanceOf(ActionNotAllowedError);
-    expect((thrown as ActionNotAllowedError).attempted).toBe("RENAME_THEME");
+    expect((thrown as ActionNotAllowedError).attempted).toBe("ADD_SOLUTION");
   });
 });
 

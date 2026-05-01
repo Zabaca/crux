@@ -46,16 +46,6 @@ const SPECS: Spec[] = [
     ],
   },
   {
-    kind: "ADD_THEME",
-    label: "Add theme",
-    title: "Add theme",
-    fields: (ctx) => [
-      { name: "workstream", hidden: true, defaultValue: ctx.workstreamSlug ?? "" },
-      { name: "slug", required: true },
-      { name: "title", required: true },
-    ],
-  },
-  {
     kind: "ADD_OBSERVATION",
     label: "Add observation",
     title: "Add observation",
@@ -131,7 +121,13 @@ const SPECS: Spec[] = [
     label: "Schedule",
     title: "Schedule problem",
     fields: (ctx) => [
-      { name: "slug", hidden: true, defaultValue: ctx.problemSlug ?? "" },
+      {
+        name: "slug",
+        label: "problem slug",
+        required: true,
+        defaultValue: ctx.problemSlug ?? "",
+        hidden: ctx.problemSlug != null,
+      },
       { name: "tier", label: "tier (now|next|later)", required: true },
     ],
   },
@@ -139,20 +135,42 @@ const SPECS: Spec[] = [
     kind: "UNSCHEDULE_PROBLEM",
     label: "Unschedule",
     title: "Unschedule problem",
-    fields: (ctx) => [{ name: "slug", hidden: true, defaultValue: ctx.problemSlug ?? "" }],
+    fields: (ctx) => [
+      {
+        name: "slug",
+        label: "problem slug",
+        required: true,
+        defaultValue: ctx.problemSlug ?? "",
+        hidden: ctx.problemSlug != null,
+      },
+    ],
   },
   {
     kind: "MARK_PROBLEM_DONE",
     label: "Mark done",
     title: "Mark problem done",
-    fields: (ctx) => [{ name: "slug", hidden: true, defaultValue: ctx.problemSlug ?? "" }],
+    fields: (ctx) => [
+      {
+        name: "slug",
+        label: "problem slug",
+        required: true,
+        defaultValue: ctx.problemSlug ?? "",
+        hidden: ctx.problemSlug != null,
+      },
+    ],
   },
   {
     kind: "ABANDON_PROBLEM",
     label: "Abandon",
     title: "Abandon problem",
     fields: (ctx) => [
-      { name: "slug", hidden: true, defaultValue: ctx.problemSlug ?? "" },
+      {
+        name: "slug",
+        label: "problem slug",
+        required: true,
+        defaultValue: ctx.problemSlug ?? "",
+        hidden: ctx.problemSlug != null,
+      },
       { name: "rationale", type: "textarea", required: true },
     ],
   },
@@ -206,7 +224,13 @@ const SPECS: Spec[] = [
     label: "Rename problem",
     title: "Rename problem",
     fields: (ctx) => [
-      { name: "oldSlug", hidden: true, defaultValue: ctx.problemSlug ?? "" },
+      {
+        name: "oldSlug",
+        label: "current problem slug",
+        required: true,
+        defaultValue: ctx.problemSlug ?? "",
+        hidden: ctx.problemSlug != null,
+      },
       { name: "newSlug", required: true },
       { name: "title" },
       { name: "description", type: "textarea" },
@@ -216,17 +240,6 @@ const SPECS: Spec[] = [
     kind: "RENAME_IDEA",
     label: "Rename idea",
     title: "Rename idea",
-    fields: () => [
-      { name: "oldSlug", required: true },
-      { name: "newSlug", required: true },
-      { name: "title" },
-      { name: "description", type: "textarea" },
-    ],
-  },
-  {
-    kind: "RENAME_THEME",
-    label: "Rename theme",
-    title: "Rename theme",
     fields: () => [
       { name: "oldSlug", required: true },
       { name: "newSlug", required: true },

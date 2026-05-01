@@ -30,7 +30,16 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
   },
   workstream_dashboard: {
     allowedView: ["OPEN_PROBLEM", "SELECT_INTAKE", "SELECT_IDEAS", "BACK"],
-    allowedMutation: ["ADD_PROBLEM", "ADD_OBSERVATION", "ADD_IDEA", "ADD_THEME", "RENAME_THEME"],
+    allowedMutation: [
+      "ADD_PROBLEM",
+      "ADD_OBSERVATION",
+      "ADD_IDEA",
+      "SCHEDULE_PROBLEM",
+      "UNSCHEDULE_PROBLEM",
+      "MARK_PROBLEM_DONE",
+      "ABANDON_PROBLEM",
+      "RENAME_PROBLEM",
+    ],
     globals: GLOBALS,
   },
   problem_detail: {
