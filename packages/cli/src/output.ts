@@ -1,4 +1,4 @@
-let jsonMode = false;
+let jsonMode = true;
 
 export function setJsonMode(on: boolean) {
   jsonMode = on;

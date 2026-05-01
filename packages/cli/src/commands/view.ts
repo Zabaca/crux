@@ -12,6 +12,8 @@ import {
 } from "@crux/core/view-state";
 import { emit, emitError, setJsonMode } from "../output.js";
 import { ViewStateOutput, ViewPathOutput } from "@crux/core/validation";
+import { loadViewMeta } from "@crux/core/view-state";
+import { getAllowedActions } from "@crux/core/actions";
 
 const getCmd = defineCommand({
   meta: { name: "get", description: "Print current view state." },
@@ -19,7 +21,16 @@ const getCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const snap = loadState();
-    const payload = { value: snap.value, context: snap.context };
+    const meta = loadViewMeta();
+    const allowed = getAllowedActions(snap.value);
+    const payload = {
+      value: snap.value,
+      context: snap.context,
+      revision: meta.revision,
+      lastAction: meta.lastAction,
+      allowedActions: [...allowed.allowedView, ...allowed.allowedMutation],
+      globalActions: allowed.globals,
+    };
     emit(
       payload,
       ViewStateOutput,
