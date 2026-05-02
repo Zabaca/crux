@@ -2,13 +2,8 @@ import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { problems, solutions } from "@crux/core/db/schema";
 import { requireUser } from "@crux/core/config";
-import {
-  SolutionInput,
-  OkWithIdOutput,
-  OkWithStatusOutput,
-  RenameOutput,
-} from "@crux/core/validation";
-import { NotFoundError, renameSolution, shipSolution, editSolution } from "@crux/core/transitions";
+import { SolutionInput, OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
+import { NotFoundError, shipSolution, editSolution } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode, emitError } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
@@ -18,7 +13,6 @@ const addCmd = defineCommand({
   meta: { name: "add", description: "Add a solution candidate to a problem." },
   args: {
     problem: { type: "string", required: false, description: "problem id" },
-    slug: { type: "string", required: true },
     title: { type: "string", required: true },
     description: { type: "string" },
     json: { type: "boolean" },
@@ -29,27 +23,28 @@ const addCmd = defineCommand({
     guardAction("ADD_SOLUTION");
     hintCtx(undefined, prVal);
     const parsed = SolutionInput.parse({
-      problemSlug: prVal,
-      slug: args.slug,
+      problemId: prVal,
       title: args.title,
       description: args.description,
     });
     const user = requireUser();
     const db = getDb();
-    const pr = await db.select().from(problems).where(eq(problems.id, parsed.problemSlug)).limit(1);
-    if (pr.length === 0)
-      throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
-        id: parsed.problemSlug,
-      });
-    const id = `SOL-${parsed.slug}`;
-    await db.insert(solutions).values({
-      id,
-      slug: parsed.slug,
-      problemId: pr[0]!.id,
-      title: parsed.title,
-      description: parsed.description,
-      createdById: user.user.id,
-    });
+    const numId =
+      typeof parsed.problemId === "number"
+        ? parsed.problemId
+        : parseInt(String(parsed.problemId), 10);
+    const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
+    if (pr.length === 0) throw new NotFoundError(`problem not found: ${prVal}`, { id: prVal });
+    const result = await db
+      .insert(solutions)
+      .values({
+        problemId: pr[0]!.id,
+        title: parsed.title,
+        description: parsed.description,
+        createdById: user.user.id,
+      })
+      .returning({ id: solutions.id });
+    const id = result[0]!.id;
     recordMutation("ADD_SOLUTION");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
@@ -65,7 +60,8 @@ const listCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     if (args.problem) {
-      const pr = await db.select().from(problems).where(eq(problems.id, args.problem)).limit(1);
+      const numId = parseInt(String(args.problem), 10);
+      const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
       if (pr.length === 0)
         throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
       const rows = await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id));
@@ -81,7 +77,8 @@ const showCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb().select().from(solutions).where(eq(solutions.id, args.id)).limit(1);
+    const numId = parseInt(String(args.id), 10);
+    const rows = await getDb().select().from(solutions).where(eq(solutions.id, numId)).limit(1);
     if (rows.length === 0)
       throw new NotFoundError(`solution not found: ${args.id}`, { id: args.id });
     emit(rows[0]!);
@@ -95,7 +92,8 @@ const shipCmd = defineCommand({
     if (args.json) setJsonMode(true);
     guardAction("SHIP_SOLUTION");
     const db = getDb();
-    const rows = await db.select().from(solutions).where(eq(solutions.id, args.id)).limit(1);
+    const numId = parseInt(String(args.id), 10);
+    const rows = await db.select().from(solutions).where(eq(solutions.id, numId)).limit(1);
     if (rows.length === 0)
       throw new NotFoundError(`solution not found: ${args.id}`, { id: args.id });
     await shipSolution(rows[0]!.id, db);
@@ -105,32 +103,6 @@ const shipCmd = defineCommand({
       OkWithStatusOutput,
       `shipped ${rows[0]!.id}`,
     );
-  },
-});
-
-const renameCmd = defineCommand({
-  meta: {
-    name: "rename",
-    description: "Rename a solution slug (cascades to all FK referrers).",
-  },
-  args: {
-    oldSlug: { type: "positional", required: true, description: "Current slug" },
-    newSlug: { type: "positional", required: true, description: "New slug" },
-    title: { type: "string" },
-    description: { type: "string" },
-    json: { type: "boolean" },
-  },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    guardAction("RENAME_SOLUTION");
-    const r = await renameSolution(
-      args.oldSlug,
-      args.newSlug,
-      { title: args.title, description: args.description },
-      getDb(),
-    );
-    recordMutation("RENAME_SOLUTION");
-    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
   },
 });
 
@@ -150,9 +122,10 @@ const editCmd = defineCommand({
     }
     guardAction("EDIT_SOLUTION");
     const db = getDb();
-    const row = (await db.select().from(solutions).where(eq(solutions.id, args.id)).limit(1))[0];
+    const numId = parseInt(String(args.id), 10);
+    const row = (await db.select().from(solutions).where(eq(solutions.id, numId)).limit(1))[0];
     if (!row) {
-      emitError(new NotFoundError("solution", args.slug));
+      emitError(new NotFoundError(`solution not found: ${args.id}`, { id: args.id }));
       process.exit(23);
     }
     await editSolution(
@@ -175,7 +148,6 @@ export const solutionCommand = defineCommand({
     list: listCmd,
     show: showCmd,
     ship: shipCmd,
-    rename: renameCmd,
     edit: editCmd,
   },
 });

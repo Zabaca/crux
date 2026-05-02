@@ -14,7 +14,6 @@ import {
   OkWithIdOutput,
   OkWithStatusOutput,
   ProblemShowOutput,
-  RenameOutput,
   RoadmapTier,
   ProblemInput,
 } from "@crux/core/validation";
@@ -22,7 +21,6 @@ import {
   abandonProblem,
   markProblemDone,
   NotFoundError,
-  renameProblem,
   scheduleProblem,
   unscheduleProblem,
 } from "@crux/core/transitions";
@@ -39,8 +37,9 @@ async function resolveWorkstream(id: string) {
   return row;
 }
 
-async function resolveProblem(id: string) {
-  const rows = await getDb().select().from(problems).where(eq(problems.id, id)).limit(1);
+async function resolveProblem(id: string | number) {
+  const numId = typeof id === "number" ? id : parseInt(String(id), 10);
+  const rows = await getDb().select().from(problems).where(eq(problems.id, numId)).limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError(`problem not found: ${id}`, { id });
   return row;
@@ -50,7 +49,6 @@ const addCmd = defineCommand({
   meta: { name: "add", description: "Add a problem to a workstream." },
   args: {
     workstream: { type: "string", required: false, alias: "w" },
-    slug: { type: "string", required: true },
     title: { type: "string", required: true },
     description: { type: "string", required: true },
     json: { type: "boolean" },
@@ -61,22 +59,22 @@ const addCmd = defineCommand({
     guardAction("ADD_PROBLEM");
     const parsed = ProblemInput.parse({
       workstream: wsVal,
-      slug: args.slug,
       title: args.title,
       description: args.description,
     });
     hintCtx(wsVal);
     const ws = await resolveWorkstream(parsed.workstream);
     const user = requireUser();
-    const id = `PRB-${parsed.slug}`;
-    await getDb().insert(problems).values({
-      id,
-      slug: parsed.slug,
-      workstreamId: ws.id,
-      title: parsed.title,
-      description: parsed.description,
-      createdById: user.user.id,
-    });
+    const result = await getDb()
+      .insert(problems)
+      .values({
+        workstreamId: ws.id,
+        title: parsed.title,
+        description: parsed.description,
+        createdById: user.user.id,
+      })
+      .returning({ id: problems.id });
+    const id = result[0]!.id;
     recordMutation("ADD_PROBLEM");
     emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
   },
@@ -134,7 +132,7 @@ const showCmd = defineCommand({
           .from(outcomeFollowUpProblems)
           .where(inArray(outcomeFollowUpProblems.outcomeId, outcomeIds))
       : [];
-    const followUpsByOutcome = new Map<string, string[]>();
+    const followUpsByOutcome = new Map<string, number[]>();
     for (const f of followUps) {
       const list = followUpsByOutcome.get(f.outcomeId) ?? [];
       list.push(f.problemId);
@@ -236,32 +234,6 @@ const abandonCmd = defineCommand({
   },
 });
 
-const renameCmd = defineCommand({
-  meta: {
-    name: "rename",
-    description: "Rename a problem slug (cascades to all FK referrers).",
-  },
-  args: {
-    oldSlug: { type: "positional", required: true, description: "Current slug" },
-    newSlug: { type: "positional", required: true, description: "New slug" },
-    title: { type: "string" },
-    description: { type: "string" },
-    json: { type: "boolean" },
-  },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    guardAction("RENAME_PROBLEM");
-    const r = await renameProblem(
-      args.oldSlug,
-      args.newSlug,
-      { title: args.title, description: args.description },
-      getDb(),
-    );
-    recordMutation("RENAME_PROBLEM");
-    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
-  },
-});
-
 export const problemCommand = defineCommand({
   meta: { name: "problem", description: "Problems." },
   subCommands: {
@@ -272,6 +244,5 @@ export const problemCommand = defineCommand({
     unschedule: unscheduleCmd,
     done: doneCmd,
     abandon: abandonCmd,
-    rename: renameCmd,
   },
 });

@@ -1,12 +1,10 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { KeyBar, Screen, type KeyHint } from "@crux/tui-ds/components";
-import {
-  getProblemById,
-  getProblemBySlug,
-  getWorkstreamBySlug,
-  type Workstream,
-} from "./queries.js";
+import { getDb } from "@crux/core";
+import { workstreams } from "@crux/core/db/schema";
+import { eq } from "drizzle-orm";
+import { getProblemById, getWorkstreamBySlug, type Workstream } from "./queries.js";
 import {
   IntakeQueueView,
   ObservationDetailView,
@@ -20,22 +18,27 @@ import { useViewStateFile } from "./useViewState.js";
 type View =
   | { kind: "picker" }
   | { kind: "dashboard"; workstream: Workstream }
-  | { kind: "problem"; workstream: Workstream; problemId: string }
+  | { kind: "problem"; workstream: Workstream; problemId: number }
   | {
       kind: "solution";
       workstream: Workstream;
-      solutionId: string;
+      solutionId: number;
       parent: "problem" | "dashboard";
-      problemId?: string;
+      problemId?: number;
     }
   | {
       kind: "observation";
       workstream: Workstream;
       observationId: string;
       parent: "problem" | "intake";
-      problemId?: string;
+      problemId?: number;
     }
   | { kind: "intake"; workstream: Workstream };
+
+async function getWorkstreamById(id: string): Promise<Workstream | null> {
+  const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, id)).limit(1);
+  return rows[0] ?? null;
+}
 
 export function App({ initialSlug }: { initialSlug?: string }): React.ReactElement {
   const { exit } = useApp();
@@ -45,8 +48,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
   const [booted, setBooted] = useState(!initialSlug);
   const { machineView, send } = useViewStateFile();
 
-  // Track the last machineView we applied, so we don't re-apply identical state
-  // and don't clobber local non-machine views (e.g. solution/observation).
   const lastAppliedMachineView = useRef<string>("");
 
   useEffect(() => {
@@ -56,17 +57,12 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         setBootError(`workstream not found: ${initialSlug}`);
       } else {
         setView({ kind: "dashboard", workstream: ws });
-        send({ type: "SELECT_WORKSTREAM", slug: initialSlug }).catch(() => {
-          // guard may refuse if initialSlug is exotic; local view still works
-        });
+        send({ type: "SELECT_WORKSTREAM", id: ws.id }).catch(() => {});
       }
       setBooted(true);
     });
   }, [initialSlug]);
 
-  // Reconcile incoming machine state → local view. Only applies when we're on
-  // a machine-covered screen (picker/dashboard/problem) or the incoming machine
-  // view disagrees with where we are.
   useEffect(() => {
     const key = JSON.stringify(machineView);
     if (key === lastAppliedMachineView.current) return;
@@ -77,27 +73,26 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
       if (machineView.kind === "workstream_list") {
         if (cancelled) return;
         setView((v) => {
-          // If caller booted with initialSlug, don't demote below dashboard.
           if (initialSlug && v.kind === "dashboard") return v;
           return { kind: "picker" };
         });
         return;
       }
       if (machineView.kind === "workstream_dashboard") {
-        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
+        const ws = await getWorkstreamById(machineView.workstreamId);
         if (cancelled || !ws) return;
         setView({ kind: "dashboard", workstream: ws });
         return;
       }
       if (machineView.kind === "problem_detail") {
-        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
-        const p = await getProblemBySlug(machineView.problemSlug);
+        const ws = await getWorkstreamById(machineView.workstreamId);
+        const p = await getProblemById(machineView.problemId);
         if (cancelled || !ws || !p) return;
         setView({ kind: "problem", workstream: ws, problemId: p.id });
         return;
       }
       if (machineView.kind === "intake_queue") {
-        const ws = await getWorkstreamBySlug(machineView.workstreamSlug);
+        const ws = await getWorkstreamById(machineView.workstreamId);
         if (cancelled || !ws) return;
         setView({ kind: "intake", workstream: ws });
         return;
@@ -129,23 +124,21 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
         return;
       case "dashboard":
         if (!initialSlug) {
-          // Machine-covered transition: dashboard → list.
           send({ type: "BACK" }).catch(() => {});
         }
         return;
       case "problem":
-        // Machine-covered transition: problem_detail → dashboard.
         send({ type: "BACK" }).catch(() => {});
         return;
       case "solution":
-        if (v.parent === "problem" && v.problemId) {
+        if (v.parent === "problem" && v.problemId !== undefined) {
           setView({ kind: "problem", workstream: v.workstream, problemId: v.problemId });
         } else {
           setView({ kind: "dashboard", workstream: v.workstream });
         }
         return;
       case "observation":
-        if (v.parent === "problem" && v.problemId) {
+        if (v.parent === "problem" && v.problemId !== undefined) {
           setView({ kind: "problem", workstream: v.workstream, problemId: v.problemId });
         } else {
           setView({ kind: "intake", workstream: v.workstream });
@@ -157,15 +150,12 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
     }
   };
 
-  const openProblem = async (problemId: string) => {
-    const p = await getProblemById(problemId);
-    if (!p) return;
-    await send({ type: "OPEN_PROBLEM", slug: p.slug }).catch(() => {});
+  const openProblem = async (problemId: number) => {
+    await send({ type: "OPEN_PROBLEM", id: String(problemId) }).catch(() => {});
   };
 
   const openWorkstream = async (ws: Workstream) => {
-    await send({ type: "SELECT_WORKSTREAM", slug: ws.slug }).catch(() => {
-      // If guard refuses, fall back to local nav so the UI stays usable.
+    await send({ type: "SELECT_WORKSTREAM", id: ws.id }).catch(() => {
       setView({ kind: "dashboard", workstream: ws });
     });
   };

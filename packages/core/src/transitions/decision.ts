@@ -5,9 +5,9 @@ import { InvariantError, ReferentialError } from "./errors.js";
 
 export interface CreateDecisionInput {
   id: string; // e.g. DEC-001
-  problemId: string;
-  chosenSolutionId: string;
-  rejectedSolutionIds: ReadonlyArray<string>;
+  problemId: number;
+  chosenSolutionId: number;
+  rejectedSolutionIds: ReadonlyArray<number>;
   rationale: string;
   context?: string | null;
   decidedById: string;

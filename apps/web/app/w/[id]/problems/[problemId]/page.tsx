@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getProblemBySlug, getWorkstreamBySlug } from "@/lib/queries";
+import { getProblemById, getWorkstreamById } from "@/lib/queries";
 import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant, statusVariant } from "@/components/ui/badge";
@@ -12,27 +12,27 @@ export const dynamic = "force-dynamic";
 export default async function ProblemPage({
   params,
 }: {
-  params: Promise<{ slug: string; problemSlug: string }>;
+  params: Promise<{ id: string; problemId: string }>;
 }) {
-  const { slug, problemSlug } = await params;
-  const ws = await getWorkstreamBySlug(slug);
+  const { id, problemId } = await params;
+  const ws = await getWorkstreamById(id);
   if (!ws) notFound();
-  const detail = await getProblemBySlug(ws.id, problemSlug);
+  const detail = await getProblemById(ws.id, parseInt(problemId, 10));
   if (!detail) notFound();
   const { problem, evidence, solutions, latestDecision, eliminations, abandonment, outcomes } =
     detail;
 
   return (
     <>
-      <SyncViewState workstreamId={ws.id} problemId={problem.id} />
+      <SyncViewState workstreamId={ws.id} problemId={String(problem.id)} />
       <PageShell
         breadcrumbs={[
           { href: "/", label: "Workstreams" },
-          { href: `/w/${ws.slug}`, label: ws.slug },
-          { label: problem.slug },
+          { href: `/w/${ws.id}`, label: ws.slug },
+          { label: String(problem.id) },
         ]}
         title={problem.title}
-        subtitle={problem.slug}
+        subtitle={String(problem.id)}
         actions={
           <Badge variant={roadmapStatusVariant(problem.status)}>
             {problem.status ?? "unscheduled"}
@@ -62,7 +62,7 @@ export default async function ProblemPage({
                           <span className="font-mono text-muted-foreground">{e.id}</span>
                           {obs ? (
                             <Link
-                              href={`/w/${ws.slug}/observations/${obs.id}`}
+                              href={`/w/${ws.id}/observations/${obs.id}`}
                               className="font-mono text-muted-foreground hover:underline"
                             >
                               {obs.id}
@@ -105,12 +105,12 @@ export default async function ProblemPage({
             <ul className="space-y-2">
               {solutions.map((s) => (
                 <li key={s.id}>
-                  <Link href={`/w/${ws.slug}/solutions/${s.slug}`} className="block">
+                  <Link href={`/w/${ws.id}/solutions/${s.id}`} className="block">
                     <Card className="hover:border-primary/40 transition-colors">
                       <CardContent className="p-4 space-y-2">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge variant={statusVariant(s.status)}>{s.status}</Badge>
-                          <span className="font-mono text-muted-foreground">{s.slug}</span>
+                          <span className="font-mono text-muted-foreground">{s.id}</span>
                           {s.effort ? (
                             <span className="text-muted-foreground">effort: {s.effort}</span>
                           ) : null}
@@ -142,10 +142,10 @@ export default async function ProblemPage({
               <CardContent className="p-5 space-y-3">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <span className="font-mono text-muted-foreground">{latestDecision.id}</span>
-                  <Badge variant="chosen">chose {latestDecision.chosenSolutionSlug ?? "?"}</Badge>
-                  {latestDecision.rejectedSolutionSlugs.map((slug) => (
-                    <Badge key={slug} variant="rejected">
-                      rejected {slug}
+                  <Badge variant="chosen">chose {latestDecision.chosenSolutionId}</Badge>
+                  {latestDecision.rejectedSolutionIds.map((sid) => (
+                    <Badge key={sid} variant="rejected">
+                      rejected {sid}
                     </Badge>
                   ))}
                 </div>
@@ -181,9 +181,9 @@ export default async function ProblemPage({
                     <CardContent className="p-4 space-y-2">
                       <div className="flex flex-wrap items-center gap-2 text-xs">
                         <span className="font-mono text-muted-foreground">{e.id}</span>
-                        {e.eliminatedSolutionSlugs.map((slug) => (
-                          <Badge key={slug} variant="rejected">
-                            ruled out {slug}
+                        {e.eliminatedSolutionIds.map((sid) => (
+                          <Badge key={sid} variant="rejected">
+                            ruled out {sid}
                           </Badge>
                         ))}
                       </div>
@@ -228,7 +228,7 @@ export default async function ProblemPage({
                     <CardContent className="p-4 space-y-2">
                       <div className="flex items-center gap-2 text-xs">
                         <span className="font-mono text-muted-foreground">{o.id}</span>
-                        <Badge variant="shipped">shipped: {o.solutionSlug}</Badge>
+                        <Badge variant="shipped">shipped: {o.solutionId}</Badge>
                       </div>
                       <div>
                         <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

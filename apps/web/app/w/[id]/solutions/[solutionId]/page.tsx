@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSolutionBySlug } from "@/lib/queries";
+import { getSolutionById } from "@/lib/queries";
 import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant, statusVariant } from "@/components/ui/badge";
@@ -11,35 +11,27 @@ export const dynamic = "force-dynamic";
 export default async function SolutionPage({
   params,
 }: {
-  params: Promise<{ slug: string; solutionSlug: string }>;
+  params: Promise<{ id: string; solutionId: string }>;
 }) {
-  const { slug, solutionSlug } = await params;
-  const detail = await getSolutionBySlug(slug, solutionSlug);
+  const { solutionId } = await params;
+  const detail = await getSolutionById(parseInt(solutionId, 10));
   if (!detail) notFound();
-  const {
-    solution,
-    problem,
-    workstream,
-    choosingDecisions,
-    rejectingDecisions,
-    eliminations,
-    outcome,
-    originatingIdea,
-  } = detail;
+  const { solution, problem, workstream, choosingDecisions, rejectingDecisions, eliminations, outcome } =
+    detail;
 
   return (
     <PageShell
       breadcrumbs={[
         { href: "/", label: "Workstreams" },
-        { href: `/w/${workstream.slug}`, label: workstream.slug },
+        { href: `/w/${workstream.id}`, label: workstream.slug },
         {
-          href: `/w/${workstream.slug}/problems/${problem.slug}`,
-          label: problem.slug,
+          href: `/w/${workstream.id}/problems/${problem.id}`,
+          label: String(problem.id),
         },
-        { label: solution.slug },
+        { label: String(solution.id) },
       ]}
       title={solution.title}
-      subtitle={solution.slug}
+      subtitle={String(solution.id)}
       actions={
         <div className="flex items-center gap-2">
           <Badge variant={statusVariant(solution.status)}>{solution.status}</Badge>
@@ -50,14 +42,14 @@ export default async function SolutionPage({
       }
     >
       <Section title="Parent problem">
-        <Link href={`/w/${workstream.slug}/problems/${problem.slug}`} className="block">
+        <Link href={`/w/${workstream.id}/problems/${problem.id}`} className="block">
           <Card className="hover:border-primary/40 transition-colors">
             <CardContent className="p-4 space-y-1">
               <div className="flex items-center gap-2 text-xs">
                 <Badge variant={roadmapStatusVariant(problem.status)}>
                   {problem.status ?? "unscheduled"}
                 </Badge>
-                <span className="font-mono text-muted-foreground">{problem.slug}</span>
+                <span className="font-mono text-muted-foreground">{problem.id}</span>
               </div>
               <div className="font-medium">{problem.title}</div>
             </CardContent>
@@ -168,20 +160,6 @@ export default async function SolutionPage({
           <EmptyState>Not shipped — no outcome recorded.</EmptyState>
         )}
       </Section>
-
-      {originatingIdea ? (
-        <Section title="Originating idea">
-          <Card>
-            <CardContent className="p-4 space-y-1">
-              <div className="text-xs font-mono text-muted-foreground">{originatingIdea.slug}</div>
-              <div className="font-medium">{originatingIdea.title}</div>
-              {originatingIdea.description ? (
-                <p className="text-sm text-muted-foreground">{originatingIdea.description}</p>
-              ) : null}
-            </CardContent>
-          </Card>
-        </Section>
-      ) : null}
     </PageShell>
   );
 }

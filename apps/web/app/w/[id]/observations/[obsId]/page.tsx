@@ -21,10 +21,10 @@ function parseTags(tags: string | null): string[] {
 export default async function ObservationPage({
   params,
 }: {
-  params: Promise<{ slug: string; obsId: string }>;
+  params: Promise<{ id: string; obsId: string }>;
 }) {
-  const { slug, obsId } = await params;
-  const detail = await getObservationById(slug, obsId);
+  const { id, obsId } = await params;
+  const detail = await getObservationById(id, obsId);
   if (!detail) notFound();
   const { observation, workstream, linkedProblems } = detail;
   const tags = parseTags(observation.tags);
@@ -33,7 +33,7 @@ export default async function ObservationPage({
     <PageShell
       breadcrumbs={[
         { href: "/", label: "Workstreams" },
-        { href: `/w/${workstream.slug}`, label: workstream.slug },
+        { href: `/w/${workstream.id}`, label: workstream.slug },
         { label: observation.id },
       ]}
       title={observation.id}
@@ -75,14 +75,14 @@ export default async function ObservationPage({
             {linkedProblems.map(({ evidence: ev, problem }) =>
               problem ? (
                 <li key={ev.id}>
-                  <Link href={`/w/${workstream.slug}/problems/${problem.slug}`} className="block">
+                  <Link href={`/w/${workstream.id}/problems/${problem.id}`} className="block">
                     <Card className="hover:border-primary/40 transition-colors">
                       <CardContent className="p-4 space-y-1">
                         <div className="flex flex-wrap items-center gap-2 text-xs">
                           <Badge variant={roadmapStatusVariant(problem.status)}>
                             {problem.status ?? "unscheduled"}
                           </Badge>
-                          <span className="font-mono text-muted-foreground">{problem.slug}</span>
+                          <span className="font-mono text-muted-foreground">{problem.id}</span>
                           <span className="font-mono text-muted-foreground">via {ev.id}</span>
                         </div>
                         <div className="font-medium">{problem.title}</div>

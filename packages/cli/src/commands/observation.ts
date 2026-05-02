@@ -9,11 +9,17 @@ import { emit, setJsonMode } from "../output.js";
 import { guardAction, recordMutation } from "../collab.js";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
 
-async function resolveWorkstream(id: string) {
-  const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) throw new NotFoundError(`workstream not found: ${id}`, { id });
-  return row;
+async function resolveWorkstream(idOrSlug: string) {
+  const db = getDb();
+  const byId = (
+    await db.select().from(workstreams).where(eq(workstreams.id, idOrSlug)).limit(1)
+  )[0];
+  if (byId) return byId;
+  const bySlug = (
+    await db.select().from(workstreams).where(eq(workstreams.slug, idOrSlug)).limit(1)
+  )[0];
+  if (bySlug) return bySlug;
+  throw new NotFoundError(`workstream not found: ${idOrSlug}`, { id: idOrSlug });
 }
 
 async function nextObsId(): Promise<string> {

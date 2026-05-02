@@ -2,7 +2,7 @@
  * Action schemas for the collab-mode action bus.
  *
  * ViewAction  = the 5 view-machine events (navigation)
- * MutationAction = ~22 kinds that call transitions (data writes)
+ * MutationAction = data write actions
  * Action = union of both
  */
 import { z } from "zod";
@@ -38,51 +38,49 @@ export const ViewActionSchema = z.discriminatedUnion("kind", [
 export type ViewAction = z.infer<typeof ViewActionSchema>;
 
 // ---------------------------------------------------------------------------
-// MutationAction — 22 kinds
+// MutationAction
 // ---------------------------------------------------------------------------
 
 export const AddProblemAction = z.object({
   kind: z.literal("ADD_PROBLEM"),
   payload: z.object({
     workstream: z.string(),
-    slug: z.string(),
     title: z.string(),
     description: z.string(),
   }),
 });
 export const ScheduleProblemAction = z.object({
   kind: z.literal("SCHEDULE_PROBLEM"),
-  payload: z.object({ slug: z.string(), tier: z.string() }),
+  payload: z.object({ id: z.union([z.string(), z.number()]), tier: z.string() }),
 });
 export const UnscheduleProblemAction = z.object({
   kind: z.literal("UNSCHEDULE_PROBLEM"),
-  payload: z.object({ slug: z.string() }),
+  payload: z.object({ id: z.union([z.string(), z.number()]) }),
 });
 export const MarkProblemDoneAction = z.object({
   kind: z.literal("MARK_PROBLEM_DONE"),
-  payload: z.object({ slug: z.string() }),
+  payload: z.object({ id: z.union([z.string(), z.number()]) }),
 });
 export const AbandonProblemAction = z.object({
   kind: z.literal("ABANDON_PROBLEM"),
-  payload: z.object({ slug: z.string(), rationale: z.string() }),
+  payload: z.object({ id: z.union([z.string(), z.number()]), rationale: z.string() }),
 });
 export const AddSolutionAction = z.object({
   kind: z.literal("ADD_SOLUTION"),
   payload: z.object({
-    problem: z.string(),
-    slug: z.string(),
+    problem: z.union([z.string(), z.number()]),
     title: z.string(),
     description: z.string().optional(),
   }),
 });
 export const ShipSolutionAction = z.object({
   kind: z.literal("SHIP_SOLUTION"),
-  payload: z.object({ slug: z.string() }),
+  payload: z.object({ id: z.union([z.string(), z.number()]) }),
 });
 export const EditSolutionAction = z.object({
   kind: z.literal("EDIT_SOLUTION"),
   payload: z.object({
-    solutionId: z.string(),
+    solutionId: z.union([z.string(), z.number()]),
     description: z.string().optional(),
     title: z.string().optional(),
   }),
@@ -90,18 +88,18 @@ export const EditSolutionAction = z.object({
 export const AddDecisionAction = z.object({
   kind: z.literal("ADD_DECISION"),
   payload: z.object({
-    problem: z.string(),
-    chosen: z.string(),
+    problem: z.union([z.string(), z.number()]),
+    chosen: z.union([z.string(), z.number()]),
     rationale: z.string(),
-    rejected: z.array(z.string()).optional(),
+    rejected: z.array(z.union([z.string(), z.number()])).optional(),
   }),
 });
 export const AddOutcomeAction = z.object({
   kind: z.literal("ADD_OUTCOME"),
   payload: z.object({
-    solution: z.string(),
+    solution: z.union([z.string(), z.number()]),
     summary: z.string(),
-    followUpProblemIds: z.array(z.string()).optional(),
+    followUpProblemIds: z.array(z.union([z.string(), z.number()])).optional(),
   }),
 });
 export const AddObservationAction = z.object({
@@ -114,11 +112,15 @@ export const ArchiveObservationAction = z.object({
 });
 export const AddEvidenceAction = z.object({
   kind: z.literal("ADD_EVIDENCE"),
-  payload: z.object({ observation: z.string(), problem: z.string(), note: z.string().optional() }),
+  payload: z.object({
+    observation: z.string(),
+    problem: z.union([z.string(), z.number()]),
+    note: z.string().optional(),
+  }),
 });
 export const AddEliminationAction = z.object({
   kind: z.literal("ADD_ELIMINATION"),
-  payload: z.object({ solution: z.string(), rationale: z.string() }),
+  payload: z.object({ solution: z.union([z.string(), z.number()]), rationale: z.string() }),
 });
 export const AddWorkstreamAction = z.object({
   kind: z.literal("ADD_WORKSTREAM"),
@@ -126,24 +128,6 @@ export const AddWorkstreamAction = z.object({
 });
 export const RenameWorkstreamAction = z.object({
   kind: z.literal("RENAME_WORKSTREAM"),
-  payload: z.object({
-    oldSlug: z.string(),
-    newSlug: z.string(),
-    title: z.string().optional(),
-    description: z.string().optional(),
-  }),
-});
-export const RenameProblemAction = z.object({
-  kind: z.literal("RENAME_PROBLEM"),
-  payload: z.object({
-    oldSlug: z.string(),
-    newSlug: z.string(),
-    title: z.string().optional(),
-    description: z.string().optional(),
-  }),
-});
-export const RenameSolutionAction = z.object({
-  kind: z.literal("RENAME_SOLUTION"),
   payload: z.object({
     oldSlug: z.string(),
     newSlug: z.string(),
@@ -173,8 +157,6 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddEliminationAction,
   AddWorkstreamAction,
   RenameWorkstreamAction,
-  RenameProblemAction,
-  RenameSolutionAction,
   RenameObservationAction,
 ]);
 
@@ -215,8 +197,6 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ADD_ELIMINATION",
   "ADD_WORKSTREAM",
   "RENAME_WORKSTREAM",
-  "RENAME_PROBLEM",
-  "RENAME_SOLUTION",
   "RENAME_OBSERVATION",
 ];
 

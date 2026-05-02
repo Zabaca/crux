@@ -49,7 +49,7 @@ const addCmd = defineCommand({
     hintCtx(wsVal, prVal);
     const parsed = DecisionInput.parse({
       workstream: wsVal,
-      problemSlug: prVal,
+      problemId: prVal,
       chosen: args.chosen,
       rejected: asList(args.rejected),
       rationale: args.rationale,
@@ -57,44 +57,60 @@ const addCmd = defineCommand({
     });
     const user = requireUser();
     const db = getDb();
-    const ws = await db
+    const wsById = await db
       .select()
       .from(workstreams)
       .where(eq(workstreams.id, parsed.workstream))
       .limit(1);
+    const wsBySlug =
+      wsById.length === 0
+        ? await db
+            .select()
+            .from(workstreams)
+            .where(eq(workstreams.slug, parsed.workstream))
+            .limit(1)
+        : [];
+    const ws = wsById.length > 0 ? wsById : wsBySlug;
     if (ws.length === 0)
       throw new NotFoundError(`workstream not found: ${parsed.workstream}`, {
         id: parsed.workstream,
       });
+    const numProbId =
+      typeof parsed.problemId === "number"
+        ? parsed.problemId
+        : parseInt(String(parsed.problemId), 10);
     const pr = await db
       .select()
       .from(problems)
-      .where(and(eq(problems.id, parsed.problemSlug), eq(problems.workstreamId, ws[0]!.id)))
+      .where(and(eq(problems.id, numProbId), eq(problems.workstreamId, ws[0]!.id)))
       .limit(1);
     if (pr.length === 0)
-      throw new NotFoundError(`problem not found in workstream: ${parsed.problemSlug}`, {
-        id: parsed.problemSlug,
+      throw new NotFoundError(`problem not found in workstream: ${parsed.problemId}`, {
+        id: parsed.problemId,
       });
 
+    const numChosenId =
+      typeof parsed.chosen === "number" ? parsed.chosen : parseInt(String(parsed.chosen), 10);
     const chosenRow = await db
       .select()
       .from(solutions)
-      .where(eq(solutions.id, parsed.chosen))
+      .where(eq(solutions.id, numChosenId))
       .limit(1);
     if (chosenRow.length === 0)
       throw new NotFoundError(`solution not found: ${parsed.chosen}`, { id: parsed.chosen });
 
-    const rejectedIds: string[] = [];
+    const rejectedIds: number[] = [];
     if (parsed.rejected.length) {
       const solsInProblem = await db
         .select()
         .from(solutions)
         .where(eq(solutions.problemId, pr[0]!.id));
-      const solIdMap = new Map(solsInProblem.map((r) => [r.id, r.id]));
-      for (const id of parsed.rejected) {
-        if (!solIdMap.has(id))
-          throw new NotFoundError(`solution not found in problem: ${id}`, { id });
-        rejectedIds.push(id);
+      const solIdSet = new Set(solsInProblem.map((r) => r.id));
+      for (const rid of parsed.rejected) {
+        const numRid = typeof rid === "number" ? rid : parseInt(String(rid), 10);
+        if (!solIdSet.has(numRid))
+          throw new NotFoundError(`solution not found in problem: ${rid}`, { id: rid });
+        rejectedIds.push(numRid);
       }
     }
 

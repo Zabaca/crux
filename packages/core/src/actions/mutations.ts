@@ -1,9 +1,5 @@
 /**
  * runMutation — maps a MutationAction to the appropriate transition call.
- *
- * This is intentionally a thin dispatcher: it resolves slugs to IDs,
- * calls the existing transitions (unchanged), and returns a result shape.
- * No business logic lives here.
  */
 import { getDb } from "../db/client.js";
 import { requireUser } from "../config/user.js";
@@ -28,28 +24,10 @@ import {
   recordOutcome,
   archiveObservation,
   renameWorkstream,
-  renameProblem,
-  renameSolution,
   NotFoundError,
   type RoadmapTier,
 } from "../transitions/index.js";
 import type { MutationAction } from "./schemas.js";
-
-function nextId(prefix: string, num: number): string {
-  return `${prefix}-${String(num).padStart(3, "0")}`;
-}
-
-async function nextSequentialId(
-  table: { id: ReturnType<typeof eq> },
-  prefix: string,
-): Promise<string> {
-  // We count rows in a table to get next numeric id
-  void table;
-  void prefix;
-  throw new Error("use nextObsId/nextEliminationId instead");
-}
-void nextSequentialId;
-void nextId;
 
 async function countRows(tableName: "observations" | "eliminations" | "outcomes"): Promise<number> {
   const db = getDb();
@@ -77,15 +55,21 @@ async function resolveWs(slug: string) {
   return rows[0];
 }
 
-async function resolveProblem(slug: string) {
-  const rows = await getDb().select().from(problems).where(eq(problems.slug, slug)).limit(1);
-  if (!rows[0]) throw new NotFoundError(`problem not found: ${slug}`, { slug });
+function toIntId(id: string | number): number {
+  return typeof id === "number" ? id : parseInt(id, 10);
+}
+
+async function resolveProblem(id: string | number) {
+  const numId = toIntId(id);
+  const rows = await getDb().select().from(problems).where(eq(problems.id, numId)).limit(1);
+  if (!rows[0]) throw new NotFoundError(`problem not found: ${id}`, { id });
   return rows[0];
 }
 
-async function resolveSolution(slug: string) {
-  const rows = await getDb().select().from(solutions).where(eq(solutions.slug, slug)).limit(1);
-  if (!rows[0]) throw new NotFoundError(`solution not found: ${slug}`, { slug });
+async function resolveSolution(id: string | number) {
+  const numId = toIntId(id);
+  const rows = await getDb().select().from(solutions).where(eq(solutions.id, numId)).limit(1);
+  if (!rows[0]) throw new NotFoundError(`solution not found: ${id}`, { id });
   return rows[0];
 }
 
@@ -119,85 +103,68 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     case "ADD_PROBLEM": {
       const p = action.payload;
       const ws = await resolveWs(p.workstream);
-      const id = `PRB-${p.slug}`;
-      await db.insert(problems).values({
-        id,
-        slug: p.slug,
-        workstreamId: ws.id,
-        title: p.title,
-        description: p.description,
-        createdById: user.id,
-      });
+      const result = await db
+        .insert(problems)
+        .values({
+          workstreamId: ws.id,
+          title: p.title,
+          description: p.description,
+          createdById: user.id,
+        })
+        .returning({ id: problems.id });
+      const id = result[0]!.id;
       return { ok: true, id };
     }
     case "SCHEDULE_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.slug);
+      const prob = await resolveProblem(p.id);
       await scheduleProblem(prob.id, p.tier as RoadmapTier, db);
       return { ok: true, id: prob.id, status: p.tier };
     }
     case "UNSCHEDULE_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.slug);
+      const prob = await resolveProblem(p.id);
       await unscheduleProblem(prob.id, db);
       return { ok: true, id: prob.id, status: null };
     }
     case "MARK_PROBLEM_DONE": {
       const p = action.payload;
-      const prob = await resolveProblem(p.slug);
+      const prob = await resolveProblem(p.id);
       await markProblemDone(prob.id, db);
       return { ok: true, id: prob.id, status: "done" };
     }
     case "ABANDON_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.slug);
+      const prob = await resolveProblem(p.id);
       await abandonProblem(prob.id, p.rationale, user.id, db);
       return { ok: true, id: prob.id, status: "abandoned" };
-    }
-    case "RENAME_PROBLEM": {
-      const p = action.payload;
-      const r = await renameProblem(
-        p.oldSlug,
-        p.newSlug,
-        { title: p.title, description: p.description },
-        db,
-      );
-      return { ok: true, ...r };
     }
     case "ADD_SOLUTION": {
       const p = action.payload;
       const prob = await resolveProblem(p.problem);
-      const id = `SOL-${p.slug}`;
-      await db.insert(solutions).values({
-        id,
-        slug: p.slug,
-        problemId: prob.id,
-        title: p.title,
-        description: p.description,
-        createdById: user.id,
-      });
+      const result = await db
+        .insert(solutions)
+        .values({
+          problemId: prob.id,
+          title: p.title,
+          description: p.description,
+          createdById: user.id,
+        })
+        .returning({ id: solutions.id });
+      const id = result[0]!.id;
       return { ok: true, id };
     }
     case "SHIP_SOLUTION": {
       const p = action.payload;
-      const sol = await resolveSolution(p.slug);
+      const sol = await resolveSolution(p.id);
       await shipSolution(sol.id, db);
       return { ok: true, id: sol.id, status: "shipped" };
     }
     case "EDIT_SOLUTION": {
       const { solutionId, description, title } = action.payload;
-      await editSolution(solutionId, { description, title }, db);
-      return { ok: true, id: solutionId };
-    }
-    case "RENAME_SOLUTION": {
-      const p = action.payload;
-      const r = await renameSolution(
-        p.oldSlug,
-        p.newSlug,
-        { title: p.title, description: p.description },
-        db,
-      );
-      return { ok: true, ...r };
+      const numId = toIntId(solutionId);
+      await editSolution(numId, { description, title }, db);
+      return { ok: true, id: numId };
     }
     case "ADD_DECISION": {
       const p = action.payload;
@@ -236,7 +203,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
           id,
           solutionId: sol.id,
           observedImpact: p.summary,
-          followUpProblemIds: p.followUpProblemIds ?? [],
+          followUpProblemIds: p.followUpProblemIds ? p.followUpProblemIds.map(toIntId) : [],
           createdById: user.id,
         },
         db,

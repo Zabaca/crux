@@ -40,7 +40,8 @@ const linkCmd = defineCommand({
       throw new NotFoundError(`observation not found: ${args.observation}`, {
         id: args.observation,
       });
-    const pr = await db.select().from(problems).where(eq(problems.id, prVal)).limit(1);
+    const numPrVal = parseInt(String(prVal), 10);
+    const pr = await db.select().from(problems).where(eq(problems.id, numPrVal)).limit(1);
     if (pr.length === 0) throw new NotFoundError(`problem not found: ${prVal}`, { id: prVal });
     const id = await nextEvidenceId();
     await db.insert(evidence).values({
@@ -65,7 +66,8 @@ const listCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     if (args.problem) {
-      const pr = await db.select().from(problems).where(eq(problems.id, args.problem)).limit(1);
+      const numId = parseInt(String(args.problem), 10);
+      const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
       if (pr.length === 0)
         throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
       emit(await db.select().from(evidence).where(eq(evidence.problemId, pr[0]!.id)));

@@ -16,7 +16,7 @@ export function problemArg(explicit: string | undefined): string {
   const id = loadViewMeta().context.problemId;
   if (!id)
     throw new Error(
-      'no --problem given and no problem in view state; run: crux view send OPEN_PROBLEM --payload \'{"id":"PRB-<slug>"}\'',
+      'no --problem given and no problem in view state; run: crux view send OPEN_PROBLEM --payload \'{"id":"42"}\'',
     );
   return id;
 }

@@ -22,7 +22,7 @@ export default async function Home() {
           <ul className="space-y-3">
             {wss.map(({ workstream: ws, tierCounts }) => (
               <li key={ws.id}>
-                <Link href={`/w/${ws.slug}`} className="block">
+                <Link href={`/w/${ws.id}`} className="block">
                   <Card className="hover:border-primary/40 transition-colors">
                     <CardContent className="p-5">
                       <div className="space-y-1">

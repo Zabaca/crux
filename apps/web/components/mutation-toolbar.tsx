@@ -4,11 +4,6 @@ import { useState } from "react";
 import { getAllowedActions } from "@crux/core/actions/allowed";
 import { ActionDialog, type FieldSpec } from "./action-dialog";
 
-function extractSlug(id: string): string {
-  const match = id.match(/^[A-Z]+-(.+)$/);
-  return match ? match[1] : id;
-}
-
 type ViewLeaf = "workstream_list" | "workstream_dashboard" | "problem_detail" | "intake_queue";
 
 type Context = {
@@ -40,7 +35,6 @@ const SPECS: Spec[] = [
     title: "Add problem",
     fields: (ctx) => [
       { name: "workstream", hidden: true, defaultValue: ctx.workstreamId ?? "" },
-      { name: "slug", required: true },
       { name: "title", required: true },
       { name: "description", type: "textarea", required: true },
     ],
@@ -61,7 +55,6 @@ const SPECS: Spec[] = [
     title: "Add solution",
     fields: (ctx) => [
       { name: "problem", hidden: true, defaultValue: ctx.problemId ?? "" },
-      { name: "slug", required: true },
       { name: "title", required: true },
       { name: "description", type: "textarea" },
     ],
@@ -82,9 +75,9 @@ const SPECS: Spec[] = [
     title: "Record decision",
     fields: (ctx) => [
       { name: "problem", hidden: true, defaultValue: ctx.problemId ?? "" },
-      { name: "chosen", label: "chosen solution slug", required: true },
+      { name: "chosen", label: "chosen solution id", required: true },
       { name: "rationale", type: "textarea", required: true },
-      { name: "rejected", label: "rejected slugs (comma-separated)" },
+      { name: "rejected", label: "rejected ids (comma-separated)" },
     ],
   },
   {
@@ -92,7 +85,7 @@ const SPECS: Spec[] = [
     label: "Eliminate solution",
     title: "Eliminate solution",
     fields: () => [
-      { name: "solution", label: "solution slug", required: true },
+      { name: "solution", label: "solution id", required: true },
       { name: "rationale", type: "textarea", required: true },
     ],
   },
@@ -101,7 +94,7 @@ const SPECS: Spec[] = [
     label: "Record outcome",
     title: "Record outcome",
     fields: () => [
-      { name: "solution", label: "solution slug", required: true },
+      { name: "solution", label: "solution id", required: true },
       { name: "summary", type: "textarea", required: true },
     ],
   },
@@ -111,8 +104,8 @@ const SPECS: Spec[] = [
     title: "Schedule problem",
     fields: (ctx) => [
       {
-        name: "slug",
-        label: "problem slug",
+        name: "id",
+        label: "problem id",
         required: true,
         defaultValue: ctx.problemId ?? "",
         hidden: ctx.problemId != null,
@@ -126,8 +119,8 @@ const SPECS: Spec[] = [
     title: "Unschedule problem",
     fields: (ctx) => [
       {
-        name: "slug",
-        label: "problem slug",
+        name: "id",
+        label: "problem id",
         required: true,
         defaultValue: ctx.problemId ?? "",
         hidden: ctx.problemId != null,
@@ -140,8 +133,8 @@ const SPECS: Spec[] = [
     title: "Mark problem done",
     fields: (ctx) => [
       {
-        name: "slug",
-        label: "problem slug",
+        name: "id",
+        label: "problem id",
         required: true,
         defaultValue: ctx.problemId ?? "",
         hidden: ctx.problemId != null,
@@ -154,8 +147,8 @@ const SPECS: Spec[] = [
     title: "Abandon problem",
     fields: (ctx) => [
       {
-        name: "slug",
-        label: "problem slug",
+        name: "id",
+        label: "problem id",
         required: true,
         defaultValue: ctx.problemId ?? "",
         hidden: ctx.problemId != null,
@@ -167,7 +160,7 @@ const SPECS: Spec[] = [
     kind: "SHIP_SOLUTION",
     label: "Ship solution",
     title: "Ship solution",
-    fields: () => [{ name: "slug", label: "solution slug", required: true }],
+    fields: () => [{ name: "id", label: "solution id", required: true }],
   },
   {
     kind: "ARCHIVE_OBSERVATION",
@@ -179,33 +172,15 @@ const SPECS: Spec[] = [
     kind: "RENAME_WORKSTREAM",
     label: "Rename workstream",
     title: "Rename workstream",
-    fields: (ctx) => [
-      {
-        name: "oldSlug",
-        hidden: true,
-        defaultValue: ctx.workstreamId ? extractSlug(ctx.workstreamId) : "",
-      },
-      { name: "newSlug", required: true },
-      { name: "title" },
-      { name: "description", type: "textarea" },
-    ],
-  },
-  {
-    kind: "RENAME_PROBLEM",
-    label: "Rename problem",
-    title: "Rename problem",
-    fields: (ctx) => [
-      {
-        name: "oldSlug",
-        label: "current problem slug",
-        required: true,
-        defaultValue: ctx.problemId ? extractSlug(ctx.problemId) : "",
-        hidden: ctx.problemId != null,
-      },
-      { name: "newSlug", required: true },
-      { name: "title" },
-      { name: "description", type: "textarea" },
-    ],
+    fields: (ctx) => {
+      const slug = ctx.workstreamId ? ctx.workstreamId.replace(/^WS-/, "") : "";
+      return [
+        { name: "oldSlug", hidden: true, defaultValue: slug },
+        { name: "newSlug", required: true },
+        { name: "title" },
+        { name: "description", type: "textarea" },
+      ];
+    },
   },
 ];
 

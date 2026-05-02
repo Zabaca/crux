@@ -87,7 +87,7 @@ export function WorkstreamDashboard({
 }: {
   workstream: Workstream;
   showArchived: boolean;
-  onOpenProblem: (problemId: string) => void;
+  onOpenProblem: (problemId: number) => void;
   onOpenIntake: () => void;
 }): React.ReactElement {
   const [rows, setRows] = useState<ProblemSummary[] | null>(null);
@@ -108,7 +108,7 @@ export function WorkstreamDashboard({
   }
 
   const problemItems: ScrollableListItem[] = rows.map((p) => ({
-    slug: p.slug,
+    slug: String(p.id),
     title: p.title,
     badges: <StatusBadge status={p.status} />,
     meta: `ev:${p.evidenceCount} sol:${p.solutionCount}`,
@@ -166,7 +166,7 @@ function DashboardDetail({ entry }: { entry: DashboardEntry | null }): React.Rea
         <StatusBadge status={p.status} />
       </Box>
       <Box marginTop={1}>
-        <Text bold>{p.slug}</Text>
+        <Text bold>{p.id}</Text>
       </Box>
       <Text>{p.title}</Text>
       <Box marginTop={1}>
@@ -197,8 +197,8 @@ export function ProblemDetailView({
   onOpenObservation,
 }: {
   workstream: Workstream;
-  problemId: string;
-  onOpenSolution: (solutionId: string) => void;
+  problemId: number;
+  onOpenSolution: (solutionId: number) => void;
   onOpenObservation: (observationId: string) => void;
 }): React.ReactElement {
   const [data, setData] = useState<ProblemDetail | null>(null);
@@ -231,7 +231,7 @@ export function ProblemDetailView({
   }));
 
   const solutionItems: ScrollableListItem[] = solutions.map((s) => ({
-    slug: s.slug,
+    slug: String(s.id),
     title: s.title,
     badges: <SolutionStatusBadge status={s.status} />,
   }));
@@ -239,13 +239,17 @@ export function ProblemDetailView({
   return (
     <Box flexDirection="column" flexGrow={1}>
       <Breadcrumb
-        items={[{ label: "Workstreams" }, { label: workstream.slug }, { label: problem.slug }]}
+        items={[
+          { label: "Workstreams" },
+          { label: workstream.slug },
+          { label: String(problem.id) },
+        ]}
       />
 
       <Box marginTop={1} flexDirection="column" flexGrow={1}>
         <DetailPane
           title={problem.title}
-          subtitle={problem.slug}
+          subtitle={String(problem.id)}
           badges={<StatusBadge status={problem.status} />}
         >
           {evidence.length > 0 && (
@@ -308,7 +312,7 @@ export function ProblemDetailView({
 
 // ---------- Solution detail ----------
 
-export function SolutionDetailView({ solutionId }: { solutionId: string }): React.ReactElement {
+export function SolutionDetailView({ solutionId }: { solutionId: number }): React.ReactElement {
   const [data, setData] = useState<SolutionDetail | null>(null);
 
   useEffect(() => {
@@ -323,12 +327,12 @@ export function SolutionDetailView({ solutionId }: { solutionId: string }): Reac
     <Box flexDirection="column">
       <Box>
         <SolutionStatusBadge status={solution.status} />
-        <Text bold> {solution.slug}</Text>
+        <Text bold> {solution.id}</Text>
         <Text> — {solution.title}</Text>
       </Box>
       <Box marginTop={1}>
         <Text color="gray">
-          problem: {problem.slug} ({problem.status ?? "unscheduled"})
+          problem: {problem.id} ({problem.status ?? "unscheduled"})
         </Text>
       </Box>
       {solution.description ? (
@@ -337,9 +341,6 @@ export function SolutionDetailView({ solutionId }: { solutionId: string }): Reac
         </Box>
       ) : null}
       {solution.effort ? <Text color="gray">effort: {solution.effort}</Text> : null}
-      {solution.originatingIdeaId ? (
-        <Text color="gray">from idea: {solution.originatingIdeaId}</Text>
-      ) : null}
 
       {choosingDecision ? (
         <>
@@ -439,7 +440,7 @@ export function ObservationDetailView({
           <Box key={e.id} flexDirection="column" marginBottom={1}>
             <Box>
               <StatusBadge status={e.problem.status} />
-              <Text bold> {e.problem.slug}</Text>
+              <Text bold> {e.problem.id}</Text>
               <Text> {e.problem.title}</Text>
             </Box>
             {e.note ? <Text color="gray">note: {e.note}</Text> : null}

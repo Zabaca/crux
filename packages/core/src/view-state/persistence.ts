@@ -101,12 +101,7 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
               : typeof ctx.workstreamSlug === "string"
                 ? `WS-${ctx.workstreamSlug}`
                 : null,
-          problemId:
-            typeof ctx.problemId === "string"
-              ? ctx.problemId
-              : typeof ctx.problemSlug === "string"
-                ? `PRB-${ctx.problemSlug}`
-                : null,
+          problemId: typeof ctx.problemId === "string" ? ctx.problemId : null,
         },
       };
     }
@@ -241,9 +236,7 @@ export function loadViewMeta(path?: string): ViewMeta {
           (typeof rawContext.workstreamSlug === "string"
             ? `WS-${rawContext.workstreamSlug}`
             : null),
-        problemId:
-          (rawContext.problemId as string | null) ??
-          (typeof rawContext.problemSlug === "string" ? `PRB-${rawContext.problemSlug}` : null),
+        problemId: (rawContext.problemId as string | null) ?? null,
       }
     : DEFAULT_CONTEXT;
 
@@ -438,10 +431,12 @@ async function wsExists(id: string): Promise<boolean> {
 }
 
 async function probExists(workstreamId: string, problemId: string): Promise<boolean> {
+  const numId = parseInt(problemId, 10);
+  if (isNaN(numId)) return false;
   const rows = await getDb()
     .select({ id: problems.id })
     .from(problems)
-    .where(and(eq(problems.workstreamId, workstreamId), eq(problems.id, problemId)))
+    .where(and(eq(problems.workstreamId, workstreamId), eq(problems.id, numId)))
     .limit(1);
   return rows.length > 0;
 }

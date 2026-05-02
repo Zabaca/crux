@@ -1,17 +1,11 @@
 /**
  * Integration tests for CLI commands via direct module import.
- *
- * Each test gets its own ephemeral libSQL db (from createTestDb()), injected
- * into the core singleton via setDb(). Output is captured via setCaptureWriter()
- * rather than stdout interception. No subprocess spawn.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 
-// These must be imported before the command modules so that the singleton
-// is not yet initialized when we call setDb() in beforeEach.
 import { setDb } from "@crux/core/db";
 import { createTestDb, type CruxTestDb } from "@crux/core/db/test-utils";
 import { users } from "@crux/core/db/schema";
@@ -19,7 +13,6 @@ import { setCaptureWriter, setJsonMode, emit } from "../output.js";
 import { OkWithIdOutput, ProblemShowOutput, ContextOutput } from "@crux/core/validation";
 import { ActionNotAllowedError } from "@crux/core/actions";
 
-// Command modules — imported after the singleton helpers above.
 import { workstreamCommand } from "../commands/workstream.js";
 import { problemCommand } from "../commands/problem.js";
 import { observationCommand } from "../commands/observation.js";
@@ -27,20 +20,14 @@ import { evidenceCommand } from "../commands/evidence.js";
 import { contextCommand } from "../commands/context.js";
 import { solutionCommand } from "../commands/solution.js";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
 type AnyCmd = {
   run?: (ctx: { args: Record<string, unknown>; rawArgs?: string[] }) => Promise<void>;
   subCommands?: Record<string, AnyCmd>;
 };
 
-// Helper: call a subcommand's run handler directly.
 async function runCmd(parent: AnyCmd, sub: string, args: Record<string, unknown>): Promise<void> {
   let cmd: AnyCmd;
   if (sub === "run") {
-    // Top-level command with its own run (no subCommands), e.g. contextCommand.
     cmd = parent;
   } else {
     cmd = parent.subCommands![sub]!;
@@ -48,7 +35,6 @@ async function runCmd(parent: AnyCmd, sub: string, args: Record<string, unknown>
   await cmd.run!({ args, rawArgs: [] });
 }
 
-// Helper: run a command and capture the emitted payload.
 async function capture<T>(fn: () => Promise<void>): Promise<T> {
   let result: unknown;
   setCaptureWriter((payload) => {
@@ -62,10 +48,6 @@ async function capture<T>(fn: () => Promise<void>): Promise<T> {
   return result as T;
 }
 
-// ---------------------------------------------------------------------------
-// Test state
-// ---------------------------------------------------------------------------
-
 const TEST_USER = { id: "USR-test", slug: "test", name: "Test User", email: "test@example.com" };
 
 let db: CruxTestDb;
@@ -73,14 +55,10 @@ let testCleanup: () => void;
 let xdgDir: string;
 
 beforeEach(async () => {
-  // 1. Spin up ephemeral db and inject into core singleton.
   ({ db, cleanup: testCleanup } = await createTestDb());
   setDb(db as unknown as Parameters<typeof setDb>[0]);
-
-  // 2. Seed a user row so commands can resolve requireUser().user.id.
   await db.insert(users).values(TEST_USER);
 
-  // 3. Write a user config to a temp XDG dir so requireUser() returns the test user.
   xdgDir = mkdtempSync(join(tmpdir(), "crux-xdg-"));
   const cfgDir = join(xdgDir, "crux");
   mkdirSync(cfgDir, { recursive: true });
@@ -90,20 +68,15 @@ beforeEach(async () => {
   );
   process.env.XDG_CONFIG_HOME = xdgDir;
 
-  // 4. Reset output state.
   setJsonMode(false);
   setCaptureWriter(null);
 });
 
 afterEach(() => {
-  // Reset db singleton so next test initialises fresh.
   setDb(null);
-  // Clean up temp dirs.
   testCleanup();
   rmSync(xdgDir, { recursive: true, force: true });
-  // Clean up env.
   delete process.env.XDG_CONFIG_HOME;
-  // Reset output state.
   setJsonMode(false);
   setCaptureWriter(null);
 });
@@ -125,18 +98,18 @@ describe("smoke: workstream → problem → observation → evidence link → co
     expect(wsResult.ok).toBe(true);
     expect(wsResult.id).toBe("WS-smoke");
 
-    // problem add
-    const pResult = await capture<{ ok: boolean; id: string }>(() =>
+    // problem add — no slug, returns integer id
+    const pResult = await capture<{ ok: boolean; id: number }>(() =>
       runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "smoke",
-        slug: "first-problem",
+        workstream: "WS-smoke",
         title: "First Problem",
         description: "A problem",
         json: false,
       }),
     );
     expect(pResult.ok).toBe(true);
-    expect(pResult.id).toBe("PRB-first-problem");
+    expect(typeof pResult.id).toBe("number");
+    const problemId = pResult.id;
 
     // observation add
     const obsResult = await capture<{ ok: boolean; id: string }>(() =>
@@ -150,11 +123,11 @@ describe("smoke: workstream → problem → observation → evidence link → co
     expect(obsResult.id).toMatch(/^OBS-/);
     const obsId = obsResult.id;
 
-    // evidence link
+    // evidence link (problem is integer id)
     const evResult = await capture<{ ok: boolean; id: string }>(() =>
       runCmd(evidenceCommand as AnyCmd, "link", {
         observation: obsId,
-        problem: "first-problem",
+        problem: String(problemId),
         json: false,
       }),
     );
@@ -168,55 +141,55 @@ describe("smoke: workstream → problem → observation → evidence link → co
       now: Array<Record<string, unknown>>;
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "smoke",
+        workstream: "WS-smoke",
         tier: "unscheduled",
         json: false,
       }),
     );
     expect(ctx.workstream.slug).toBe("smoke");
     expect(ctx.unscheduled.length).toBe(1);
-    expect(ctx.unscheduled[0]!.slug).toBe("first-problem");
+    expect(ctx.unscheduled[0]!.id).toBe(problemId);
+    expect(ctx.unscheduled[0]!.title).toBe("First Problem");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Regression OBS-030 (a): context entries have slug/title/status at top level
+// Regression OBS-030 (a): context entries have id/title/status at top level
 // ---------------------------------------------------------------------------
 
-describe("regression OBS-030 (a): context problem entries spread slug/title/status", () => {
-  test("unscheduled problem entry has non-null slug and title at top level", async () => {
-    // Set up a workstream with a problem.
+describe("regression OBS-030 (a): context problem entries spread id/title/status", () => {
+  test("unscheduled problem entry has non-null id and title at top level", async () => {
     await runCmd(workstreamCommand as AnyCmd, "add", {
       slug: "reg-a",
       title: "Reg A",
       json: false,
     });
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "reg-a",
-      slug: "p-one",
-      title: "P One",
-      description: "desc",
-      json: false,
-    });
+    const pResult = await capture<{ ok: boolean; id: number }>(() =>
+      runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "WS-reg-a",
+        title: "P One",
+        description: "desc",
+        json: false,
+      }),
+    );
+    const problemId = pResult.id;
 
     const ctx = await capture<{
       unscheduled: Array<Record<string, unknown>>;
       now: Array<Record<string, unknown>>;
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "reg-a",
+        workstream: "WS-reg-a",
         tier: "unscheduled",
         json: false,
       }),
     );
 
     const entry = ctx.unscheduled[0]!;
-    expect(entry.slug).toBe("p-one");
+    expect(entry.id).toBe(problemId);
     expect(entry.title).toBe("P One");
-    // status is null for unscheduled — the field must exist directly on entry
-    expect("slug" in entry).toBe(true);
+    expect("id" in entry).toBe(true);
     expect("title" in entry).toBe(true);
-    // Must NOT be nested under a 'problem' key
     expect(entry.problem).toBeUndefined();
   });
 
@@ -226,15 +199,17 @@ describe("regression OBS-030 (a): context problem entries spread slug/title/stat
       title: "Reg A2",
       json: false,
     });
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "reg-a2",
-      slug: "p-two",
-      title: "P Two",
-      description: "desc",
-      json: false,
-    });
+    const pResult = await capture<{ ok: boolean; id: number }>(() =>
+      runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "WS-reg-a2",
+        title: "P Two",
+        description: "desc",
+        json: false,
+      }),
+    );
+    const problemId = pResult.id;
     await runCmd(problemCommand as AnyCmd, "schedule", {
-      slug: "p-two",
+      id: String(problemId),
       tier: "now",
       json: false,
     });
@@ -243,14 +218,14 @@ describe("regression OBS-030 (a): context problem entries spread slug/title/stat
       now: Array<Record<string, unknown>>;
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "reg-a2",
+        workstream: "WS-reg-a2",
         json: false,
       }),
     );
 
     expect(ctx.now.length).toBe(1);
     const entry = ctx.now[0]!;
-    expect(entry.slug).toBe("p-two");
+    expect(entry.id).toBe(problemId);
     expect(entry.title).toBe("P Two");
     expect(entry.status).toBe("now");
     expect(entry.problem).toBeUndefined();
@@ -268,17 +243,19 @@ describe("regression OBS-030 (b): problem show includes solutions and latest_dec
       title: "Reg B",
       json: false,
     });
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "reg-b",
-      slug: "prob-b",
-      title: "Prob B",
-      description: "desc",
-      json: false,
-    });
+    const pResult = await capture<{ ok: boolean; id: number }>(() =>
+      runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "WS-reg-b",
+        title: "Prob B",
+        description: "desc",
+        json: false,
+      }),
+    );
+    const problemId = pResult.id;
 
     const result = await capture<Record<string, unknown>>(() =>
       runCmd(problemCommand as AnyCmd, "show", {
-        slug: "prob-b",
+        id: String(problemId),
         json: false,
       }),
     );
@@ -292,34 +269,28 @@ describe("regression OBS-030 (b): problem show includes solutions and latest_dec
 });
 
 // ---------------------------------------------------------------------------
-// ---------------------------------------------------------------------------
 // Schema validation: emit() rejects malformed payloads at construction time
 // ---------------------------------------------------------------------------
 
 describe("schema validation: emit() rejects malformed payloads", () => {
   test("OkWithIdOutput rejects payload missing 'id'", () => {
-    // { ok: true } with no `id` must throw.
     expect(() => emit({ ok: true }, OkWithIdOutput)).toThrow();
   });
 
   test("ProblemShowOutput rejects payload missing 'solutions'", () => {
-    // A bare problem row (no solutions[]) must fail with path `solutions: Required`.
-    const bareRow = { id: "PRB-test", slug: "test", title: "T", status: null };
+    const bareRow = { id: 1, title: "T", status: null };
     expect(() => emit(bareRow, ProblemShowOutput)).toThrow();
   });
 
   test("ContextOutput rejects payload missing required fields (workstream + seed_version)", () => {
-    // Omitting seed_version must throw — it is still required.
     const malformed = {
       workstream: { slug: "ws" },
       now: [],
-      // seed_version deliberately omitted
     };
     expect(() => emit(malformed, ContextOutput)).toThrow();
   });
 
   test("ContextOutput accepts payload with only now bucket (tier buckets are optional)", () => {
-    // Default (now-only) shape must pass validation.
     const nowOnly = {
       workstream: { slug: "ws" },
       now: [],
@@ -340,25 +311,24 @@ describe("context --tier / --all flag behaviour", () => {
       title: "Tier Default WS",
       json: false,
     });
-    // Add a problem and schedule it 'now'.
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "tier-default",
-      slug: "prob-now",
-      title: "Now Problem",
-      description: "desc",
-      json: false,
-    });
+    const pResult = await capture<{ ok: boolean; id: number }>(() =>
+      runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "WS-tier-default",
+        title: "Now Problem",
+        description: "desc",
+        json: false,
+      }),
+    );
     await runCmd(problemCommand as AnyCmd, "schedule", {
-      slug: "prob-now",
+      id: String(pResult.id),
       tier: "now",
       json: false,
     });
 
     const ctx = await capture<Record<string, unknown>>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "tier-default",
+        workstream: "WS-tier-default",
         json: false,
-        // no tier / no all — defaults to now-only
       }),
     );
 
@@ -369,7 +339,6 @@ describe("context --tier / --all flag behaviour", () => {
     expect(ctx.unscheduled).toBeUndefined();
     expect(ctx.abandoned).toBeUndefined();
     expect(ctx.recent_observations_unlinked).toBeUndefined();
-    // Workstream and seed_version always present.
     expect(ctx.workstream).toBeDefined();
     expect(typeof ctx.seed_version).toBe("string");
   });
@@ -381,8 +350,7 @@ describe("context --tier / --all flag behaviour", () => {
       json: false,
     });
     await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "tier-all",
-      slug: "prob-all",
+      workstream: "WS-tier-all",
       title: "All Problem",
       description: "desc",
       json: false,
@@ -390,20 +358,18 @@ describe("context --tier / --all flag behaviour", () => {
 
     const ctx = await capture<Record<string, unknown>>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "tier-all",
+        workstream: "WS-tier-all",
         all: true,
         json: false,
       }),
     );
 
-    // All six tier buckets present.
     expect(Array.isArray(ctx.now)).toBe(true);
     expect(Array.isArray(ctx.next)).toBe(true);
     expect(Array.isArray(ctx.later)).toBe(true);
     expect(Array.isArray(ctx.unscheduled)).toBe(true);
     expect(Array.isArray(ctx.done)).toBe(true);
     expect(Array.isArray(ctx.abandoned)).toBe(true);
-    // Top-level extras present.
     expect(Array.isArray(ctx.recent_observations_unlinked)).toBe(true);
   });
 });
@@ -417,9 +383,7 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
   const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
 
   beforeEach(async () => {
-    // Start from workstream_list (no view-state file = initial state = workstream_list)
     process.env.CRUX_COLLAB = "1";
-    // Point view state to a non-existent file so initial state is workstream_list
     process.env.CRUX_VIEW_STATE_PATH = join(xdgDir, "nonexistent-view-state.json");
   });
   afterEach(() => {
@@ -434,7 +398,6 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
     try {
       await runCmd(problemCommand as AnyCmd, "add", {
         workstream: "any",
-        slug: "any",
         title: "Any",
         description: "any",
         json: false,
@@ -447,14 +410,11 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
   });
 
   test("ADD_OBSERVATION from workstream_list succeeds (global action)", async () => {
-    // First create the workstream directly without guard
     await runCmd(workstreamCommand as AnyCmd, "add", {
       slug: "collab-ws",
       title: "Collab WS",
       json: false,
     });
-    // ADD_OBSERVATION is a global — must not throw from any view
-    // But ADD_WORKSTREAM is allowed from workstream_list, so this passes
     const result = await capture<{ ok: boolean; id: string }>(() =>
       runCmd(observationCommand as AnyCmd, "add", {
         workstream: "collab-ws",
@@ -485,17 +445,16 @@ describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstre
       title: "Direct WS",
       json: false,
     });
-    const result = await capture<{ ok: boolean; id: string }>(() =>
+    const result = await capture<{ ok: boolean; id: number }>(() =>
       runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "direct-ws",
-        slug: "direct-prob",
+        workstream: "WS-direct-ws",
         title: "Direct Prob",
         description: "desc",
         json: false,
       }),
     );
     expect(result.ok).toBe(true);
-    expect(result.id).toBe("PRB-direct-prob");
+    expect(typeof result.id).toBe("number");
   });
 });
 
@@ -507,34 +466,34 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
   const ORIG_COLLAB = process.env.CRUX_COLLAB;
   const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
   let viewStatePath: string;
+  let testProblemId: number;
 
   beforeEach(async () => {
     viewStatePath = join(xdgDir, `view-state-problem-ops-${Date.now()}-${Math.random()}.json`);
     process.env.CRUX_VIEW_STATE_PATH = viewStatePath;
-    // Ensure directory exists
     mkdirSync(dirname(viewStatePath), { recursive: true });
 
-    // Create workstream and problem first (in direct mode, no guard)
     delete process.env.CRUX_COLLAB;
     await runCmd(workstreamCommand as AnyCmd, "add", {
       slug: "ws-prob-ops",
       title: "Prob Ops WS",
       json: false,
     });
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "ws-prob-ops",
-      slug: "test-prob",
-      title: "Test Problem",
-      description: "For testing ops",
-      json: false,
-    });
+    const pResult = await capture<{ ok: boolean; id: number }>(() =>
+      runCmd(problemCommand as AnyCmd, "add", {
+        workstream: "WS-ws-prob-ops",
+        title: "Test Problem",
+        description: "For testing ops",
+        json: false,
+      }),
+    );
+    testProblemId = pResult.id;
 
-    // Write view-state file in workstream_dashboard state
     const viewState = {
       status: "active",
       value: { viewing: "workstream_dashboard" },
       historyValue: {},
-      context: { workstreamSlug: "ws-prob-ops", problemSlug: null },
+      context: { workstreamId: "WS-ws-prob-ops", problemId: null },
       children: {},
       revision: 0,
       lastAction: null,
@@ -542,12 +501,10 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
     };
     writeFileSync(viewStatePath, JSON.stringify(viewState, null, 2), "utf8");
 
-    // Enable collab mode for the mutation tests
     process.env.CRUX_COLLAB = "1";
   });
 
   afterEach(() => {
-    // Clean up view-state file
     if (viewStatePath) {
       const fs = require("node:fs") as typeof import("node:fs");
       if (fs.existsSync(viewStatePath)) {
@@ -563,7 +520,7 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
   test("SCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
     const result = await capture<{ ok: boolean }>(() =>
       runCmd(problemCommand as AnyCmd, "schedule", {
-        slug: "test-prob",
+        id: String(testProblemId),
         tier: "now",
         json: false,
       }),
@@ -572,16 +529,14 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
   });
 
   test("UNSCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
-    // First schedule it
     await runCmd(problemCommand as AnyCmd, "schedule", {
-      slug: "test-prob",
+      id: String(testProblemId),
       tier: "now",
       json: false,
     });
-    // Then unschedule
     const result = await capture<{ ok: boolean }>(() =>
       runCmd(problemCommand as AnyCmd, "unschedule", {
-        slug: "test-prob",
+        id: String(testProblemId),
         json: false,
       }),
     );
@@ -589,34 +544,32 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
   });
 
   test("MARK_PROBLEM_DONE from workstream_dashboard succeeds", async () => {
-    // Create and ship a solution (required to mark problem done)
     delete process.env.CRUX_COLLAB;
     const { decisionCommand } = await import("../commands/decision.js");
-    await runCmd(solutionCommand as AnyCmd, "add", {
-      problem: "test-prob",
-      slug: "test-sol",
-      title: "Test Solution",
-      json: false,
-    });
-    // Record decision to choose the solution
+    const sResult = await capture<{ ok: boolean; id: number }>(() =>
+      runCmd(solutionCommand as AnyCmd, "add", {
+        problem: String(testProblemId),
+        title: "Test Solution",
+        json: false,
+      }),
+    );
+    const solId = sResult.id;
     await runCmd(decisionCommand as AnyCmd, "add", {
-      workstream: "ws-prob-ops",
-      problem: "test-prob",
-      chosen: "test-sol",
+      workstream: "WS-ws-prob-ops",
+      problem: String(testProblemId),
+      chosen: String(solId),
       rationale: "best option",
       json: false,
     });
-    // Ship the chosen solution
     await runCmd(solutionCommand as AnyCmd, "ship", {
-      slug: "test-sol",
+      id: String(solId),
       json: false,
     });
-    // Re-enable collab mode
     process.env.CRUX_COLLAB = "1";
 
     const result = await capture<{ ok: boolean }>(() =>
       runCmd(problemCommand as AnyCmd, "done", {
-        slug: "test-prob",
+        id: String(testProblemId),
         json: false,
       }),
     );
@@ -626,19 +579,8 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
   test("ABANDON_PROBLEM from workstream_dashboard succeeds", async () => {
     const result = await capture<{ ok: boolean }>(() =>
       runCmd(problemCommand as AnyCmd, "abandon", {
-        slug: "test-prob",
+        id: String(testProblemId),
         rationale: "Test abandon",
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  test("RENAME_PROBLEM from workstream_dashboard succeeds", async () => {
-    const result = await capture<{ ok: boolean }>(() =>
-      runCmd(problemCommand as AnyCmd, "rename", {
-        oldSlug: "test-prob",
-        newSlug: "renamed-prob",
         json: false,
       }),
     );
@@ -649,8 +591,7 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
     let thrown: unknown;
     try {
       await runCmd(solutionCommand as AnyCmd, "add", {
-        problem: "test-prob",
-        slug: "sol-test",
+        problem: String(testProblemId),
         title: "Test Solution",
         json: false,
       });
@@ -672,10 +613,9 @@ describe("recordMutation: mutation success bumps revision and writes lastAction"
   let viewStatePath: string;
 
   beforeEach(() => {
-    // Each test gets its own view-state file
     viewStatePath = join(xdgDir, `view-state-${Date.now()}-${Math.random()}.json`);
     process.env.CRUX_VIEW_STATE_PATH = viewStatePath;
-    delete process.env.CRUX_COLLAB; // direct mode by default
+    delete process.env.CRUX_COLLAB;
   });
 
   afterEach(() => {
@@ -715,8 +655,7 @@ describe("recordMutation: mutation success bumps revision and writes lastAction"
     });
     expect(readViewMeta().revision).toBe(1);
     await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "rev-two",
-      slug: "p1",
+      workstream: "WS-rev-two",
       title: "P1",
       description: "d",
       json: false,
@@ -728,7 +667,6 @@ describe("recordMutation: mutation success bumps revision and writes lastAction"
 
   test("CRUX_COLLAB=1 also bumps revision (unconditional, gated only on guardAction)", async () => {
     process.env.CRUX_COLLAB = "1";
-    // ADD_WORKSTREAM is allowed from workstream_list (initial state)
     await runCmd(workstreamCommand as AnyCmd, "add", {
       slug: "collab-rev",
       title: "Collab Rev",

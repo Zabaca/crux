@@ -5,8 +5,8 @@ import { InvariantError, ReferentialError } from "./errors.js";
 
 export interface CreateEliminationInput {
   id: string; // ELIM-###
-  problemId: string;
-  eliminatedSolutionIds: ReadonlyArray<string>;
+  problemId: number;
+  eliminatedSolutionIds: ReadonlyArray<number>;
   rationale: string;
   context?: string | null;
   eliminatedById: string;
@@ -14,8 +14,7 @@ export interface CreateEliminationInput {
 
 /**
  * Insert an Elimination, flip each targeted Solution to `rejected`. Validates
- * that every solution belongs to the problem and is in `proposed|evaluated`
- * (can't eliminate a chosen or shipped Solution).
+ * that every solution belongs to the problem and is in `proposed|evaluated`.
  */
 export async function createElimination(
   input: CreateEliminationInput,

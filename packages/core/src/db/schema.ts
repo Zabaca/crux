@@ -5,9 +5,10 @@ import { sql } from "drizzle-orm";
  * Crux entity schema.
  *
  * Conventions:
- * - Primary keys are prefixed, human-readable ids (WS-<slug>, PRB-<slug>, OBS-###, …).
+ * - Workstreams: text PK "WS-<slug>", slug column kept for human-readable URLs.
+ * - Problems/Solutions: integer autoincrement PK, no slug column.
+ * - Other entities: prefixed text PKs (OBS-###, EVD-###, …).
  * - Timestamps are integer epoch ms.
- * - `archived_at` replaces status columns on Observation/Idea.
  */
 
 export const users = sqliteTable("users", {
@@ -60,8 +61,7 @@ export const observations = sqliteTable("observations", {
 });
 
 export const problems = sqliteTable("problems", {
-  id: text("id").primaryKey(), // PRB-<slug>
-  slug: text("slug").notNull().unique(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
   workstreamId: text("workstream_id")
     .notNull()
     .references(() => workstreams.id),
@@ -87,7 +87,7 @@ export const evidence = sqliteTable(
     observationId: text("observation_id")
       .notNull()
       .references(() => observations.id),
-    problemId: text("problem_id")
+    problemId: integer("problem_id")
       .notNull()
       .references(() => problems.id),
     note: text("note"),
@@ -104,9 +104,8 @@ export const evidence = sqliteTable(
 );
 
 export const solutions = sqliteTable("solutions", {
-  id: text("id").primaryKey(), // SOL-<slug>
-  slug: text("slug").notNull().unique(),
-  problemId: text("problem_id")
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  problemId: integer("problem_id")
     .notNull()
     .references(() => problems.id),
   title: text("title").notNull(),
@@ -128,7 +127,7 @@ export const solutions = sqliteTable("solutions", {
 
 export const eliminations = sqliteTable("eliminations", {
   id: text("id").primaryKey(), // ELIM-###
-  problemId: text("problem_id")
+  problemId: integer("problem_id")
     .notNull()
     .references(() => problems.id),
   rationale: text("rationale").notNull(),
@@ -147,7 +146,7 @@ export const eliminationSolutions = sqliteTable(
     eliminationId: text("elimination_id")
       .notNull()
       .references(() => eliminations.id),
-    solutionId: text("solution_id")
+    solutionId: integer("solution_id")
       .notNull()
       .references(() => solutions.id),
   },
@@ -156,10 +155,10 @@ export const eliminationSolutions = sqliteTable(
 
 export const decisions = sqliteTable("decisions", {
   id: text("id").primaryKey(), // DEC-###
-  problemId: text("problem_id")
+  problemId: integer("problem_id")
     .notNull()
     .references(() => problems.id),
-  chosenSolutionId: text("chosen_solution_id")
+  chosenSolutionId: integer("chosen_solution_id")
     .notNull()
     .references(() => solutions.id),
   rationale: text("rationale").notNull(),
@@ -179,7 +178,7 @@ export const decisionRejectedSolutions = sqliteTable(
     decisionId: text("decision_id")
       .notNull()
       .references(() => decisions.id),
-    solutionId: text("solution_id")
+    solutionId: integer("solution_id")
       .notNull()
       .references(() => solutions.id),
   },
@@ -187,8 +186,8 @@ export const decisionRejectedSolutions = sqliteTable(
 );
 
 export const abandonments = sqliteTable("abandonments", {
-  id: text("id").primaryKey(), // ABN-<problem-id>
-  problemId: text("problem_id")
+  id: text("id").primaryKey(), // ABN-<integer-problem-id>
+  problemId: integer("problem_id")
     .notNull()
     .references(() => problems.id)
     .unique(),
@@ -203,7 +202,7 @@ export const abandonments = sqliteTable("abandonments", {
 
 export const outcomes = sqliteTable("outcomes", {
   id: text("id").primaryKey(), // OUT-###
-  solutionId: text("solution_id")
+  solutionId: integer("solution_id")
     .notNull()
     .references(() => solutions.id)
     .unique(),
@@ -224,7 +223,7 @@ export const outcomeFollowUpProblems = sqliteTable(
     outcomeId: text("outcome_id")
       .notNull()
       .references(() => outcomes.id),
-    problemId: text("problem_id")
+    problemId: integer("problem_id")
       .notNull()
       .references(() => problems.id),
   },

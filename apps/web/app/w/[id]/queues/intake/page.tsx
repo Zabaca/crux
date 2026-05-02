@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getUnlinkedObservations, getWorkstreamBySlug } from "@/lib/queries";
+import { getUnlinkedObservations, getWorkstreamById } from "@/lib/queries";
 import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,13 +24,13 @@ export default async function IntakePage({
   params,
   searchParams,
 }: {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ id: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { slug } = await params;
+  const { id } = await params;
   const sp = await searchParams;
   const showArchived = sp["show-archived"] === "1";
-  const ws = await getWorkstreamBySlug(slug);
+  const ws = await getWorkstreamById(id);
   if (!ws) notFound();
   const obs = await getUnlinkedObservations(ws.id, showArchived);
 
@@ -40,13 +40,13 @@ export default async function IntakePage({
       <PageShell
         breadcrumbs={[
           { href: "/", label: "Workstreams" },
-          { href: `/w/${ws.slug}`, label: ws.slug },
+          { href: `/w/${ws.id}`, label: ws.slug },
           { label: "intake" },
         ]}
         title="Unlinked intake"
         subtitle="Observations not yet cited by any problem as evidence."
         actions={
-          <ArchiveToggle basePath={`/w/${ws.slug}/queues/intake`} showArchived={showArchived} />
+          <ArchiveToggle basePath={`/w/${ws.id}/queues/intake`} showArchived={showArchived} />
         }
       >
         <Section title={`${obs.length} observation${obs.length === 1 ? "" : "s"}`}>
@@ -62,7 +62,7 @@ export default async function IntakePage({
                 const tags = parseTags(o.tags);
                 return (
                   <li key={o.id}>
-                    <Link href={`/w/${ws.slug}/observations/${o.id}`} className="block">
+                    <Link href={`/w/${ws.id}/observations/${o.id}`} className="block">
                       <Card className="hover:border-primary/40 transition-colors">
                         <CardContent className="p-4 space-y-2">
                           <div className="flex flex-wrap items-center gap-2 text-xs">

@@ -137,7 +137,7 @@ export function RightDrawer() {
           {context.workstreamId && (
             <div className="flex-none p-4 border-b space-y-2">
               <Link
-                href={`/w/${context.workstreamId.replace(/^WS-/, "")}/queues/intake`}
+                href={`/w/${context.workstreamId}/queues/intake`}
                 className="block text-xs rounded border px-2 py-1 hover:bg-accent text-center transition-colors"
               >
                 Intake queue

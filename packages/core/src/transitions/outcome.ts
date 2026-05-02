@@ -1,15 +1,15 @@
 import { eq } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
 import { outcomes, outcomeFollowUpProblems, solutions } from "../db/schema.js";
-import { InvariantError, ReferentialError, NotFoundError } from "./errors.js";
+import { InvariantError, NotFoundError } from "./errors.js";
 
 export interface RecordOutcomeInput {
   id: string; // OUT-###
-  solutionId: string;
+  solutionId: number;
   observedImpact: string;
   expectedImpact?: string | null;
   learnings?: string | null;
-  followUpProblemIds?: ReadonlyArray<string>;
+  followUpProblemIds?: ReadonlyArray<number>;
   createdById: string;
 }
 
@@ -64,7 +64,5 @@ export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Prom
       }
     }
   });
-  // silence unused imports
-  void ReferentialError;
   return input.id;
 }

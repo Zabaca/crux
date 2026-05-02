@@ -10,8 +10,8 @@ import { InvariantError, NotFoundError, TransitionError } from "./errors.js";
 export async function eliminateSolutions(
   input: {
     id: string;
-    problemId: string;
-    solutionIds: ReadonlyArray<string>;
+    problemId: number;
+    solutionIds: ReadonlyArray<number>;
     rationale: string;
     createdById: string;
   },
@@ -41,9 +41,9 @@ export async function eliminateSolutions(
 
 /**
  * Flip a chosen Solution to `shipped`. Simple state transition — gates on the
- * Solution being in `chosen` status. Needed so Outcomes become reachable.
+ * Solution being in `chosen` status.
  */
-export async function shipSolution(solutionId: string, db: CruxDb): Promise<void> {
+export async function shipSolution(solutionId: number, db: CruxDb): Promise<void> {
   const rows = await db.select().from(solutions).where(eq(solutions.id, solutionId)).limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError(`Solution not found: ${solutionId}`, { solutionId });
@@ -60,7 +60,7 @@ export async function shipSolution(solutionId: string, db: CruxDb): Promise<void
 }
 
 export async function editSolution(
-  solutionId: string,
+  solutionId: number,
   updates: { description?: string; title?: string },
   db: CruxDb,
 ): Promise<void> {

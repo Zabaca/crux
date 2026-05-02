@@ -10,36 +10,27 @@ import {
 
 export type MachineView =
   | { kind: "workstream_list" }
-  | { kind: "workstream_dashboard"; workstreamSlug: string }
-  | { kind: "problem_detail"; workstreamSlug: string; problemSlug: string }
-  | { kind: "intake_queue"; workstreamSlug: string };
+  | { kind: "workstream_dashboard"; workstreamId: string }
+  | { kind: "problem_detail"; workstreamId: string; problemId: number }
+  | { kind: "intake_queue"; workstreamId: string };
 
 export function snapshotToView(snapshot: ReturnType<typeof loadState>): MachineView {
   const value = formatStateValue(snapshot.value);
   const ctx = snapshot.context;
-  if (value.endsWith("problem_detail") && ctx.workstreamSlug && ctx.problemSlug) {
-    return {
-      kind: "problem_detail",
-      workstreamSlug: ctx.workstreamSlug,
-      problemSlug: ctx.problemSlug,
-    };
+  const wsId = ctx.workstreamId ?? null;
+  const probId = ctx.problemId ? parseInt(ctx.problemId, 10) : null;
+  if (value.endsWith("problem_detail") && wsId && probId !== null && !isNaN(probId)) {
+    return { kind: "problem_detail", workstreamId: wsId, problemId: probId };
   }
-  if (value.endsWith("intake_queue") && ctx.workstreamSlug) {
-    return { kind: "intake_queue", workstreamSlug: ctx.workstreamSlug };
+  if (value.endsWith("intake_queue") && wsId) {
+    return { kind: "intake_queue", workstreamId: wsId };
   }
-  if (value.endsWith("workstream_dashboard") && ctx.workstreamSlug) {
-    return { kind: "workstream_dashboard", workstreamSlug: ctx.workstreamSlug };
+  if (value.endsWith("workstream_dashboard") && wsId) {
+    return { kind: "workstream_dashboard", workstreamId: wsId };
   }
   return { kind: "workstream_list" };
 }
 
-/**
- * Subscribe to the view-state file. Returns the current machine-derived view
- * plus a `send` to drive transitions through the bus.
- *
- * Surfaces a simple 3-value view (the machine-covered subset). Screens outside
- * the machine's scope (solution/observation/queues) stay managed locally.
- */
 export function useViewStateFile(): {
   machineView: MachineView;
   send: (event: ViewEvent) => Promise<void>;

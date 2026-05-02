@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getWorkstreamBySlug, getWorkstreamProblems } from "@/lib/queries";
+import { getWorkstreamById, getWorkstreamProblems } from "@/lib/queries";
 import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant } from "@/components/ui/badge";
@@ -11,13 +11,13 @@ export const dynamic = "force-dynamic";
 
 type ProblemRow = Awaited<ReturnType<typeof getWorkstreamProblems>>[number];
 
-function ProblemCard({ slug, p }: { slug: string; p: ProblemRow }) {
+function ProblemCard({ wsId, p }: { wsId: string; p: ProblemRow }) {
   return (
-    <Link href={`/w/${slug}/problems/${p.slug}`} className="block">
+    <Link href={`/w/${wsId}/problems/${p.id}`} className="block">
       <Card className="hover:border-primary/40 transition-colors">
         <CardContent className="p-3 space-y-1.5">
           <div className="font-medium text-sm leading-snug">{p.title}</div>
-          <div className="font-mono text-xs text-muted-foreground truncate">{p.slug}</div>
+          <div className="font-mono text-xs text-muted-foreground truncate">{p.id}</div>
           <div className="flex gap-3 text-xs text-muted-foreground">
             <span>
               <span className="font-mono text-foreground">{p.evidenceCount}</span> ev
@@ -35,12 +35,12 @@ function ProblemCard({ slug, p }: { slug: string; p: ProblemRow }) {
 function Column({
   title,
   rows,
-  slug,
+  wsId,
   tone,
 }: {
   title: string;
   rows: ProblemRow[];
-  slug: string;
+  wsId: string;
   tone?: string;
 }) {
   return (
@@ -55,7 +55,7 @@ function Column({
         <ul className="space-y-2">
           {rows.map((p) => (
             <li key={p.id}>
-              <ProblemCard slug={slug} p={p} />
+              <ProblemCard wsId={wsId} p={p} />
             </li>
           ))}
         </ul>
@@ -64,9 +64,9 @@ function Column({
   );
 }
 
-export default async function WorkstreamPage({ params }: { params: Promise<{ slug: string }> }) {
-  const { slug } = await params;
-  const ws = await getWorkstreamBySlug(slug);
+export default async function WorkstreamPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const ws = await getWorkstreamById(id);
   if (!ws) notFound();
   const allProblems = await getWorkstreamProblems(ws.id);
 
@@ -91,10 +91,10 @@ export default async function WorkstreamPage({ params }: { params: Promise<{ slu
             <EmptyState>No problems yet.</EmptyState>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <Column title="Now" rows={now} slug={ws.slug} tone="text-red-600" />
-              <Column title="Next" rows={next} slug={ws.slug} tone="text-orange-600" />
-              <Column title="Later" rows={later} slug={ws.slug} tone="text-stone-600" />
-              <Column title="Unscheduled" rows={unscheduled} slug={ws.slug} tone="text-slate-500" />
+              <Column title="Now" rows={now} wsId={ws.id} tone="text-red-600" />
+              <Column title="Next" rows={next} wsId={ws.id} tone="text-orange-600" />
+              <Column title="Later" rows={later} wsId={ws.id} tone="text-stone-600" />
+              <Column title="Unscheduled" rows={unscheduled} wsId={ws.id} tone="text-slate-500" />
             </div>
           )}
         </Section>
@@ -108,13 +108,13 @@ export default async function WorkstreamPage({ params }: { params: Promise<{ slu
               <ul className="space-y-2 mt-3">
                 {archived.map((p) => (
                   <li key={p.id}>
-                    <Link href={`/w/${ws.slug}/problems/${p.slug}`} className="block">
+                    <Link href={`/w/${ws.id}/problems/${p.id}`} className="block">
                       <Card className="hover:border-primary/40 transition-colors">
                         <CardContent className="flex items-start justify-between gap-4 p-4">
                           <div className="space-y-1 min-w-0">
                             <div className="flex flex-wrap items-center gap-2 text-xs">
                               <Badge variant={roadmapStatusVariant(p.status)}>{p.status}</Badge>
-                              <span className="font-mono text-muted-foreground">{p.slug}</span>
+                              <span className="font-mono text-muted-foreground">{p.id}</span>
                             </div>
                             <div className="font-medium truncate">{p.title}</div>
                           </div>

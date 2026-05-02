@@ -6,14 +6,14 @@ import { chosenSolutionIsShipped } from "./predicates.js";
 
 export type RoadmapTier = "now" | "next" | "later";
 
-async function loadProblem(problemId: string, db: CruxDb) {
+async function loadProblem(problemId: number, db: CruxDb) {
   const rows = await db.select().from(problems).where(eq(problems.id, problemId)).limit(1);
   const row = rows[0];
   if (!row) throw new NotFoundError(`Problem not found: ${problemId}`, { problemId });
   return row;
 }
 
-function assertNotTerminal(p: { id: string; status: string | null }, action: string) {
+function assertNotTerminal(p: { id: number; status: string | null }, action: string) {
   if (p.status === "done" || p.status === "abandoned") {
     throw new TransitionError(`Problem ${p.id} is terminal (${p.status}); cannot ${action}`, {
       problemId: p.id,
@@ -22,7 +22,7 @@ function assertNotTerminal(p: { id: string; status: string | null }, action: str
   }
 }
 
-export async function scheduleProblem(problemId: string, tier: RoadmapTier, db: CruxDb) {
+export async function scheduleProblem(problemId: number, tier: RoadmapTier, db: CruxDb) {
   const p = await loadProblem(problemId, db);
   assertNotTerminal(p, "reschedule");
   await db
@@ -31,7 +31,7 @@ export async function scheduleProblem(problemId: string, tier: RoadmapTier, db: 
     .where(eq(problems.id, problemId));
 }
 
-export async function unscheduleProblem(problemId: string, db: CruxDb) {
+export async function unscheduleProblem(problemId: number, db: CruxDb) {
   const p = await loadProblem(problemId, db);
   assertNotTerminal(p, "unschedule");
   await db
@@ -40,7 +40,7 @@ export async function unscheduleProblem(problemId: string, db: CruxDb) {
     .where(eq(problems.id, problemId));
 }
 
-export async function markProblemDone(problemId: string, db: CruxDb) {
+export async function markProblemDone(problemId: number, db: CruxDb) {
   const p = await loadProblem(problemId, db);
   assertNotTerminal(p, "mark done");
   if (!(await chosenSolutionIsShipped(problemId, db))) {
@@ -56,7 +56,7 @@ export async function markProblemDone(problemId: string, db: CruxDb) {
 }
 
 export async function abandonProblem(
-  problemId: string,
+  problemId: number,
   rationale: string,
   userId: string,
   db: CruxDb,

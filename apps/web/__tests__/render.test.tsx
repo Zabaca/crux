@@ -15,34 +15,34 @@ describe("state-to-path", () => {
     expect(
       stateToPath({
         value: { viewing: "workstream_list" },
-        context: { workstreamSlug: null, problemSlug: null },
+        context: { workstreamId: null, problemId: null },
       }),
     ).toBe("/");
   });
 
-  test("workstream_dashboard → /w/<slug>", () => {
+  test("workstream_dashboard → /w/WS-crux", () => {
     expect(
       stateToPath({
         value: { viewing: "workstream_dashboard" },
-        context: { workstreamSlug: "crux", problemSlug: null },
+        context: { workstreamId: "WS-crux", problemId: null },
       }),
-    ).toBe("/w/crux");
+    ).toBe("/w/WS-crux");
   });
 
-  test("problem_detail → /w/<slug>/problems/<problem>", () => {
+  test("problem_detail → /w/WS-crux/problems/42", () => {
     expect(
       stateToPath({
         value: { viewing: "problem_detail" },
-        context: { workstreamSlug: "crux", problemSlug: "thinking-residue-gap" },
+        context: { workstreamId: "WS-crux", problemId: "42" },
       }),
-    ).toBe("/w/crux/problems/thinking-residue-gap");
+    ).toBe("/w/WS-crux/problems/42");
   });
 
   test("falls back to / when context is missing", () => {
     expect(
       stateToPath({
         value: { viewing: "workstream_dashboard" },
-        context: { workstreamSlug: null, problemSlug: null },
+        context: { workstreamId: null, problemId: null },
       }),
     ).toBe("/");
   });
@@ -50,7 +50,6 @@ describe("state-to-path", () => {
 
 describe("view-state listener", () => {
   test("mounts without crashing and renders nothing visible", () => {
-    // Provide a stub EventSource for happy-dom.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (globalThis as any).EventSource = class {
       onmessage: ((e: MessageEvent) => void) | null = null;

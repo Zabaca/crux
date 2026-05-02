@@ -29,7 +29,6 @@ export type Outcome = typeof outcomes.$inferSelect;
 export async function listWorkstreams() {
   const d = db();
   const wss = await d.select().from(workstreams).orderBy(workstreams.title);
-  // Per-workstream tier counts.
   const counts = await Promise.all(
     wss.map(async (ws) => {
       const probs = await d
@@ -46,9 +45,9 @@ export async function listWorkstreams() {
   return counts;
 }
 
-export async function getWorkstreamBySlug(slug: string) {
+export async function getWorkstreamById(id: string) {
   const d = db();
-  const row = (await d.select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1))[0];
+  const row = (await d.select().from(workstreams).where(eq(workstreams.id, id)).limit(1))[0];
   return row ?? null;
 }
 
@@ -56,7 +55,6 @@ export async function getWorkstreamBySlug(slug: string) {
 export async function getWorkstreamProblems(workstreamId: string) {
   const d = db();
   const rows = await d.select().from(problems).where(eq(problems.workstreamId, workstreamId));
-  // Annotate with evidence count and solution count.
   const ids = rows.map((p) => p.id);
   if (!ids.length) return [];
   const [evRows, solRows] = await Promise.all([
@@ -69,11 +67,11 @@ export async function getWorkstreamProblems(workstreamId: string) {
       .from(solutions)
       .where(inArray(solutions.problemId, ids)),
   ]);
-  const evCountByProblem = new Map<string, number>();
+  const evCountByProblem = new Map<number, number>();
   for (const r of evRows) {
     evCountByProblem.set(r.problemId, (evCountByProblem.get(r.problemId) ?? 0) + 1);
   }
-  const solCountByProblem = new Map<string, number>();
+  const solCountByProblem = new Map<number, number>();
   for (const r of solRows) {
     solCountByProblem.set(r.problemId, (solCountByProblem.get(r.problemId) ?? 0) + 1);
   }
@@ -124,28 +122,25 @@ export type ProblemDetail = {
   solutions: Array<Solution & { outcome: Outcome | null }>;
   latestDecision:
     | (Decision & {
-        rejectedSolutionIds: string[];
-        chosenSolutionSlug: string | null;
-        rejectedSolutionSlugs: string[];
+        rejectedSolutionIds: number[];
+        chosenSolutionId: number;
       })
     | null;
-  eliminations: Array<
-    Elimination & { eliminatedSolutionIds: string[]; eliminatedSolutionSlugs: string[] }
-  >;
+  eliminations: Array<Elimination & { eliminatedSolutionIds: number[] }>;
   abandonment: Abandonment | null;
-  outcomes: Array<Outcome & { solutionSlug: string }>;
+  outcomes: Outcome[];
 };
 
-export async function getProblemBySlug(
+export async function getProblemById(
   workstreamId: string,
-  problemSlug: string,
+  problemId: number,
 ): Promise<ProblemDetail | null> {
   const d = db();
   const p = (
     await d
       .select()
       .from(problems)
-      .where(and(eq(problems.workstreamId, workstreamId), eq(problems.slug, problemSlug)))
+      .where(and(eq(problems.workstreamId, workstreamId), eq(problems.id, problemId)))
       .limit(1)
   )[0];
   if (!p) return null;
@@ -179,7 +174,6 @@ export async function getProblemBySlug(
       if (d !== 0) return d;
       return a.createdAt - b.createdAt;
     });
-  const slugBySolId = new Map(solRows.map((s) => [s.id, s.slug]));
 
   const latestDec = (
     await d
@@ -195,14 +189,9 @@ export async function getProblemBySlug(
       .select({ solutionId: decisionRejectedSolutions.solutionId })
       .from(decisionRejectedSolutions)
       .where(eq(decisionRejectedSolutions.decisionId, latestDec.id));
-    const rejectedIds = rej.map((r) => r.solutionId);
     latestDecisionPayload = {
       ...latestDec,
-      rejectedSolutionIds: rejectedIds,
-      chosenSolutionSlug: slugBySolId.get(latestDec.chosenSolutionId) ?? null,
-      rejectedSolutionSlugs: rejectedIds
-        .map((id) => slugBySolId.get(id) ?? null)
-        .filter((s): s is string => Boolean(s)),
+      rejectedSolutionIds: rej.map((r) => r.solutionId),
     };
   }
 
@@ -215,31 +204,20 @@ export async function getProblemBySlug(
         .from(eliminationSolutions)
         .where(inArray(eliminationSolutions.eliminationId, elimIds))
     : [];
-  const targetsByElim = new Map<string, string[]>();
+  const targetsByElim = new Map<string, number[]>();
   for (const j of elimJoins) {
     const list = targetsByElim.get(j.eliminationId) ?? [];
     list.push(j.solutionId);
     targetsByElim.set(j.eliminationId, list);
   }
-  const eliminationsInlined = elimRows.map((e) => {
-    const ids = targetsByElim.get(e.id) ?? [];
-    return {
-      ...e,
-      eliminatedSolutionIds: ids,
-      eliminatedSolutionSlugs: ids
-        .map((id) => slugBySolId.get(id) ?? null)
-        .filter((s): s is string => Boolean(s)),
-    };
-  });
+  const eliminationsInlined = elimRows.map((e) => ({
+    ...e,
+    eliminatedSolutionIds: targetsByElim.get(e.id) ?? [],
+  }));
 
   const abandonRow = (
     await d.select().from(abandonments).where(eq(abandonments.problemId, p.id)).limit(1)
   )[0];
-
-  const outcomesWithSlug = outcomeRows.map((o) => ({
-    ...o,
-    solutionSlug: slugBySolId.get(o.solutionId) ?? "",
-  }));
 
   return {
     problem: p,
@@ -249,22 +227,21 @@ export async function getProblemBySlug(
     latestDecision: latestDecisionPayload,
     eliminations: eliminationsInlined,
     abandonment: abandonRow ?? null,
-    outcomes: outcomesWithSlug,
+    outcomes: outcomeRows,
   };
 }
 
-export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: string) {
+export async function getSolutionById(solutionId: number) {
   const d = db();
-  const s = (await d.select().from(solutions).where(eq(solutions.slug, solutionSlug)).limit(1))[0];
+  const s = (await d.select().from(solutions).where(eq(solutions.id, solutionId)).limit(1))[0];
   if (!s) return null;
   const p = (await d.select().from(problems).where(eq(problems.id, s.problemId)).limit(1))[0];
   if (!p) return null;
   const ws = (
     await d.select().from(workstreams).where(eq(workstreams.id, p.workstreamId)).limit(1)
   )[0];
-  if (!ws || ws.slug !== workstreamSlug) return null;
+  if (!ws) return null;
 
-  // Decisions touching this solution: chosen or rejected.
   const allDecsForProblem = await d.select().from(decisions).where(eq(decisions.problemId, p.id));
   const decIds = allDecsForProblem.map((d) => d.id);
   const rejJoins = decIds.length
@@ -273,7 +250,7 @@ export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: st
         .from(decisionRejectedSolutions)
         .where(inArray(decisionRejectedSolutions.decisionId, decIds))
     : [];
-  const rejByDec = new Map<string, string[]>();
+  const rejByDec = new Map<string, number[]>();
   for (const j of rejJoins) {
     const list = rejByDec.get(j.decisionId) ?? [];
     list.push(j.solutionId);
@@ -284,7 +261,6 @@ export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: st
     (rejByDec.get(d.id) ?? []).includes(s.id),
   );
 
-  // Eliminations touching this solution.
   const allElimsForProblem = await d
     .select()
     .from(eliminations)
@@ -300,7 +276,6 @@ export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: st
     elimJoins.some((j) => j.eliminationId === e.id && j.solutionId === s.id),
   );
 
-  // Outcome.
   const outcome = (
     await d.select().from(outcomes).where(eq(outcomes.solutionId, s.id)).limit(1)
   )[0];
@@ -316,14 +291,14 @@ export async function getSolutionBySlug(workstreamSlug: string, solutionSlug: st
   };
 }
 
-export async function getObservationById(workstreamSlug: string, obsId: string) {
+export async function getObservationById(workstreamId: string, obsId: string) {
   const d = db();
   const obs = (await d.select().from(observations).where(eq(observations.id, obsId)).limit(1))[0];
   if (!obs) return null;
   const ws = (
     await d.select().from(workstreams).where(eq(workstreams.id, obs.workstreamId)).limit(1)
   )[0];
-  if (!ws || ws.slug !== workstreamSlug) return null;
+  if (!ws || ws.id !== workstreamId) return null;
 
   const evRows = await d.select().from(evidence).where(eq(evidence.observationId, obs.id));
   const probIds = evRows.map((e) => e.problemId);

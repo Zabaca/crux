@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
 import { decisions, solutions } from "../db/schema.js";
 
-export async function hasDecisionFor(problemId: string, db: CruxDb): Promise<boolean> {
+export async function hasDecisionFor(problemId: number, db: CruxDb): Promise<boolean> {
   const row = await db
     .select({ id: decisions.id })
     .from(decisions)
@@ -11,7 +11,7 @@ export async function hasDecisionFor(problemId: string, db: CruxDb): Promise<boo
   return row.length > 0;
 }
 
-export async function chosenSolutionIsShipped(problemId: string, db: CruxDb): Promise<boolean> {
+export async function chosenSolutionIsShipped(problemId: number, db: CruxDb): Promise<boolean> {
   const rows = await db
     .select({ status: solutions.status })
     .from(solutions)
@@ -21,8 +21,8 @@ export async function chosenSolutionIsShipped(problemId: string, db: CruxDb): Pr
 }
 
 export async function solutionBelongsToProblem(
-  solutionId: string,
-  problemId: string,
+  solutionId: number,
+  problemId: number,
   db: CruxDb,
 ): Promise<boolean> {
   const rows = await db
@@ -34,7 +34,7 @@ export async function solutionBelongsToProblem(
 }
 
 export async function solutionInStatus(
-  solutionId: string,
+  solutionId: number,
   allowed: ReadonlyArray<string>,
   db: CruxDb,
 ): Promise<boolean> {

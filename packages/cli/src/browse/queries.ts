@@ -17,8 +17,6 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
 /**
  * Read-only query layer for the TUI (`crux browse`).
- * Mirrors the shape of `crux context` but exposes finer-grained lookups
- * so navigation between Observation ↔ Problem ↔ Solution works.
  */
 
 export type ArchiveBlock = {
@@ -32,10 +30,10 @@ export type Problem = typeof problems.$inferSelect;
 export type Observation = typeof observations.$inferSelect & { archive: ArchiveBlock };
 export type Solution = typeof solutions.$inferSelect;
 export type Evidence = typeof evidence.$inferSelect;
-export type Decision = typeof decisions.$inferSelect & { rejectedSolutionIds: string[] };
-export type Elimination = typeof eliminations.$inferSelect & { eliminatedSolutionIds: string[] };
+export type Decision = typeof decisions.$inferSelect & { rejectedSolutionIds: number[] };
+export type Elimination = typeof eliminations.$inferSelect & { eliminatedSolutionIds: number[] };
 export type Abandonment = typeof abandonments.$inferSelect;
-export type Outcome = typeof outcomes.$inferSelect & { followUpProblemIds: string[] };
+export type Outcome = typeof outcomes.$inferSelect & { followUpProblemIds: number[] };
 
 const STATUS_RANK: Record<string, number> = {
   now: 0,
@@ -101,9 +99,9 @@ export async function listOpenProblems(workstreamId: string): Promise<ProblemSum
     .select({ problemId: solutions.problemId })
     .from(solutions)
     .where(inArray(solutions.problemId, ids));
-  const evCount = new Map<string, number>();
+  const evCount = new Map<number, number>();
   for (const e of ev) evCount.set(e.problemId, (evCount.get(e.problemId) ?? 0) + 1);
-  const solCount = new Map<string, number>();
+  const solCount = new Map<number, number>();
   for (const s of sol) solCount.set(s.problemId, (solCount.get(s.problemId) ?? 0) + 1);
 
   return rows
@@ -119,12 +117,7 @@ export async function listOpenProblems(workstreamId: string): Promise<ProblemSum
     });
 }
 
-export async function getProblemBySlug(slug: string): Promise<Problem | null> {
-  const rows = await getDb().select().from(problems).where(eq(problems.slug, slug)).limit(1);
-  return rows[0] ?? null;
-}
-
-export async function getProblemById(id: string): Promise<Problem | null> {
+export async function getProblemById(id: number): Promise<Problem | null> {
   const rows = await getDb().select().from(problems).where(eq(problems.id, id)).limit(1);
   return rows[0] ?? null;
 }
@@ -138,12 +131,11 @@ export type ProblemDetail = {
   abandonment: Abandonment | null;
 };
 
-export async function getProblemDetail(problemId: string): Promise<ProblemDetail | null> {
+export async function getProblemDetail(problemId: number): Promise<ProblemDetail | null> {
   const db = getDb();
   const p = await getProblemById(problemId);
   if (!p) return null;
 
-  // Evidence + observation.
   const evRows = await db.select().from(evidence).where(eq(evidence.problemId, problemId));
   evRows.sort((a, b) => a.createdAt - b.createdAt);
   const obsIds = evRows.map((e) => e.observationId);
@@ -156,7 +148,6 @@ export async function getProblemDetail(problemId: string): Promise<ProblemDetail
     observation: obsById.get(e.observationId) ?? null,
   }));
 
-  // Solutions + outcome.
   const sols = await db.select().from(solutions).where(eq(solutions.problemId, problemId));
   const solIds = sols.map((s) => s.id);
   const outcomeRows = solIds.length
@@ -169,7 +160,7 @@ export async function getProblemDetail(problemId: string): Promise<ProblemDetail
         .from(outcomeFollowUpProblems)
         .where(inArray(outcomeFollowUpProblems.outcomeId, followUpIds))
     : [];
-  const followUpsByOutcome = new Map<string, string[]>();
+  const followUpsByOutcome = new Map<string, number[]>();
   for (const f of followUps) {
     const list = followUpsByOutcome.get(f.outcomeId) ?? [];
     list.push(f.problemId);
@@ -189,7 +180,6 @@ export async function getProblemDetail(problemId: string): Promise<ProblemDetail
       return a.createdAt - b.createdAt;
     });
 
-  // Latest decision.
   const decRow = (
     await db
       .select()
@@ -207,7 +197,6 @@ export async function getProblemDetail(problemId: string): Promise<ProblemDetail
     latestDecision = { ...decRow, rejectedSolutionIds: rej.map((r) => r.solutionId) };
   }
 
-  // Eliminations.
   const elimRows = await db
     .select()
     .from(eliminations)
@@ -219,7 +208,7 @@ export async function getProblemDetail(problemId: string): Promise<ProblemDetail
         .from(eliminationSolutions)
         .where(inArray(eliminationSolutions.eliminationId, elimIds))
     : [];
-  const targetsByElim = new Map<string, string[]>();
+  const targetsByElim = new Map<string, number[]>();
   for (const t of elimTargets) {
     const list = targetsByElim.get(t.eliminationId) ?? [];
     list.push(t.solutionId);
@@ -230,7 +219,6 @@ export async function getProblemDetail(problemId: string): Promise<ProblemDetail
     eliminatedSolutionIds: targetsByElim.get(e.id) ?? [],
   }));
 
-  // Abandonment.
   const abandonRow = (
     await db.select().from(abandonments).where(eq(abandonments.problemId, problemId)).limit(1)
   )[0];
@@ -254,12 +242,12 @@ export type SolutionDetail = {
   outcome: Outcome | null;
 };
 
-export async function getSolutionBySlug(slug: string): Promise<Solution | null> {
-  const rows = await getDb().select().from(solutions).where(eq(solutions.slug, slug)).limit(1);
+export async function getSolutionById(id: number): Promise<Solution | null> {
+  const rows = await getDb().select().from(solutions).where(eq(solutions.id, id)).limit(1);
   return rows[0] ?? null;
 }
 
-export async function getSolutionDetail(solutionId: string): Promise<SolutionDetail | null> {
+export async function getSolutionDetail(solutionId: number): Promise<SolutionDetail | null> {
   const db = getDb();
   const sRows = await db.select().from(solutions).where(eq(solutions.id, solutionId)).limit(1);
   const s = sRows[0];
@@ -294,7 +282,6 @@ export async function getSolutionDetail(solutionId: string): Promise<SolutionDet
     }
   }
 
-  // Eliminations where this solution is a target.
   const elimJoins = await db
     .select()
     .from(eliminationSolutions)
@@ -309,7 +296,7 @@ export async function getSolutionDetail(solutionId: string): Promise<SolutionDet
         .from(eliminationSolutions)
         .where(inArray(eliminationSolutions.eliminationId, elimIds))
     : [];
-  const targetsByElim = new Map<string, string[]>();
+  const targetsByElim = new Map<string, number[]>();
   for (const t of allTargets) {
     const list = targetsByElim.get(t.eliminationId) ?? [];
     list.push(t.solutionId);
@@ -320,7 +307,6 @@ export async function getSolutionDetail(solutionId: string): Promise<SolutionDet
     eliminatedSolutionIds: targetsByElim.get(e.id) ?? [],
   }));
 
-  // Outcome.
   const outRows = await db
     .select()
     .from(outcomes)
@@ -384,7 +370,7 @@ export async function listUnlinkedObservations(
     .sort((a, b) => b.createdAt - a.createdAt);
 }
 
-export async function getSolutionsByIds(ids: string[]): Promise<Solution[]> {
+export async function getSolutionsByIds(ids: number[]): Promise<Solution[]> {
   if (ids.length === 0) return [];
   return getDb().select().from(solutions).where(inArray(solutions.id, ids));
 }
