@@ -41,24 +41,28 @@ const addCmd = defineCommand({
     guardAction("ADD_ELIMINATION");
     hintCtx(undefined, prVal);
     const parsed = EliminationInput.parse({
-      problemSlug: prVal,
+      problemId: prVal,
       solutions: asList(args.solutions),
       rationale: args.rationale,
       context: args.context,
     });
     const db = getDb();
-    const pr = await db.select().from(problems).where(eq(problems.id, parsed.problemSlug)).limit(1);
+    const numProbId =
+      typeof parsed.problemId === "number"
+        ? parsed.problemId
+        : parseInt(String(parsed.problemId), 10);
+    const pr = await db.select().from(problems).where(eq(problems.id, numProbId)).limit(1);
     if (pr.length === 0)
-      throw new NotFoundError(`problem not found: ${parsed.problemSlug}`, {
-        id: parsed.problemSlug,
+      throw new NotFoundError(`problem not found: ${parsed.problemId}`, {
+        id: parsed.problemId,
       });
-    const solRows = await db
-      .select()
-      .from(solutions)
-      .where(inArray(solutions.id, parsed.solutions));
+    const numSolIds = (parsed.solutions as (string | number)[]).map((s) =>
+      typeof s === "number" ? s : parseInt(String(s), 10),
+    );
+    const solRows = await db.select().from(solutions).where(inArray(solutions.id, numSolIds));
     const byId = new Map(solRows.map((r) => [r.id, r]));
-    const solutionIds: string[] = [];
-    for (const s of parsed.solutions) {
+    const solutionIds: number[] = [];
+    for (const s of numSolIds) {
       const row = byId.get(s);
       if (!row) throw new NotFoundError(`solution not found: ${s}`, { id: s });
       solutionIds.push(row.id);
@@ -91,7 +95,8 @@ const listCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const db = getDb();
     if (args.problem) {
-      const pr = await db.select().from(problems).where(eq(problems.id, args.problem)).limit(1);
+      const numId = parseInt(args.problem, 10);
+      const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
       if (pr.length === 0)
         throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
       emit(await db.select().from(eliminations).where(eq(eliminations.problemId, pr[0]!.id)));

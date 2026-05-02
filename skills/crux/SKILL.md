@@ -140,7 +140,7 @@ The view-state machine tracks what the user is looking at across web UI and TUI.
 crux view get --json        # current state + context
 crux view next --json       # legal events from current state
 crux view send <EVENT> --json
-crux view send <EVENT> '{"slug":"x"}' --json
+crux view send <EVENT> --payload '{"id":"x"}' --json
 crux view reset --json
 crux view path
 ```

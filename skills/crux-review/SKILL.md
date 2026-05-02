@@ -43,7 +43,7 @@ If no workstream is named and you can't infer one from cwd, ask.
 
 For each item in `recent_observations_unlinked` and `unpromoted_ideas`, propose one of:
 
-1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> --problem <slug> --note "why this supports it"`. Preferred when fit is clear.
+1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> --problem <id> --note "why this supports it"`. Preferred when fit is clear.
 2. **Promote to a new Problem** — file `crux problem add` (with the seed Observation linked as Evidence in the same review).
 3. **Archive** — terminal. `crux observation archive` / `crux idea archive` with a rationale. Use for misfiles, duplicates, evaporated relevance.
 4. **Leave** — explicitly defer. Keep the row; no action this pass.
@@ -73,21 +73,21 @@ A Decision where rejected Solutions aren't rows in the db is dishonest — claim
 
 ### Abandonment is first-class
 
-`crux problem abandon <slug> --rationale "..."` is a real event, not deletion. Rationale travels forward so future sessions don't re-derive the dead end.
+`crux problem abandon <id> --rationale "..."` is a real event, not deletion. Rationale travels forward so future sessions don't re-derive the dead end.
 
 ### Scheduling is intentional
 
-Problems start unscheduled (null status). `crux problem schedule <slug> --tier now|next|later` only when user has expressed genuine intent. `now` = actively in flight, `next` = queued, `later` = acknowledged but not soon. Leave unscheduled rather than guess.
+Problems start unscheduled (null status). `crux problem schedule <id> --tier now|next|later` only when user has expressed genuine intent. `now` = actively in flight, `next` = queued, `later` = acknowledged but not soon. Leave unscheduled rather than guess.
 
 ### Outcome closes the loop
 
 When a shipped Solution's impact is known, `crux outcome add` records what shipping produced. Required for closing a Problem to `done`.
 
-## Slugs and titles
+## Titles
 
-- Problem slug: noun-phrase describing the gap — `thinking-residue-gap`, `onboarding-dropoff`. Not questions, not feature names.
-- Solution slug: descriptive approach — `build-crux`, `notion-as-backend`. Not outcomes.
 - Titles are one sentence. Descriptions are the paragraph.
+- Problem title: noun-phrase describing the gap — "Thinking residue gap", "Onboarding dropoff". Not questions, not feature names.
+- Solution title: descriptive approach — "Build crux", "Notion as backend". Not outcomes.
 
 ## Priority only when genuinely felt
 
@@ -106,7 +106,7 @@ If review runs long and the user adds new intake or another session writes, re-r
 Drive web UI / TUI focus during review so the user sees what you're working on:
 
 ```sh
-crux view send OPEN_PROBLEM '{"slug":"agent-view-bidirectional-sync"}' --json
+crux view send OPEN_PROBLEM --payload '{"id":"42"}' --json
 crux view next --json | jq '.events[].type'   # check legal events first
 ```
 
