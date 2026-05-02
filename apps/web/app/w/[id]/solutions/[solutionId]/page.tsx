@@ -16,23 +16,25 @@ export default async function SolutionPage({
   const { solutionId } = await params;
   const detail = await getSolutionById(parseInt(solutionId, 10));
   if (!detail) notFound();
-  const { solution, problem, workstream, choosingDecisions, rejectingDecisions, eliminations, outcome } =
-    detail;
+  const {
+    solution,
+    problem,
+    workstream,
+    choosingDecisions,
+    rejectingDecisions,
+    eliminations,
+    outcome,
+  } = detail;
 
   return (
     <PageShell
       breadcrumbs={[
         { href: "/", label: "Workstreams" },
         { href: `/w/${workstream.id}`, label: workstream.slug },
-        {
-          href: `/w/${workstream.id}/problems/${problem.id}`,
-          label: String(problem.id),
-        },
-        { label: String(solution.id) },
+        { href: `/w/${workstream.id}/problems/${problem.id}`, label: problem.title },
+        { label: solution.title },
       ]}
-      title={solution.title}
-      subtitle={String(solution.id)}
-      actions={
+      breadcrumbActions={
         <div className="flex items-center gap-2">
           <Badge variant={statusVariant(solution.status)}>{solution.status}</Badge>
           {solution.effort ? (
@@ -40,6 +42,7 @@ export default async function SolutionPage({
           ) : null}
         </div>
       }
+      title={solution.title}
     >
       <Section title="Parent problem">
         <Link href={`/w/${workstream.id}/problems/${problem.id}`} className="block">

@@ -28,15 +28,14 @@ export default async function ProblemPage({
         breadcrumbs={[
           { href: "/", label: "Workstreams" },
           { href: `/w/${ws.id}`, label: ws.slug },
-          { label: String(problem.id) },
+          { label: problem.title },
         ]}
-        title={problem.title}
-        subtitle={String(problem.id)}
-        actions={
+        breadcrumbActions={
           <Badge variant={roadmapStatusVariant(problem.status)}>
             {problem.status ?? "unscheduled"}
           </Badge>
         }
+        title={problem.title}
       >
         <Section title="Description">
           <Card>

@@ -3,12 +3,14 @@ import { cn } from "@/lib/utils";
 
 export function PageShell({
   breadcrumbs,
+  breadcrumbActions,
   title,
   subtitle,
   children,
   actions,
 }: {
   breadcrumbs?: Array<{ href?: string; label: string }>;
+  breadcrumbActions?: React.ReactNode;
   title: string;
   subtitle?: string;
   children: React.ReactNode;
@@ -18,19 +20,22 @@ export function PageShell({
     <div className="container py-6 space-y-6">
       <header className="space-y-2">
         {breadcrumbs && breadcrumbs.length > 0 ? (
-          <nav className="text-xs text-muted-foreground">
-            {breadcrumbs.map((b, i) => (
-              <span key={i}>
-                {i > 0 && <span className="px-1">/</span>}
-                {b.href ? (
-                  <Link href={b.href} className="hover:underline">
-                    {b.label}
-                  </Link>
-                ) : (
-                  <span>{b.label}</span>
-                )}
-              </span>
-            ))}
+          <nav className="flex items-center gap-2 text-xs text-muted-foreground">
+            <span>
+              {breadcrumbs.map((b, i) => (
+                <span key={i}>
+                  {i > 0 && <span className="px-1">/</span>}
+                  {b.href ? (
+                    <Link href={b.href} className="hover:underline">
+                      {b.label}
+                    </Link>
+                  ) : (
+                    <span>{b.label}</span>
+                  )}
+                </span>
+              ))}
+            </span>
+            {breadcrumbActions ? <span>{breadcrumbActions}</span> : null}
           </nav>
         ) : null}
         <div className="flex items-start justify-between gap-4">

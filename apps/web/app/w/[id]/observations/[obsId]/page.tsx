@@ -36,9 +36,8 @@ export default async function ObservationPage({
         { href: `/w/${workstream.id}`, label: workstream.slug },
         { label: observation.id },
       ]}
+      breadcrumbActions={observation.archive ? <Badge variant="archived">archived</Badge> : null}
       title={observation.id}
-      subtitle="Observation"
-      actions={observation.archive ? <Badge variant="archived">archived</Badge> : null}
     >
       <Section title="Content">
         <Card>
