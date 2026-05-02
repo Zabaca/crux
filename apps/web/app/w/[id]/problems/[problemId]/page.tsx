@@ -19,8 +19,7 @@ export default async function ProblemPage({
   if (!ws) notFound();
   const detail = await getProblemById(ws.id, parseInt(problemId, 10));
   if (!detail) notFound();
-  const { problem, evidence, solutions, latestDecision, eliminations, abandonment, outcomes } =
-    detail;
+  const { problem, evidence, solutions, decisions, eliminations, abandonment, outcomes } = detail;
 
   return (
     <>
@@ -136,37 +135,43 @@ export default async function ProblemPage({
           )}
         </Section>
 
-        <Section title="Latest decision">
-          {latestDecision ? (
-            <Card>
-              <CardContent className="p-5 space-y-3">
-                <div className="flex flex-wrap items-center gap-2 text-xs">
-                  <span className="font-mono text-muted-foreground">{latestDecision.id}</span>
-                  <Badge variant="chosen">chose {latestDecision.chosenSolutionId}</Badge>
-                  {latestDecision.rejectedSolutionIds.map((sid) => (
-                    <Badge key={sid} variant="rejected">
-                      rejected {sid}
-                    </Badge>
-                  ))}
-                </div>
-                <div>
-                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    Rationale
-                  </div>
-                  <p className="text-sm whitespace-pre-wrap mt-1">{latestDecision.rationale}</p>
-                </div>
-                {latestDecision.context ? (
-                  <div>
-                    <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Context
-                    </div>
-                    <p className="text-sm whitespace-pre-wrap mt-1">{latestDecision.context}</p>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ) : (
+        <Section title={`Decisions (${decisions.length})`}>
+          {decisions.length === 0 ? (
             <EmptyState>No decision recorded yet.</EmptyState>
+          ) : (
+            <ul className="space-y-3">
+              {decisions.map((dec) => (
+                <li key={dec.id}>
+                  <Card>
+                    <CardContent className="p-5 space-y-3">
+                      <div className="flex flex-wrap items-center gap-2 text-xs">
+                        <span className="font-mono text-muted-foreground">{dec.id}</span>
+                        <Badge variant="chosen">chose {dec.chosenSolutionId}</Badge>
+                        {dec.rejectedSolutionIds.map((sid) => (
+                          <Badge key={sid} variant="rejected">
+                            rejected {sid}
+                          </Badge>
+                        ))}
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Rationale
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap mt-1">{dec.rationale}</p>
+                      </div>
+                      {dec.context ? (
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Context
+                          </div>
+                          <p className="text-sm whitespace-pre-wrap mt-1">{dec.context}</p>
+                        </div>
+                      ) : null}
+                    </CardContent>
+                  </Card>
+                </li>
+              ))}
+            </ul>
           )}
         </Section>
 

@@ -115,17 +115,14 @@ function withArchive<
   };
 }
 
+export type DecisionWithRejected = Decision & { rejectedSolutionIds: number[] };
+
 export type ProblemDetail = {
   problem: Problem;
   workstream: Workstream;
   evidence: Array<Evidence & { observation: ObservationWithArchive | null }>;
   solutions: Array<Solution & { outcome: Outcome | null }>;
-  latestDecision:
-    | (Decision & {
-        rejectedSolutionIds: number[];
-        chosenSolutionId: number;
-      })
-    | null;
+  decisions: DecisionWithRejected[];
   eliminations: Array<Elimination & { eliminatedSolutionIds: number[] }>;
   abandonment: Abandonment | null;
   outcomes: Outcome[];
@@ -175,25 +172,28 @@ export async function getProblemById(
       return a.createdAt - b.createdAt;
     });
 
-  const latestDec = (
-    await d
-      .select()
-      .from(decisions)
-      .where(eq(decisions.problemId, p.id))
-      .orderBy(desc(decisions.createdAt))
-      .limit(1)
-  )[0];
-  let latestDecisionPayload: ProblemDetail["latestDecision"] = null;
-  if (latestDec) {
-    const rej = await d
-      .select({ solutionId: decisionRejectedSolutions.solutionId })
-      .from(decisionRejectedSolutions)
-      .where(eq(decisionRejectedSolutions.decisionId, latestDec.id));
-    latestDecisionPayload = {
-      ...latestDec,
-      rejectedSolutionIds: rej.map((r) => r.solutionId),
-    };
+  const decRows = await d
+    .select()
+    .from(decisions)
+    .where(eq(decisions.problemId, p.id))
+    .orderBy(desc(decisions.createdAt));
+  const decIds = decRows.map((dec) => dec.id);
+  const rejJoins = decIds.length
+    ? await d
+        .select()
+        .from(decisionRejectedSolutions)
+        .where(inArray(decisionRejectedSolutions.decisionId, decIds))
+    : [];
+  const rejByDec = new Map<string, number[]>();
+  for (const j of rejJoins) {
+    const list = rejByDec.get(j.decisionId) ?? [];
+    list.push(j.solutionId);
+    rejByDec.set(j.decisionId, list);
   }
+  const decisionsPayload: DecisionWithRejected[] = decRows.map((dec) => ({
+    ...dec,
+    rejectedSolutionIds: rejByDec.get(dec.id) ?? [],
+  }));
 
   const elimRows = await d.select().from(eliminations).where(eq(eliminations.problemId, p.id));
   elimRows.sort((a, b) => a.createdAt - b.createdAt);
@@ -224,7 +224,7 @@ export async function getProblemById(
     workstream: ws,
     evidence: evidenceInlined,
     solutions: solutionsInlined,
-    latestDecision: latestDecisionPayload,
+    decisions: decisionsPayload,
     eliminations: eliminationsInlined,
     abandonment: abandonRow ?? null,
     outcomes: outcomeRows,

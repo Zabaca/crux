@@ -43,13 +43,21 @@ const main = defineCommand({
 async function bootstrap() {
   const rawArgs = process.argv.slice(2);
   if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
-    const sub = rawArgs[0];
-    if (sub && main.subCommands && sub in main.subCommands) {
-      const subCmd = await (main.subCommands as Record<string, unknown>)[sub];
-      await showUsage(subCmd as never, main as never);
-    } else {
-      await showUsage(main as never);
+    let cmd: {
+      meta?: unknown;
+      subCommands?: Record<string, unknown>;
+      args?: unknown;
+      run?: unknown;
+    } = main;
+    let parent: typeof cmd | undefined;
+    for (const arg of rawArgs) {
+      if (arg.startsWith("-")) break;
+      const subs = cmd.subCommands;
+      if (!subs || !(arg in subs)) break;
+      parent = cmd;
+      cmd = await (subs[arg] as Promise<typeof cmd>);
     }
+    await showUsage(cmd as never, parent as never);
     return;
   }
   await runCommand(main, { rawArgs });
