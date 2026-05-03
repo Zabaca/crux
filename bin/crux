@@ -26,25 +26,21 @@ if [ ! -d "$PLUGIN_ROOT/node_modules" ]; then
     || (cd "$PLUGIN_ROOT" && bun install >/dev/null 2>&1)
 fi
 
-# Dev-mode guard: only fire when the caller is *actively working inside* this
-# plugin's git checkout — i.e. cwd is within PLUGIN_ROOT. The earlier .git-alone
-# heuristic misrouted real user data whenever /path/to/cloned-crux/bin/crux
-# was invoked from an unrelated cwd (see issue #2). Cwd-scoping is the concrete
-# "doing dev work on crux itself" signal. CRUX_DEV=0 force-disables even when
-# cwd is inside the repo. An explicit CRUX_DB_URL always wins.
-if [ -z "${CRUX_HOME:-}" ] && [ -d "$PLUGIN_ROOT/.git" ]; then
-  case "$PWD/" in
-    "$PLUGIN_ROOT"/*|"$PLUGIN_ROOT/")
-      if [ "${CRUX_DEV:-}" = "0" ]; then
-        # Explicit opt-out: force production path so the committed .env doesn't
-        # pull us back into the dev state when Bun auto-loads it.
-        export CRUX_HOME="$HOME/.claude/.crux"
-      else
-        export CRUX_HOME="$PLUGIN_ROOT/.crux"
-        echo "crux: dev-mode guard active — writing to $PLUGIN_ROOT/.crux (set CRUX_DEV=0 to disable)" >&2
-      fi
-      ;;
-  esac
+# Always set CRUX_HOME explicitly so Bun's .env load can't override it.
+# Default: user DB at ~/.claude/.crux.
+# CRUX_DEV=1 + cwd inside repo: dev DB at $PLUGIN_ROOT/.crux (opt-in).
+# An already-set CRUX_HOME always wins.
+if [ -z "${CRUX_HOME:-}" ]; then
+  CRUX_HOME="$HOME/.claude/.crux"
+  if [ "${CRUX_DEV:-0}" = "1" ] && [ -d "$PLUGIN_ROOT/.git" ]; then
+    case "$PWD/" in
+      "$PLUGIN_ROOT"/*|"$PLUGIN_ROOT/")
+        CRUX_HOME="$PLUGIN_ROOT/.crux"
+        echo "crux: dev mode — writing to $PLUGIN_ROOT/.crux (unset CRUX_DEV to disable)" >&2
+        ;;
+    esac
+  fi
+  export CRUX_HOME
 fi
 
 exec bun run "$PLUGIN_ROOT/packages/cli/src/index.ts" "$@"
