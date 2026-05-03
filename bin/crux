@@ -43,4 +43,5 @@ if [ -z "${CRUX_HOME:-}" ]; then
   export CRUX_HOME
 fi
 
+export CRUX_PLUGIN_ROOT="$PLUGIN_ROOT"
 exec bun run "$PLUGIN_ROOT/packages/cli/src/index.ts" "$@"
