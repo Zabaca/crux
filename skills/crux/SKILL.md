@@ -87,9 +87,9 @@ Before the first `crux` command in a session, run these checks in order. Steady 
    ```
 6. **Web UI**: `lsof -i :3210 | grep LISTEN`. If down, start:
    ```sh
-   cd <repo-root> && bun run --filter @crux/web dev &> /tmp/crux-web-dev.log &
+   ${CLAUDE_PLUGIN_ROOT}/bin/crux web start
    ```
-   Wait ~3s, verify `curl -s -o /dev/null -w "%{http_code}" http://localhost:3210/`. Open in browser for user.
+   Polls until ready and opens browser automatically.
 
 ## Load context before contributing
 
