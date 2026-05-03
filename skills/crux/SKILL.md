@@ -69,7 +69,7 @@ Before the first `crux` command in a session, run these checks in order. Steady 
    - Windows: `powershell -c "irm bun.sh/install.ps1|iex"`
    - User must restart shell after install.
 2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. Wrapper auto-installs on first invocation; pre-warm with `${CLAUDE_PLUGIN_ROOT}/bin/crux --help`.
-3. **Database**: `test -f ~/.local/share/crux/crux.db`. If missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
+3. **Database**: `test -f ~/.claude/.crux/crux.db`. If missing, `${CLAUDE_PLUGIN_ROOT}/bin/crux init`.
 4. **User config**: `test -f ~/.config/crux/config.toml`. If missing, ask name/email then `crux user init --name "..." --email "..."`.
 5. **Agent bus**: `TeamCreate` with `team_name: "crux"`. If team already exists, skip. Then write runtime pointer:
    ```sh
