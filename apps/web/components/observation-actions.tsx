@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { ActionDialog } from "./action-dialog";
 
 export function ObservationActions({
-  wsId,
+  wsId: _wsId,
   obsId,
   archived,
 }: {
