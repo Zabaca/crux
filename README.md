@@ -90,7 +90,7 @@ There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux alr
 
 - **Transitions are code, not documentation.** Invariants live as plain functions in `packages/core/src/transitions/`.
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
-- **User identity in `$XDG_CONFIG_HOME/crux/config.toml`.** Not committed, not hardcoded.
+- **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded.
 - **libSQL file gitignored.** Migrations committed. Turso embedded replicas for team mode.
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.
 - **Claude is a tool, not an actor.** Attributions resolve to the human user.

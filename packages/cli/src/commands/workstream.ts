@@ -1,13 +1,17 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { workstreams } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
-import { WorkstreamInput, OkWithIdOutput, RenameOutput } from "@crux/core/validation";
-import { NotFoundError, renameWorkstream } from "@crux/core/transitions";
+import { OkWithIdOutput, RenameOutput } from "@crux/core/validation";
+import { NotFoundError } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { dispatch } from "@crux/core/actions";
+import type {
+  AddWorkstreamPayload,
+  RenameWorkstreamPayload,
+  SelectWorkstreamPayload,
+} from "@crux/core/actions";
 import { wsArg } from "../ctx-defaults.js";
-import { guardAction, recordMutation } from "../collab.js";
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a workstream." },
@@ -19,23 +23,13 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("ADD_WORKSTREAM");
-    const parsed = WorkstreamInput.parse({
+    const payload: AddWorkstreamPayload = {
       slug: args.slug,
       title: args.title,
       description: args.description,
-    });
-    const user = requireUser();
-    const id = `WS-${parsed.slug}`;
-    await getDb().insert(workstreams).values({
-      id,
-      slug: parsed.slug,
-      title: parsed.title,
-      description: parsed.description,
-      ownerId: user.user.id,
-    });
-    recordMutation("ADD_WORKSTREAM");
-    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
+    };
+    const { result } = await dispatch({ kind: "ADD_WORKSTREAM", payload });
+    emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });
 
@@ -58,10 +52,7 @@ const showCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const wsId = wsArg();
     const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, wsId)).limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`workstream not found: ${wsId}`, {
-        id: wsId,
-      });
+    if (rows.length === 0) throw new NotFoundError(`workstream not found: ${wsId}`, { id: wsId });
     emit(rows[0]!, `${rows[0]!.id}\t${rows[0]!.title}`);
   },
 });
@@ -80,19 +71,44 @@ const renameCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("RENAME_WORKSTREAM");
-    const r = await renameWorkstream(
-      args.oldSlug,
-      args.newSlug,
-      { title: args.title, description: args.description },
-      getDb(),
+    const payload: RenameWorkstreamPayload = {
+      oldSlug: args.oldSlug,
+      newSlug: args.newSlug,
+      title: args.title,
+      description: args.description,
+    };
+    const { result } = await dispatch({ kind: "RENAME_WORKSTREAM", payload });
+    emit(
+      result,
+      RenameOutput,
+      `renamed ${(result as { oldId: string; newId: string }).oldId} → ${(result as { oldId: string; newId: string }).newId}`,
     );
-    recordMutation("RENAME_WORKSTREAM");
-    emit({ ok: true, ...r }, RenameOutput, `renamed ${r.oldId} → ${r.newId}`);
+  },
+});
+
+const selectCmd = defineCommand({
+  meta: { name: "select", description: "Select a workstream (sets view state context)." },
+  args: {
+    slug: { type: "positional", required: true, description: "Workstream slug" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const rows = await getDb()
+      .select()
+      .from(workstreams)
+      .where(eq(workstreams.slug, args.slug))
+      .limit(1);
+    if (rows.length === 0)
+      throw new NotFoundError(`workstream not found: ${args.slug}`, { id: args.slug });
+    const id = rows[0]!.id;
+    const payload: SelectWorkstreamPayload = { id };
+    const { viewState, revision } = await dispatch({ kind: "SELECT_WORKSTREAM", payload });
+    emit({ ok: true, value: viewState, revision, context: { workstreamId: id } }, `selected ${id}`);
   },
 });
 
 export const workstreamCommand = defineCommand({
   meta: { name: "workstream", description: "Workstreams." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, rename: renameCmd },
+  subCommands: { add: addCmd, list: listCmd, show: showCmd, rename: renameCmd, select: selectCmd },
 });

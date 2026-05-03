@@ -9,24 +9,18 @@ import {
   solutions,
   workstreams,
 } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
-import {
-  OkWithIdOutput,
-  OkWithStatusOutput,
-  ProblemShowOutput,
-  RoadmapTier,
-  ProblemInput,
-} from "@crux/core/validation";
-import {
-  abandonProblem,
-  markProblemDone,
-  NotFoundError,
-  scheduleProblem,
-  unscheduleProblem,
-} from "@crux/core/transitions";
+import { OkWithStatusOutput, ProblemShowOutput, RoadmapTier } from "@crux/core/validation";
+import { NotFoundError } from "@crux/core/transitions";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction, recordMutation } from "../collab.js";
+import { dispatch } from "@crux/core/actions";
+import type {
+  AddProblemPayload,
+  ScheduleProblemPayload,
+  UnscheduleProblemPayload,
+  MarkProblemDonePayload,
+  AbandonProblemPayload,
+} from "@crux/core/actions";
 import { recordQuery } from "../record-query.js";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
 
@@ -55,27 +49,14 @@ const addCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const wsVal = wsArg();
-    guardAction("ADD_PROBLEM");
-    const parsed = ProblemInput.parse({
+    hintCtx(wsVal);
+    const payload: AddProblemPayload = {
       workstream: wsVal,
       title: args.title,
       description: args.description,
-    });
-    hintCtx(wsVal);
-    const ws = await resolveWorkstream(parsed.workstream);
-    const user = requireUser();
-    const result = await getDb()
-      .insert(problems)
-      .values({
-        workstreamId: ws.id,
-        title: parsed.title,
-        description: parsed.description,
-        createdById: user.user.id,
-      })
-      .returning({ id: problems.id });
-    const id = result[0]!.id;
-    recordMutation("ADD_PROBLEM");
-    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
+    };
+    const { result } = await dispatch({ kind: "ADD_PROBLEM", payload });
+    emit(result, `added ${(result as { id: number }).id}`);
   },
 });
 
@@ -179,12 +160,10 @@ const scheduleCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("SCHEDULE_PROBLEM");
     const tier = RoadmapTier.parse(args.tier);
-    const p = await resolveProblem(args.id);
-    await scheduleProblem(p.id, tier, getDb());
-    recordMutation("SCHEDULE_PROBLEM");
-    emit({ ok: true, id: p.id, status: tier }, OkWithStatusOutput, `scheduled ${p.id} → ${tier}`);
+    const payload: ScheduleProblemPayload = { id: args.id, tier };
+    const { result } = await dispatch({ kind: "SCHEDULE_PROBLEM", payload });
+    emit(result, OkWithStatusOutput, `scheduled ${args.id} → ${tier}`);
   },
 });
 
@@ -193,11 +172,9 @@ const unscheduleCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("UNSCHEDULE_PROBLEM");
-    const p = await resolveProblem(args.id);
-    await unscheduleProblem(p.id, getDb());
-    recordMutation("UNSCHEDULE_PROBLEM");
-    emit({ ok: true, id: p.id, status: null }, OkWithStatusOutput, `unscheduled ${p.id}`);
+    const payload: UnscheduleProblemPayload = { id: args.id };
+    const { result } = await dispatch({ kind: "UNSCHEDULE_PROBLEM", payload });
+    emit(result, OkWithStatusOutput, `unscheduled ${args.id}`);
   },
 });
 
@@ -206,11 +183,9 @@ const doneCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("MARK_PROBLEM_DONE");
-    const p = await resolveProblem(args.id);
-    await markProblemDone(p.id, getDb());
-    recordMutation("MARK_PROBLEM_DONE");
-    emit({ ok: true, id: p.id, status: "done" }, OkWithStatusOutput, `done ${p.id}`);
+    const payload: MarkProblemDonePayload = { id: args.id };
+    const { result } = await dispatch({ kind: "MARK_PROBLEM_DONE", payload });
+    emit(result, OkWithStatusOutput, `done ${args.id}`);
   },
 });
 
@@ -223,12 +198,9 @@ const abandonCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("ABANDON_PROBLEM");
-    const user = requireUser();
-    const p = await resolveProblem(args.id);
-    await abandonProblem(p.id, args.rationale, user.user.id, getDb());
-    recordMutation("ABANDON_PROBLEM");
-    emit({ ok: true, id: p.id, status: "abandoned" }, OkWithStatusOutput, `abandoned ${p.id}`);
+    const payload: AbandonProblemPayload = { id: args.id, rationale: args.rationale };
+    const { result } = await dispatch({ kind: "ABANDON_PROBLEM", payload });
+    emit(result, OkWithStatusOutput, `abandoned ${args.id}`);
   },
 });
 

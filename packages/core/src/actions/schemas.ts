@@ -13,7 +13,7 @@ import { z } from "zod";
 
 export const SelectWorkstreamAction = z.object({
   kind: z.literal("SELECT_WORKSTREAM"),
-  payload: z.object({ slug: z.string() }),
+  payload: z.object({ id: z.string() }),
 });
 export const OpenProblemAction = z.object({
   kind: z.literal("OPEN_PROBLEM"),
@@ -92,23 +92,32 @@ export const AddDecisionAction = z.object({
     chosen: z.union([z.string(), z.number()]),
     rationale: z.string(),
     rejected: z.array(z.union([z.string(), z.number()])).optional(),
+    context: z.string().optional(),
   }),
 });
 export const AddOutcomeAction = z.object({
   kind: z.literal("ADD_OUTCOME"),
   payload: z.object({
     solution: z.union([z.string(), z.number()]),
-    summary: z.string(),
+    observedImpact: z.string(),
+    expectedImpact: z.string().optional(),
+    learnings: z.string().optional(),
     followUpProblemIds: z.array(z.union([z.string(), z.number()])).optional(),
   }),
 });
 export const AddObservationAction = z.object({
   kind: z.literal("ADD_OBSERVATION"),
-  payload: z.object({ workstream: z.string(), content: z.string(), source: z.string().optional() }),
+  payload: z.object({
+    workstream: z.string(),
+    content: z.string(),
+    source: z.string().optional(),
+    sourceType: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+  }),
 });
 export const ArchiveObservationAction = z.object({
   kind: z.literal("ARCHIVE_OBSERVATION"),
-  payload: z.object({ id: z.string() }),
+  payload: z.object({ id: z.string(), rationale: z.string().optional() }),
 });
 export const AddEvidenceAction = z.object({
   kind: z.literal("ADD_EVIDENCE"),
@@ -120,7 +129,11 @@ export const AddEvidenceAction = z.object({
 });
 export const AddEliminationAction = z.object({
   kind: z.literal("ADD_ELIMINATION"),
-  payload: z.object({ solution: z.union([z.string(), z.number()]), rationale: z.string() }),
+  payload: z.object({
+    solutions: z.array(z.union([z.string(), z.number()])),
+    rationale: z.string(),
+    context: z.string().optional(),
+  }),
 });
 export const AddWorkstreamAction = z.object({
   kind: z.literal("ADD_WORKSTREAM"),
@@ -203,3 +216,30 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
 export function isViewAction(action: Action): action is ViewAction {
   return VIEW_ACTION_KINDS.includes(action.kind as ViewActionKind);
 }
+
+// ---------------------------------------------------------------------------
+// Typed payload helpers
+// ---------------------------------------------------------------------------
+
+export type AddObservationPayload = z.infer<typeof AddObservationAction>["payload"];
+export type ArchiveObservationPayload = z.infer<typeof ArchiveObservationAction>["payload"];
+export type AddProblemPayload = z.infer<typeof AddProblemAction>["payload"];
+export type ScheduleProblemPayload = z.infer<typeof ScheduleProblemAction>["payload"];
+export type UnscheduleProblemPayload = z.infer<typeof UnscheduleProblemAction>["payload"];
+export type MarkProblemDonePayload = z.infer<typeof MarkProblemDoneAction>["payload"];
+export type AbandonProblemPayload = z.infer<typeof AbandonProblemAction>["payload"];
+export type AddSolutionPayload = z.infer<typeof AddSolutionAction>["payload"];
+export type ShipSolutionPayload = z.infer<typeof ShipSolutionAction>["payload"];
+export type EditSolutionPayload = z.infer<typeof EditSolutionAction>["payload"];
+export type AddDecisionPayload = z.infer<typeof AddDecisionAction>["payload"];
+export type AddOutcomePayload = z.infer<typeof AddOutcomeAction>["payload"];
+export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];
+export type AddEliminationPayload = z.infer<typeof AddEliminationAction>["payload"];
+export type AddWorkstreamPayload = z.infer<typeof AddWorkstreamAction>["payload"];
+export type RenameWorkstreamPayload = z.infer<typeof RenameWorkstreamAction>["payload"];
+export type SelectWorkstreamPayload = z.infer<typeof SelectWorkstreamAction>["payload"];
+
+export type MutationPayload<K extends MutationActionKind> = Extract<
+  MutationAction,
+  { kind: K }
+>["payload"];

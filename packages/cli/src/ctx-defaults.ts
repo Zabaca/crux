@@ -3,10 +3,7 @@ import { isJsonMode } from "./output.js";
 
 export function wsArg(): string {
   const id = loadViewMeta().context.workstreamId;
-  if (!id)
-    throw new Error(
-      'no workstream in view state; run: crux view send SELECT_WORKSTREAM --payload \'{"id":"WS-<slug>"}\'',
-    );
+  if (!id) throw new Error("no workstream selected — run `crux workstream select <slug>` first");
   return id;
 }
 

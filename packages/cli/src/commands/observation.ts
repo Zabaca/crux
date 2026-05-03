@@ -1,12 +1,11 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { observations, workstreams } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
-import { ObservationInput, ObservationArchiveInput, OkWithIdOutput } from "@crux/core/validation";
-import { NotFoundError, archiveObservation } from "@crux/core/transitions";
+import { NotFoundError } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction, recordMutation } from "../collab.js";
+import { dispatch } from "@crux/core/actions";
+import type { AddObservationPayload, ArchiveObservationPayload } from "@crux/core/actions";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
 
 async function resolveWorkstream(idOrSlug: string) {
@@ -20,13 +19,6 @@ async function resolveWorkstream(idOrSlug: string) {
   )[0];
   if (bySlug) return bySlug;
   throw new NotFoundError(`workstream not found: ${idOrSlug}`, { id: idOrSlug });
-}
-
-async function nextObsId(): Promise<string> {
-  const all = await getDb().select({ id: observations.id }).from(observations);
-  const nums = all.map((r) => Number(r.id.replace(/^OBS-/, ""))).filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return `OBS-${String(next).padStart(3, "0")}`;
 }
 
 function asTags(v: unknown): string[] {
@@ -54,31 +46,16 @@ const addCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const wsVal = wsArg();
-    guardAction("ADD_OBSERVATION");
-    const parsed = ObservationInput.parse({
+    hintCtx(wsVal);
+    const payload: AddObservationPayload = {
       workstream: wsVal,
       content: args.content,
       source: args.source,
       sourceType: args["source-type"],
       tags: asTags(args.tag),
-    });
-    hintCtx(wsVal);
-    const ws = await resolveWorkstream(parsed.workstream);
-    const user = requireUser();
-    const id = await nextObsId();
-    await getDb()
-      .insert(observations)
-      .values({
-        id,
-        workstreamId: ws.id,
-        reporterId: user.user.id,
-        content: parsed.content,
-        source: parsed.source,
-        sourceType: parsed.sourceType,
-        tags: parsed.tags && parsed.tags.length ? JSON.stringify(parsed.tags) : null,
-      });
-    recordMutation("ADD_OBSERVATION");
-    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
+    };
+    const { result } = await dispatch({ kind: "ADD_OBSERVATION", payload });
+    emit(result, `added ${(result as { id: string }).id}`);
   },
 });
 
@@ -126,24 +103,17 @@ const archiveCmd = defineCommand({
   },
   args: {
     id: { type: "positional", required: true },
-    rationale: { type: "string", required: true },
+    rationale: { type: "string" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("ARCHIVE_OBSERVATION");
-    const parsed = ObservationArchiveInput.parse({
-      observationId: args.id,
+    const payload: ArchiveObservationPayload = {
+      id: args.id,
       rationale: args.rationale,
-    });
-    const user = requireUser();
-    await archiveObservation(parsed.observationId, parsed.rationale, user.user.id, getDb());
-    recordMutation("ARCHIVE_OBSERVATION");
-    emit(
-      { ok: true, id: parsed.observationId },
-      OkWithIdOutput,
-      `archived ${parsed.observationId}`,
-    );
+    };
+    const { result } = await dispatch({ kind: "ARCHIVE_OBSERVATION", payload });
+    emit(result, `archived ${args.id}`);
   },
 });
 

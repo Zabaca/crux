@@ -1,12 +1,12 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
-import { outcomeFollowUpProblems, outcomes, problems, solutions } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
-import { OutcomeInput, OkWithIdOutput } from "@crux/core/validation";
-import { NotFoundError, recordOutcome } from "@crux/core/transitions";
-import { eq, inArray } from "drizzle-orm";
+import { outcomeFollowUpProblems, outcomes } from "@crux/core/db/schema";
+import { OkWithIdOutput } from "@crux/core/validation";
+import { NotFoundError } from "@crux/core/transitions";
+import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction, recordMutation } from "../collab.js";
+import { dispatch } from "@crux/core/actions";
+import type { AddOutcomePayload } from "@crux/core/actions";
 
 function asList(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -16,13 +16,6 @@ function asList(v: unknown): string[] {
       .map((s) => s.trim())
       .filter(Boolean);
   return [];
-}
-
-async function nextOutcomeId(): Promise<string> {
-  const all = await getDb().select({ id: outcomes.id }).from(outcomes);
-  const nums = all.map((r) => Number(r.id.replace(/^OUT-/, ""))).filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return `OUT-${String(next).padStart(3, "0")}`;
 }
 
 const addCmd = defineCommand({
@@ -37,53 +30,15 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("ADD_OUTCOME");
-    const parsed = OutcomeInput.parse({
-      solutionSlug: args.solution,
+    const payload: AddOutcomePayload = {
+      solution: args.solution,
       observedImpact: args["observed-impact"],
       expectedImpact: args["expected-impact"],
       learnings: args.learnings,
-      followUpProblems: asList(args["follow-up-problems"]),
-    });
-    const db = getDb();
-    const sol = await db
-      .select()
-      .from(solutions)
-      .where(eq(solutions.id, parsed.solutionSlug))
-      .limit(1);
-    if (sol.length === 0)
-      throw new NotFoundError(`solution not found: ${parsed.solutionSlug}`, {
-        id: parsed.solutionSlug,
-      });
-    let followUpProblemIds: string[] = [];
-    if (parsed.followUpProblems && parsed.followUpProblems.length > 0) {
-      const rows = await db
-        .select()
-        .from(problems)
-        .where(inArray(problems.id, parsed.followUpProblems));
-      const byId = new Map(rows.map((r) => [r.id, r.id]));
-      for (const s of parsed.followUpProblems) {
-        const id = byId.get(s);
-        if (!id) throw new NotFoundError(`follow-up problem not found: ${s}`, { id: s });
-        followUpProblemIds.push(id);
-      }
-    }
-    const user = requireUser();
-    const id = await nextOutcomeId();
-    await recordOutcome(
-      {
-        id,
-        solutionId: sol[0]!.id,
-        observedImpact: parsed.observedImpact,
-        expectedImpact: parsed.expectedImpact,
-        learnings: parsed.learnings,
-        followUpProblemIds,
-        createdById: user.user.id,
-      },
-      db,
-    );
-    recordMutation("ADD_OUTCOME");
-    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
+      followUpProblemIds: asList(args["follow-up-problems"]),
+    };
+    const { result } = await dispatch({ kind: "ADD_OUTCOME", payload });
+    emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });
 

@@ -1,12 +1,12 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
-import { eliminations, eliminationSolutions, problems, solutions } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
-import { EliminationInput, OkWithIdOutput } from "@crux/core/validation";
-import { NotFoundError, createElimination } from "@crux/core/transitions";
-import { eq, inArray } from "drizzle-orm";
+import { eliminations, eliminationSolutions, problems } from "@crux/core/db/schema";
+import { OkWithIdOutput } from "@crux/core/validation";
+import { NotFoundError } from "@crux/core/transitions";
+import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { guardAction, recordMutation } from "../collab.js";
+import { dispatch } from "@crux/core/actions";
+import type { AddEliminationPayload } from "@crux/core/actions";
 import { problemArg, hintCtx } from "../ctx-defaults.js";
 
 function asList(v: unknown): string[] {
@@ -17,13 +17,6 @@ function asList(v: unknown): string[] {
       .map((s) => s.trim())
       .filter(Boolean);
   return [];
-}
-
-async function nextEliminationId(): Promise<string> {
-  const all = await getDb().select({ id: eliminations.id }).from(eliminations);
-  const nums = all.map((r) => Number(r.id.replace(/^ELIM-/, ""))).filter((n) => Number.isFinite(n));
-  const next = (nums.length ? Math.max(...nums) : 0) + 1;
-  return `ELIM-${String(next).padStart(3, "0")}`;
 }
 
 const addCmd = defineCommand({
@@ -38,50 +31,14 @@ const addCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const prVal = problemArg(args.problem);
-    guardAction("ADD_ELIMINATION");
     hintCtx(undefined, prVal);
-    const parsed = EliminationInput.parse({
-      problemId: prVal,
+    const payload: AddEliminationPayload = {
       solutions: asList(args.solutions),
       rationale: args.rationale,
       context: args.context,
-    });
-    const db = getDb();
-    const numProbId =
-      typeof parsed.problemId === "number"
-        ? parsed.problemId
-        : parseInt(String(parsed.problemId), 10);
-    const pr = await db.select().from(problems).where(eq(problems.id, numProbId)).limit(1);
-    if (pr.length === 0)
-      throw new NotFoundError(`problem not found: ${parsed.problemId}`, {
-        id: parsed.problemId,
-      });
-    const numSolIds = (parsed.solutions as (string | number)[]).map((s) =>
-      typeof s === "number" ? s : parseInt(String(s), 10),
-    );
-    const solRows = await db.select().from(solutions).where(inArray(solutions.id, numSolIds));
-    const byId = new Map(solRows.map((r) => [r.id, r]));
-    const solutionIds: number[] = [];
-    for (const s of numSolIds) {
-      const row = byId.get(s);
-      if (!row) throw new NotFoundError(`solution not found: ${s}`, { id: s });
-      solutionIds.push(row.id);
-    }
-    const user = requireUser();
-    const id = await nextEliminationId();
-    await createElimination(
-      {
-        id,
-        problemId: pr[0]!.id,
-        eliminatedSolutionIds: solutionIds,
-        rationale: parsed.rationale,
-        context: parsed.context,
-        eliminatedById: user.user.id,
-      },
-      db,
-    );
-    recordMutation("ADD_ELIMINATION");
-    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
+    };
+    const { result } = await dispatch({ kind: "ADD_ELIMINATION", payload });
+    emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });
 

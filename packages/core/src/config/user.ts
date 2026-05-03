@@ -18,9 +18,7 @@ export function resolveCruxHome(): string {
 }
 
 export function configDir(): string {
-  const xdg = process.env.XDG_CONFIG_HOME;
-  const base = xdg && xdg.length > 0 ? xdg : join(homedir(), ".config");
-  return join(base, "crux");
+  return resolveCruxHome();
 }
 
 export function configPath(): string {

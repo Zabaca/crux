@@ -49,10 +49,17 @@ async function countRows(tableName: "observations" | "eliminations" | "outcomes"
   return 0;
 }
 
-async function resolveWs(slug: string) {
-  const rows = await getDb().select().from(workstreams).where(eq(workstreams.slug, slug)).limit(1);
-  if (!rows[0]) throw new NotFoundError(`workstream not found: ${slug}`, { slug });
-  return rows[0];
+async function resolveWs(slugOrId: string) {
+  const db = getDb();
+  const byId = (
+    await db.select().from(workstreams).where(eq(workstreams.id, slugOrId)).limit(1)
+  )[0];
+  if (byId) return byId;
+  const bySlug = (
+    await db.select().from(workstreams).where(eq(workstreams.slug, slugOrId)).limit(1)
+  )[0];
+  if (bySlug) return bySlug;
+  throw new NotFoundError(`workstream not found: ${slugOrId}`, { slug: slugOrId });
 }
 
 function toIntId(id: string | number): number {
@@ -186,6 +193,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
           problemId: prob.id,
           chosenSolutionId: chosenSol.id,
           rationale: p.rationale,
+          context: p.context,
           rejectedSolutionIds: rejectedIds,
           decidedById: user.id,
         },
@@ -202,7 +210,9 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
         {
           id,
           solutionId: sol.id,
-          observedImpact: p.summary,
+          observedImpact: p.observedImpact,
+          expectedImpact: p.expectedImpact,
+          learnings: p.learnings,
           followUpProblemIds: p.followUpProblemIds ? p.followUpProblemIds.map(toIntId) : [],
           createdById: user.id,
         },
@@ -221,12 +231,14 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
         reporterId: user.id,
         content: p.content,
         source: p.source,
+        sourceType: p.sourceType,
+        tags: p.tags && p.tags.length ? JSON.stringify(p.tags) : null,
       });
       return { ok: true, id };
     }
     case "ARCHIVE_OBSERVATION": {
       const p = action.payload;
-      await archiveObservation(p.id, "", user.id, db);
+      await archiveObservation(p.id, p.rationale ?? "", user.id, db);
       return { ok: true, id: p.id };
     }
     case "ADD_EVIDENCE": {
@@ -257,15 +269,17 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_ELIMINATION": {
       const p = action.payload;
-      const sol = await resolveSolution(p.solution);
+      const solRows = await Promise.all(p.solutions.map((s) => resolveSolution(s)));
+      const firstSol = solRows[0]!;
       const n = await countRows("eliminations");
       const id = `ELIM-${String(n + 1).padStart(3, "0")}`;
       await createElimination(
         {
           id,
-          problemId: sol.problemId,
-          eliminatedSolutionIds: [sol.id],
+          problemId: firstSol.problemId,
+          eliminatedSolutionIds: solRows.map((s) => s.id),
           rationale: p.rationale,
+          context: p.context,
           eliminatedById: user.id,
         },
         db,

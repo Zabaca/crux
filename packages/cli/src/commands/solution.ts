@@ -1,12 +1,16 @@
 import { defineCommand } from "citty";
 import { getDb } from "@crux/core";
 import { problems, solutions } from "@crux/core/db/schema";
-import { requireUser } from "@crux/core/config";
-import { SolutionInput, OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
-import { NotFoundError, shipSolution, editSolution } from "@crux/core/transitions";
+import { OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
+import { NotFoundError } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode, emitError } from "../output.js";
-import { guardAction, recordMutation } from "../collab.js";
+import { dispatch } from "@crux/core/actions";
+import type {
+  AddSolutionPayload,
+  ShipSolutionPayload,
+  EditSolutionPayload,
+} from "@crux/core/actions";
 import { problemArg, hintCtx } from "../ctx-defaults.js";
 
 const addCmd = defineCommand({
@@ -20,33 +24,14 @@ const addCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const prVal = problemArg(args.problem);
-    guardAction("ADD_SOLUTION");
     hintCtx(undefined, prVal);
-    const parsed = SolutionInput.parse({
-      problemId: prVal,
+    const payload: AddSolutionPayload = {
+      problem: prVal,
       title: args.title,
       description: args.description,
-    });
-    const user = requireUser();
-    const db = getDb();
-    const numId =
-      typeof parsed.problemId === "number"
-        ? parsed.problemId
-        : parseInt(String(parsed.problemId), 10);
-    const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
-    if (pr.length === 0) throw new NotFoundError(`problem not found: ${prVal}`, { id: prVal });
-    const result = await db
-      .insert(solutions)
-      .values({
-        problemId: pr[0]!.id,
-        title: parsed.title,
-        description: parsed.description,
-        createdById: user.user.id,
-      })
-      .returning({ id: solutions.id });
-    const id = result[0]!.id;
-    recordMutation("ADD_SOLUTION");
-    emit({ ok: true, id }, OkWithIdOutput, `added ${id}`);
+    };
+    const { result } = await dispatch({ kind: "ADD_SOLUTION", payload });
+    emit(result, OkWithIdOutput, `added ${(result as { id: number }).id}`);
   },
 });
 
@@ -90,19 +75,9 @@ const shipCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    guardAction("SHIP_SOLUTION");
-    const db = getDb();
-    const numId = parseInt(String(args.id), 10);
-    const rows = await db.select().from(solutions).where(eq(solutions.id, numId)).limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`solution not found: ${args.id}`, { id: args.id });
-    await shipSolution(rows[0]!.id, db);
-    recordMutation("SHIP_SOLUTION");
-    emit(
-      { ok: true, id: rows[0]!.id, status: "shipped" },
-      OkWithStatusOutput,
-      `shipped ${rows[0]!.id}`,
-    );
+    const payload: ShipSolutionPayload = { id: args.id };
+    const { result } = await dispatch({ kind: "SHIP_SOLUTION", payload });
+    emit(result, OkWithStatusOutput, `shipped ${args.id}`);
   },
 });
 
@@ -120,24 +95,13 @@ const editCmd = defineCommand({
       emitError({ code: "VALIDATION_ERROR", message: "Provide --description or --title" });
       process.exit(1);
     }
-    guardAction("EDIT_SOLUTION");
-    const db = getDb();
-    const numId = parseInt(String(args.id), 10);
-    const row = (await db.select().from(solutions).where(eq(solutions.id, numId)).limit(1))[0];
-    if (!row) {
-      emitError(new NotFoundError(`solution not found: ${args.id}`, { id: args.id }));
-      process.exit(23);
-    }
-    await editSolution(
-      row.id,
-      {
-        ...(args.description !== undefined && { description: args.description }),
-        ...(args.title !== undefined && { title: args.title }),
-      },
-      db,
-    );
-    recordMutation("EDIT_SOLUTION");
-    emit({ ok: true, id: row.id }, OkWithIdOutput, `edited ${row.id}`);
+    const payload: EditSolutionPayload = {
+      solutionId: args.id,
+      ...(args.description !== undefined && { description: args.description }),
+      ...(args.title !== undefined && { title: args.title }),
+    };
+    const { result } = await dispatch({ kind: "EDIT_SOLUTION", payload });
+    emit(result, OkWithIdOutput, `edited ${args.id}`);
   },
 });
 
