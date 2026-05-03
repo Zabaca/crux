@@ -14,7 +14,7 @@ Run this when the user has signaled they're ready to review accumulated state an
 `crux` refers to `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Use the explicit path; not on `$PATH`.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --all
+${CLAUDE_PLUGIN_ROOT}/bin/crux context --all
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias.
@@ -26,7 +26,7 @@ If first-run init hasn't happened this session (Bun, deps, db, config, team, web
 Synthesis without fresh context produces drift. Run before the first action:
 
 ```sh
-crux context -w <slug> --all
+crux context --all
 ```
 
 Anchor on:
@@ -99,7 +99,7 @@ When a shipped Solution's impact is known, `crux outcome add` records what shipp
 
 ## Reload mid-review
 
-If review runs long and the user adds new intake or another session writes, re-run `crux context -w <slug> --json --all` before continuing. State drifts.
+If review runs long and the user adds new intake or another session writes, re-run `crux context --json --all` before continuing. State drifts.
 
 ## View control bus
 

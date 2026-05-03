@@ -16,12 +16,11 @@ async function resolveWorkstream(id: string) {
 const listCmd = defineCommand({
   meta: { name: "list", description: "List abandonments in a workstream." },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     hintCtx(wsVal);
     const ws = await resolveWorkstream(wsVal);
     const db = getDb();

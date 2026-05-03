@@ -1,12 +1,11 @@
 import { loadViewMeta } from "@crux/core/view-state";
 import { isJsonMode } from "./output.js";
 
-export function wsArg(explicit: string | undefined): string {
-  if (explicit) return explicit;
+export function wsArg(): string {
   const id = loadViewMeta().context.workstreamId;
   if (!id)
     throw new Error(
-      'no --workstream given and no workstream in view state; run: crux view send SELECT_WORKSTREAM --payload \'{"id":"WS-<slug>"}\'',
+      'no workstream in view state; run: crux view send SELECT_WORKSTREAM --payload \'{"id":"WS-<slug>"}\'',
     );
   return id;
 }

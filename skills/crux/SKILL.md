@@ -12,12 +12,12 @@ Crux is a product-thinking residue tool. This skill is the **default intake mode
 `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug>
+${CLAUDE_PLUGIN_ROOT}/bin/crux context
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
 
-**`-w` is always optional.** Context-aware defaults infer workstream from view-state. Never pass `-w` alongside a positional ID argument (`done`, `show`, `abandon`, `ship`) — citty will assign the workstream slug to the positional slot, producing a NaN lookup error.
+**`-w` flag has been removed.** All commands infer workstream from view-state. If no workstream is in view-state, commands fail with a clear error — run `crux view send SELECT_WORKSTREAM --payload '{"id":"WS-<slug>"}'` first.
 
 The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
 
@@ -98,7 +98,7 @@ Before the first `crux` command in a session, run these checks in order. Steady 
 When user names a workstream, run before adding state:
 
 ```sh
-crux context -w <slug>
+crux context
 ```
 
 This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--tier` or `--all` to opt into more:

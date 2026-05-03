@@ -46,7 +46,6 @@ export const contextCommand = defineCommand({
     description: "Emit a JSON digest of the workstream for session reload.",
   },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     "show-archived": {
       type: "boolean",
       description: "Include archived Observations in the unlinked-observations section.",
@@ -65,7 +64,7 @@ export const contextCommand = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     hintCtx(wsVal);
     recordQuery("CONTEXT_SHOW", wsVal);
     const showArchived = Boolean(args["show-archived"]);

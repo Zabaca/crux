@@ -33,7 +33,6 @@ const addCmd = defineCommand({
       "Record a decision — flip chosen Solution to chosen, rejected Solutions to rejected.",
   },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     problem: { type: "string", required: false },
     chosen: { type: "string", required: true },
     rejected: { type: "string", description: "Repeatable or comma-separated." },
@@ -43,7 +42,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     const prVal = problemArg(args.problem);
     guardAction("ADD_DECISION");
     hintCtx(wsVal, prVal);

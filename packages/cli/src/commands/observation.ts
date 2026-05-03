@@ -42,7 +42,6 @@ function asTags(v: unknown): string[] {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Record a new observation." },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     content: { type: "string", required: true },
     source: { type: "string" },
     "source-type": {
@@ -54,7 +53,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     guardAction("ADD_OBSERVATION");
     const parsed = ObservationInput.parse({
       workstream: wsVal,
@@ -86,12 +85,11 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List observations in a workstream." },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     hintCtx(wsVal);
     const ws = await resolveWorkstream(wsVal);
     const rows = await getDb()

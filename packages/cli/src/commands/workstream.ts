@@ -6,6 +6,7 @@ import { WorkstreamInput, OkWithIdOutput, RenameOutput } from "@crux/core/valida
 import { NotFoundError, renameWorkstream } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { wsArg } from "../ctx-defaults.js";
 import { guardAction, recordMutation } from "../collab.js";
 
 const addCmd = defineCommand({
@@ -51,19 +52,15 @@ const listCmd = defineCommand({
 const showCmd = defineCommand({
   meta: { name: "show", description: "Show a workstream by id." },
   args: {
-    workstream: { type: "string", required: true, alias: "w" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb()
-      .select()
-      .from(workstreams)
-      .where(eq(workstreams.id, args.workstream))
-      .limit(1);
+    const wsId = wsArg();
+    const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, wsId)).limit(1);
     if (rows.length === 0)
-      throw new NotFoundError(`workstream not found: ${args.workstream}`, {
-        id: args.workstream,
+      throw new NotFoundError(`workstream not found: ${wsId}`, {
+        id: wsId,
       });
     emit(rows[0]!, `${rows[0]!.id}\t${rows[0]!.title}`);
   },

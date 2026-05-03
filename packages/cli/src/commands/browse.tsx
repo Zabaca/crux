@@ -8,16 +8,8 @@ export const browseCommand = defineCommand({
     name: "browse",
     description: "Interactive TUI for inspecting a Crux workstream.",
   },
-  args: {
-    workstream: {
-      type: "string",
-      alias: "w",
-      description: "Open directly into the given workstream slug.",
-    },
-  },
-  async run({ args }) {
-    const slug = typeof args.workstream === "string" ? args.workstream : undefined;
-    const instance = render(<App initialSlug={slug} />, {
+  async run() {
+    const instance = render(<App />, {
       alternateScreen: true,
     });
     await instance.waitUntilExit();

@@ -48,14 +48,13 @@ async function resolveProblem(id: string | number) {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a problem to a workstream." },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     title: { type: "string", required: true },
     description: { type: "string", required: true },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     guardAction("ADD_PROBLEM");
     const parsed = ProblemInput.parse({
       workstream: wsVal,
@@ -83,7 +82,6 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List problems in a workstream." },
   args: {
-    workstream: { type: "string", required: false, alias: "w" },
     status: {
       type: "string",
       description: "now | next | later | done | abandoned | unscheduled",
@@ -92,7 +90,7 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = wsArg();
     hintCtx(wsVal);
     const ws = await resolveWorkstream(wsVal);
     const filter = args.status;
