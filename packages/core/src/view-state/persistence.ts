@@ -86,7 +86,13 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
   void _r;
   void _la;
   void _rq;
-  let parsed = xstateFields as PersistedViewSnapshot;
+  // Normalize: XState v5 requires status/children/historyValue; old files omit them.
+  let parsed = {
+    status: "active",
+    historyValue: {},
+    children: {},
+    ...xstateFields,
+  } as PersistedViewSnapshot;
 
   // Migrate legacy context fields from slugs to IDs.
   if (parsed.context && typeof parsed.context === "object") {
