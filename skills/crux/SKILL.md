@@ -17,6 +17,8 @@ ${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug>
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
 
+**`-w` is always optional.** Context-aware defaults infer workstream from view-state. Never pass `-w` alongside a positional ID argument (`done`, `show`, `abandon`, `ship`) — citty will assign the workstream slug to the positional slot, producing a NaN lookup error.
+
 The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
 
 ## Collab mode (CRUX_COLLAB=1)
