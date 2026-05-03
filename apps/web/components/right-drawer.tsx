@@ -53,7 +53,7 @@ export function RightDrawer() {
           recentQueriesCount: data.recentQueries?.length ?? 0,
         });
         setViewing(viewing);
-        setContext(data.context);
+        if (data.context) setContext(data.context);
         if (data.recentQueries) {
           setQueries(data.recentQueries);
         }

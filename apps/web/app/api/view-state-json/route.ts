@@ -8,8 +8,8 @@ export async function GET() {
     const snap = loadState(path);
     const meta = loadViewMeta(path);
     return Response.json({
-      value: snap.value,
-      context: snap.context,
+      value: snap.value ?? { viewing: "workstream_list" },
+      context: snap.context ?? { workstreamId: null, problemId: null },
       revision: meta.revision,
       lastAction: meta.lastAction,
       recentQueries: meta.recentQueries,
