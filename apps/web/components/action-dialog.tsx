@@ -6,7 +6,8 @@ import { dispatchAction, type ActionResponse } from "@/lib/dispatch-action";
 export type FieldSpec = {
   name: string;
   label?: string;
-  type?: "text" | "textarea";
+  type?: "text" | "textarea" | "select";
+  options?: { value: string; label: string }[];
   required?: boolean;
   defaultValue?: string;
   /** Hidden field — pre-filled from page context, not editable. */
@@ -90,6 +91,20 @@ export function ActionDialog({ kind, title, fields, open, onClose, transform }: 
                     rows={4}
                     className="w-full rounded border bg-background px-2 py-1 text-sm"
                   />
+                ) : f.type === "select" ? (
+                  <select
+                    name={f.name}
+                    defaultValue={f.defaultValue ?? ""}
+                    required={f.required}
+                    className="w-full rounded border bg-background px-2 py-1 text-sm"
+                  >
+                    {!f.required && <option value="">— select —</option>}
+                    {(f.options ?? []).map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
                 ) : (
                   <input
                     name={f.name}

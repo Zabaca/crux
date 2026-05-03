@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { MutationToolbar } from "./mutation-toolbar";
 
 type ViewLeaf = "workstream_list" | "workstream_dashboard" | "problem_detail" | "intake_queue";
 
@@ -144,14 +143,6 @@ export function RightDrawer() {
               </Link>
             </div>
           )}
-
-          {/* Actions section */}
-          <div className="flex-none p-4 border-b">
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">
-              Actions
-            </p>
-            <MutationToolbar view={viewing} context={context} />
-          </div>
 
           {/* Recent queries section */}
           <div className="flex-1 p-4 overflow-y-auto">

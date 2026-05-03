@@ -5,6 +5,7 @@ import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant, statusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { SolutionActions } from "@/components/solution-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,11 @@ export default async function SolutionPage({
         </div>
       }
       title={solution.title}
+      actions={
+        <SolutionActions
+          solution={{ id: solution.id, status: solution.status, title: solution.title }}
+        />
+      }
     >
       <Section title="Parent problem">
         <Link href={`/w/${workstream.id}/problems/${problem.id}`} className="block">

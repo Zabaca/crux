@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant, statusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
+import { ProblemActions } from "@/components/problem-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,14 @@ export default async function ProblemPage({
           </Badge>
         }
         title={problem.title}
+        actions={
+          <ProblemActions
+            wsId={ws.id}
+            problemId={problem.id}
+            status={problem.status}
+            solutions={solutions.map((s) => ({ id: s.id, title: s.title, status: s.status }))}
+          />
+        }
       >
         <Section title="Description">
           <Card>

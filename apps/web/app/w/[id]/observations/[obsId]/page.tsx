@@ -5,6 +5,7 @@ import { PageShell, Section } from "@/components/page-shell";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
+import { ObservationActions } from "@/components/observation-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +39,13 @@ export default async function ObservationPage({
       ]}
       breadcrumbActions={observation.archive ? <Badge variant="archived">archived</Badge> : null}
       title={observation.id}
+      actions={
+        <ObservationActions
+          wsId={workstream.id}
+          obsId={observation.id}
+          archived={!!observation.archive}
+        />
+      }
     >
       <Section title="Content">
         <Card>

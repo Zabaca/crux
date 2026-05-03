@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { ArchiveToggle } from "@/components/archive-toggle";
 import { SyncViewState } from "@/components/sync-view-state";
+import { ObservationActions } from "@/components/observation-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -62,34 +63,42 @@ export default async function IntakePage({
                 const tags = parseTags(o.tags);
                 return (
                   <li key={o.id}>
-                    <Link href={`/w/${ws.id}/observations/${o.id}`} className="block">
-                      <Card className="hover:border-primary/40 transition-colors">
-                        <CardContent className="p-4 space-y-2">
+                    <Card className="hover:border-primary/40 transition-colors">
+                      <CardContent className="p-4 space-y-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
                           <div className="flex flex-wrap items-center gap-2 text-xs">
-                            <span className="font-mono text-muted-foreground">{o.id}</span>
+                            <Link
+                              href={`/w/${ws.id}/observations/${o.id}`}
+                              className="font-mono text-muted-foreground hover:underline"
+                            >
+                              {o.id}
+                            </Link>
                             {o.archive ? <Badge variant="archived">archived</Badge> : null}
                             {o.sourceType ? (
                               <span className="text-muted-foreground">{o.sourceType}</span>
                             ) : null}
                           </div>
+                          <ObservationActions wsId={ws.id} obsId={o.id} archived={!!o.archive} />
+                        </div>
+                        <Link href={`/w/${ws.id}/observations/${o.id}`} className="block">
                           <p className="text-sm whitespace-pre-wrap line-clamp-3">{o.content}</p>
-                          {tags.length > 0 ? (
-                            <div className="flex flex-wrap gap-1 text-xs">
-                              {tags.map((t) => (
-                                <span key={t} className="rounded bg-muted px-1.5 py-0.5 font-mono">
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          ) : null}
-                          {o.archive ? (
-                            <p className="text-xs text-muted-foreground">
-                              archive rationale: {o.archive.rationale ?? "(none)"}
-                            </p>
-                          ) : null}
-                        </CardContent>
-                      </Card>
-                    </Link>
+                        </Link>
+                        {tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 text-xs">
+                            {tags.map((t) => (
+                              <span key={t} className="rounded bg-muted px-1.5 py-0.5 font-mono">
+                                {t}
+                              </span>
+                            ))}
+                          </div>
+                        ) : null}
+                        {o.archive ? (
+                          <p className="text-xs text-muted-foreground">
+                            archive rationale: {o.archive.rationale ?? "(none)"}
+                          </p>
+                        ) : null}
+                      </CardContent>
+                    </Card>
                   </li>
                 );
               })}

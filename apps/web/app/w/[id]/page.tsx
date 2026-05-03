@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge, roadmapStatusVariant } from "@/components/ui/badge";
 import { EmptyState } from "@/components/empty-state";
 import { SyncViewState } from "@/components/sync-view-state";
+import { WorkstreamActions } from "@/components/workstream-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -85,6 +86,7 @@ export default async function WorkstreamPage({ params }: { params: Promise<{ id:
         breadcrumbs={[{ href: "/", label: "Workstreams" }, { label: ws.slug }]}
         title={ws.title}
         subtitle={ws.description ?? undefined}
+        actions={<WorkstreamActions wsId={ws.id} />}
       >
         <Section title="Roadmap">
           {allProblems.length === 0 ? (
