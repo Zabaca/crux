@@ -92,6 +92,9 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
     actor.start();
     const snap = actor.getSnapshot();
     actor.stop();
+    if (!snap.context || typeof snap.context !== "object") {
+      throw new Error("restored snapshot missing context");
+    }
     return snap;
   } catch {
     // Snapshot incompatible — fall back to initial state

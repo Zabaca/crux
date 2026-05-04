@@ -109,11 +109,12 @@ export async function POST(req: Request) {
     };
 
     const current = loadState();
-    const leaf = JSON.stringify(current.value);
+    const leaf = JSON.stringify(current.value ?? { viewing: "workstream_list" });
+    const ctx = current.context ?? { workstreamSlug: null, problemSlug: null };
 
     // Helper: ensure we're at workstream_dashboard for the given slug.
     const ensureAtDashboard = async (slug: string) => {
-      if (current.context.workstreamSlug !== slug) {
+      if (ctx.workstreamSlug !== slug) {
         if (!leaf.includes("workstream_list")) await sendViewEvent({ type: "BACK" });
         await sendViewEvent({ type: "SELECT_WORKSTREAM", slug });
       } else if (
@@ -126,7 +127,7 @@ export async function POST(req: Request) {
     };
 
     if (problemSlug && workstreamSlug) {
-      if (current.context.workstreamSlug !== workstreamSlug) {
+      if (ctx.workstreamSlug !== workstreamSlug) {
         await sendViewEvent({ type: "SELECT_WORKSTREAM", slug: workstreamSlug });
       }
       await sendViewEvent({ type: "OPEN_PROBLEM", slug: problemSlug });
@@ -140,7 +141,9 @@ export async function POST(req: Request) {
     }
 
     return Response.json({ ok: true });
-  } catch {
-    return Response.json({ ok: false });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error("[view-state] POST failed:", message);
+    return Response.json({ ok: false, error: message }, { status: 500 });
   }
 }
