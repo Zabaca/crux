@@ -167,3 +167,13 @@ For multi-step tasks, state a brief plan:
 ```
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
+
+## Agent skills
+
+### Issue tracker
+
+Issues are Fredrin tickets, operated via the `fredrin` CLI (not GitHub issues). See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
