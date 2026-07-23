@@ -469,6 +469,13 @@ Hard rules:
 
 ## Team guidelines
 
+**This project's memory folder is `docs/` (set in project settings), not the
+default `.fredrin/memory/`.** Decision records live in `docs/adr/` (sequentially
+numbered, short — see existing entries), and the domain glossary is the root
+`CONTEXT.md` (read it before exploring, per `docs/agents/domain.md`). Wherever
+this file's prose says `.fredrin/memory/…`, read `docs/…` instead. There is
+exactly one ADR home — never create `.fredrin/memory/adr/`.
+
 Customize this section for your project — coding standards, review expectations,
 definition of done, branch naming, and anything every Worker should know before
 touching code. Durable knowledge about **your own app's domain** (its glossary,
