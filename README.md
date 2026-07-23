@@ -79,16 +79,31 @@ There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux alr
 
 ## Layout
 
-- `.claude-plugin/` — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
-- `skills/crux/` — the Crux skill that teaches Claude when and how to operate the CLI.
-- `packages/core` — schema, transitions, validation, config loader.
-- `packages/cli` — `crux` binary, command dispatch via citty.
-- `scripts/` — seeding.
-- `apps/` — reserved for a future web UI.
+- [`.claude-plugin/`](.claude-plugin/) — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
+- [`skills/crux/`](skills/crux/) — the Crux skill that teaches Claude when and how to operate the CLI.
+- [`packages/core`](packages/core) — schema, transitions, validation, config loader.
+- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty.
+- [`scripts/`](scripts/) — seeding.
+- [`apps/web`](apps/web) — the read-only web UI (roadmap + docs).
+
+## Docs
+
+Documentation is whatever is reachable from this file: a walker starts here and
+follows internal links and `@import`s ([ADR-0002](docs/adr/0002-readme-rooted-doc-tree.md)).
+A doc that exists but isn't linked from the tree doesn't count — `bun run docs:check`
+reports it as rot, and the web UI's `/docs` section renders the same tree live.
+
+- [`CONTEXT.md`](CONTEXT.md) — the glossary. Canonical vocabulary for this repo.
+- Decisions — [ADR-0001: single dual-audience doc](docs/adr/0001-single-dual-audience-doc.md),
+  [ADR-0002: README-rooted doc tree](docs/adr/0002-readme-rooted-doc-tree.md).
+- Specs — [human-readable surface](docs/human-readable-surface-spec.md),
+  [agent-driven view control](docs/agent-driven-view-control-spec.md).
+- Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
+  [model selection](docs/model-selection.md).
 
 ## Principles
 
-- **Transitions are code, not documentation.** Invariants live as plain functions in `packages/core/src/transitions/`.
+- **Transitions are code, not documentation.** Invariants live as plain functions in [`packages/core/src/transitions/`](packages/core/src/transitions/).
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
 - **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded.
 - **libSQL file gitignored.** Migrations committed. Turso embedded replicas for team mode.
@@ -99,7 +114,7 @@ There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux alr
 
 MVP. Single-user local libSQL. No multi-tenant, no web UI, no test suite (transition logic is exercised end-to-end via the seed script). Design thinking for WS-crux itself is seeded in the db (`bun run seed`) and serves as the initial dogfood corpus.
 
-See `.claude/skills/dev-start/SKILL.md` for new-machine onboarding.
+See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 
 
 ---
@@ -172,8 +187,8 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 ### Issue tracker
 
-Issues are Fredrin tickets, operated via the `fredrin` CLI (not GitHub issues). See `docs/agents/issue-tracker.md`.
+Issues are Fredrin tickets, operated via the `fredrin` CLI (not GitHub issues). See [`docs/agents/issue-tracker.md`](docs/agents/issue-tracker.md).
 
 ### Domain docs
 
-Single-context: one `CONTEXT.md` + `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context: one [`CONTEXT.md`](CONTEXT.md) + [`docs/adr/`](docs/adr/) at the repo root. See [`docs/agents/domain.md`](docs/agents/domain.md).

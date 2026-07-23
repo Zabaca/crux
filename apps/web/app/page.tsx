@@ -13,7 +13,15 @@ export default async function Home() {
   return (
     <>
       <SyncViewState workstreamId={null} />
-      <PageShell title="Workstreams" subtitle="All Crux workstreams in this database.">
+      <PageShell
+        title="Workstreams"
+        subtitle="All Crux workstreams in this database."
+        actions={
+          <Link href="/docs" className="text-sm text-muted-foreground hover:underline">
+            Docs
+          </Link>
+        }
+      >
         {wss.length === 0 ? (
           <EmptyState>
             No workstreams. Run <code>bun run seed</code> to seed WS-crux.

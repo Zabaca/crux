@@ -45,6 +45,59 @@
   }
 }
 
+@layer components {
+  .doc-prose {
+    @apply text-sm leading-relaxed;
+  }
+  .doc-prose > * + * {
+    @apply mt-4;
+  }
+  .doc-prose h1 {
+    @apply text-xl font-semibold tracking-tight mt-8;
+  }
+  .doc-prose h2 {
+    @apply text-lg font-semibold tracking-tight mt-8;
+  }
+  .doc-prose h3 {
+    @apply text-base font-semibold mt-6;
+  }
+  .doc-prose a {
+    @apply underline underline-offset-2;
+  }
+  .doc-prose ul {
+    @apply list-disc space-y-1 pl-5;
+  }
+  .doc-prose ol {
+    @apply list-decimal space-y-1 pl-5;
+  }
+  .doc-prose li > ul,
+  .doc-prose li > ol {
+    @apply mt-1;
+  }
+  .doc-prose code {
+    @apply rounded bg-muted px-1 py-0.5 font-mono text-xs;
+  }
+  .doc-prose pre {
+    @apply overflow-x-auto rounded-md border bg-muted/40 p-3;
+  }
+  .doc-prose pre code {
+    @apply bg-transparent p-0;
+  }
+  .doc-prose blockquote {
+    @apply border-l-2 pl-4 text-muted-foreground;
+  }
+  .doc-prose table {
+    @apply block w-full overflow-x-auto text-xs;
+  }
+  .doc-prose th,
+  .doc-prose td {
+    @apply border px-2 py-1 text-left align-top;
+  }
+  .doc-prose hr {
+    @apply my-6;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
