@@ -16,7 +16,7 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 
 ## Lifecycle vocabulary
 
-- **Stage** — a Problem's place on the roadmap: **now**, **next**, or **later**. A Problem starts **unscheduled** (not on the roadmap); scheduling places it in a stage; it ends **done** or **abandoned** (terminal). *Deprecated synonym: "tier" — still what the code says (`RoadmapTier`); rename pending.*
+- **Stage** — a Problem's place on the roadmap: **now**, **next**, or **later**. A Problem starts **unscheduled** (not on the roadmap); scheduling places it in a stage; it ends **done** or **abandoned** (terminal).
 - **Unscheduled** — filed but not yet placed on the roadmap (status null). Not a bug, not a backlog: simply awaiting scheduling.
 - **Rejected** (Solution) — ruled out, terminally. One status, two provenances: an Elimination (ruled out with no winner yet) or a Decision (lost to the chosen Solution). The *why* lives in that record, never in the status.
 - **Solution statuses** — `proposed → evaluated → chosen → shipped`, with `rejected` as the terminal "no" from either path.
