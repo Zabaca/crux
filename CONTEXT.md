@@ -24,3 +24,5 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 ## Doc conventions
 
 - **Graduate (a doc section)** — move a section out of the shared README into its own file behind a short pointer, triggered by the section's *size*, never by which audience it serves (ADR-0001).
+- **Reachable (a doc)** — part of the project's documentation only if the doc tree walker can reach it from README, via internal links or Claude Code `@import`s (ADR-0002).
+- **Rot (structural)** — a broken internal link, or an *orphan*: a doc file that exists on disk but is unreachable from README. What the walker catches. *Content* rot — a reachable doc stating stale facts — remains a human/agent judgment.
