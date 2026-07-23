@@ -101,10 +101,10 @@ When user names a workstream, run before adding state:
 crux context
 ```
 
-This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--tier` or `--all` to opt into more:
+This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--stage` or `--all` to opt into more:
 
-- `--tier=now,next` — specific buckets, comma-separated. Valid values: `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
-- `--all` — all six tier buckets plus `recent_observations_unlinked`.
+- `--stage=now,next` — specific buckets, comma-separated. Valid values: `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
+- `--all` — all six stage buckets plus `recent_observations_unlinked`.
 
 For intake mode, anchor on:
 

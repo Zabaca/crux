@@ -33,7 +33,7 @@ Anchor on:
 
 - `recent_observations_unlinked[]` — primary review queue. Each one is a candidate for either Evidence-linking to an existing Problem or seeding a new Problem.
 - `unpromoted_ideas[]` — solution-space hunches waiting for a Problem to attach to. Either link (via Solution + Problem), archive, or leave.
-- `now[]`, `next[]`, `later[]`, `unscheduled[]` — open Problems by tier, with evidence counts and latest decisions. Use to find link targets.
+- `now[]`, `next[]`, `later[]`, `unscheduled[]` — open Problems by stage, with evidence counts and latest decisions. Use to find link targets.
 - `[].latest_decision`, `[].eliminations[]` — what's already been decided / ruled out. Don't re-propose ruled-out directions.
 - `done[]`, `abandoned[]` — closed Problems; scan for relevant prior decisions before filing new work.
 
@@ -77,7 +77,7 @@ A Decision where rejected Solutions aren't rows in the db is dishonest — claim
 
 ### Scheduling is intentional
 
-Problems start unscheduled (null status). `crux problem schedule <id> --tier now|next|later` only when user has expressed genuine intent. `now` = actively in flight, `next` = queued, `later` = acknowledged but not soon. Leave unscheduled rather than guess.
+Problems start unscheduled (null status). `crux problem schedule <id> --stage now|next|later` only when user has expressed genuine intent. `now` = actively in flight, `next` = queued, `later` = acknowledged but not soon. Leave unscheduled rather than guess.
 
 ### Outcome closes the loop
 

@@ -16,20 +16,20 @@ import { ProblemCard, type ProblemRow } from "./problem-card";
 import { useViewSync } from "./sync-view-state";
 import { dispatchAction } from "@/lib/dispatch-action";
 
-type Tier = "now" | "next" | "later" | "unscheduled";
-type Columns = Record<Tier, ProblemRow[]>;
+type Stage = "now" | "next" | "later" | "unscheduled";
+type Columns = Record<Stage, ProblemRow[]>;
 
-const TIERS: { id: Tier; title: string; tone: string }[] = [
+const STAGES: { id: Stage; title: string; tone: string }[] = [
   { id: "now", title: "Now", tone: "text-red-600" },
   { id: "next", title: "Next", tone: "text-orange-600" },
   { id: "later", title: "Later", tone: "text-stone-600" },
   { id: "unscheduled", title: "Unscheduled", tone: "text-slate-500" },
 ];
 
-function DraggableCard({ slug, p, tier }: { slug: string; p: ProblemRow; tier: Tier }) {
+function DraggableCard({ slug, p, stage }: { slug: string; p: ProblemRow; stage: Stage }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: p.slug,
-    data: { tier },
+    data: { stage },
   });
   return (
     <div
@@ -47,19 +47,19 @@ function DraggableCard({ slug, p, tier }: { slug: string; p: ProblemRow; tier: T
 }
 
 function DroppableColumn({
-  tier,
+  stage,
   title,
   tone,
   rows,
   workstreamSlug,
 }: {
-  tier: Tier;
+  stage: Stage;
   title: string;
   tone: string;
   rows: ProblemRow[];
   workstreamSlug: string;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: tier });
+  const { setNodeRef, isOver } = useDroppable({ id: stage });
   return (
     <div
       ref={setNodeRef}
@@ -77,7 +77,7 @@ function DroppableColumn({
         <ul className="space-y-2">
           {rows.map((p) => (
             <li key={p.id}>
-              <DraggableCard slug={workstreamSlug} p={p} tier={tier} />
+              <DraggableCard slug={workstreamSlug} p={p} stage={stage} />
             </li>
           ))}
         </ul>
@@ -101,8 +101,8 @@ export function RoadmapBoard({
   async function onDragEnd(e: DragEndEvent) {
     const { active, over } = e;
     if (!over) return;
-    const from = (active.data.current?.tier as Tier | undefined) ?? null;
-    const to = over.id as Tier;
+    const from = (active.data.current?.stage as Stage | undefined) ?? null;
+    const to = over.id as Stage;
     if (!from || from === to) return;
 
     const slug = String(active.id);
@@ -131,7 +131,7 @@ export function RoadmapBoard({
     const res =
       to === "unscheduled"
         ? await dispatchAction("UNSCHEDULE_PROBLEM", { slug })
-        : await dispatchAction("SCHEDULE_PROBLEM", { slug, tier: to });
+        : await dispatchAction("SCHEDULE_PROBLEM", { slug, stage: to });
 
     if (!res.ok) {
       setColumns(prev);
@@ -144,10 +144,10 @@ export function RoadmapBoard({
   return (
     <DndContext sensors={sensors} onDragEnd={onDragEnd}>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {TIERS.map((t) => (
+        {STAGES.map((t) => (
           <DroppableColumn
             key={t.id}
-            tier={t.id}
+            stage={t.id}
             title={t.title}
             tone={t.tone}
             rows={columns[t.id]}

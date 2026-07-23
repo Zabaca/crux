@@ -51,7 +51,7 @@ export const AddProblemAction = z.object({
 });
 export const ScheduleProblemAction = z.object({
   kind: z.literal("SCHEDULE_PROBLEM"),
-  payload: z.object({ id: z.union([z.string(), z.number()]), tier: z.string() }),
+  payload: z.object({ id: z.union([z.string(), z.number()]), stage: z.string() }),
 });
 export const UnscheduleProblemAction = z.object({
   kind: z.literal("UNSCHEDULE_PROBLEM"),

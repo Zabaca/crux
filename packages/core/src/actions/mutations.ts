@@ -25,7 +25,7 @@ import {
   archiveObservation,
   renameWorkstream,
   NotFoundError,
-  type RoadmapTier,
+  type RoadmapStage,
 } from "../transitions/index.js";
 import type { MutationAction } from "./schemas.js";
 
@@ -125,8 +125,8 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     case "SCHEDULE_PROBLEM": {
       const p = action.payload;
       const prob = await resolveProblem(p.id);
-      await scheduleProblem(prob.id, p.tier as RoadmapTier, db);
-      return { ok: true, id: prob.id, status: p.tier };
+      await scheduleProblem(prob.id, p.stage as RoadmapStage, db);
+      return { ok: true, id: prob.id, status: p.stage };
     }
     case "UNSCHEDULE_PROBLEM": {
       const p = action.payload;

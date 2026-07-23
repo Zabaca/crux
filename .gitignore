@@ -28,3 +28,4 @@ dist/
 !.claude/skills/
 .view-state.json
 .env
+.fredrin/

@@ -142,7 +142,7 @@ describe("smoke: workstream → problem → observation → evidence link → co
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
         workstream: "WS-smoke",
-        tier: "unscheduled",
+        stage: "unscheduled",
         json: false,
       }),
     );
@@ -180,7 +180,7 @@ describe("regression OBS-030 (a): context problem entries spread id/title/status
     }>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
         workstream: "WS-reg-a",
-        tier: "unscheduled",
+        stage: "unscheduled",
         json: false,
       }),
     );
@@ -210,7 +210,7 @@ describe("regression OBS-030 (a): context problem entries spread id/title/status
     const problemId = pResult.id;
     await runCmd(problemCommand as AnyCmd, "schedule", {
       id: String(problemId),
-      tier: "now",
+      stage: "now",
       json: false,
     });
 
@@ -290,7 +290,7 @@ describe("schema validation: emit() rejects malformed payloads", () => {
     expect(() => emit(malformed, ContextOutput)).toThrow();
   });
 
-  test("ContextOutput accepts payload with only now bucket (tier buckets are optional)", () => {
+  test("ContextOutput accepts payload with only now bucket (stage buckets are optional)", () => {
     const nowOnly = {
       workstream: { slug: "ws" },
       now: [],
@@ -301,19 +301,19 @@ describe("schema validation: emit() rejects malformed payloads", () => {
 });
 
 // ---------------------------------------------------------------------------
-// SOL-context-now-only-default: --tier and --all flag behaviour
+// SOL-context-now-only-default: --stage and --all flag behaviour
 // ---------------------------------------------------------------------------
 
-describe("context --tier / --all flag behaviour", () => {
+describe("context --stage / --all flag behaviour", () => {
   test("default invocation emits only 'now' bucket; done/next/later/unscheduled/abandoned absent", async () => {
     await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "tier-default",
-      title: "Tier Default WS",
+      slug: "stage-default",
+      title: "Stage Default WS",
       json: false,
     });
     const pResult = await capture<{ ok: boolean; id: number }>(() =>
       runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-tier-default",
+        workstream: "WS-stage-default",
         title: "Now Problem",
         description: "desc",
         json: false,
@@ -321,13 +321,13 @@ describe("context --tier / --all flag behaviour", () => {
     );
     await runCmd(problemCommand as AnyCmd, "schedule", {
       id: String(pResult.id),
-      tier: "now",
+      stage: "now",
       json: false,
     });
 
     const ctx = await capture<Record<string, unknown>>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-tier-default",
+        workstream: "WS-stage-default",
         json: false,
       }),
     );
@@ -343,14 +343,14 @@ describe("context --tier / --all flag behaviour", () => {
     expect(typeof ctx.seed_version).toBe("string");
   });
 
-  test("--all invocation emits all six tier buckets + recent_observations_unlinked", async () => {
+  test("--all invocation emits all six stage buckets + recent_observations_unlinked", async () => {
     await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "tier-all",
-      title: "Tier All WS",
+      slug: "stage-all",
+      title: "Stage All WS",
       json: false,
     });
     await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "WS-tier-all",
+      workstream: "WS-stage-all",
       title: "All Problem",
       description: "desc",
       json: false,
@@ -358,7 +358,7 @@ describe("context --tier / --all flag behaviour", () => {
 
     const ctx = await capture<Record<string, unknown>>(() =>
       runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-tier-all",
+        workstream: "WS-stage-all",
         all: true,
         json: false,
       }),
@@ -521,7 +521,7 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
     const result = await capture<{ ok: boolean }>(() =>
       runCmd(problemCommand as AnyCmd, "schedule", {
         id: String(testProblemId),
-        tier: "now",
+        stage: "now",
         json: false,
       }),
     );
@@ -531,7 +531,7 @@ describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", 
   test("UNSCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
     await runCmd(problemCommand as AnyCmd, "schedule", {
       id: String(testProblemId),
-      tier: "now",
+      stage: "now",
       json: false,
     });
     const result = await capture<{ ok: boolean }>(() =>

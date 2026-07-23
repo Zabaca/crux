@@ -39,7 +39,7 @@ export async function listWorkstreams() {
       const next = probs.filter((p) => p.status === "next").length;
       const later = probs.filter((p) => p.status === "later").length;
       const unscheduled = probs.filter((p) => p.status === null).length;
-      return { workstream: ws, tierCounts: { now, next, later, unscheduled } };
+      return { workstream: ws, stageCounts: { now, next, later, unscheduled } };
     }),
   );
   return counts;

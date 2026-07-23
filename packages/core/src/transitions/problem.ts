@@ -4,7 +4,7 @@ import { problems, abandonments } from "../db/schema.js";
 import { TransitionError, InvariantError, NotFoundError } from "./errors.js";
 import { chosenSolutionIsShipped } from "./predicates.js";
 
-export type RoadmapTier = "now" | "next" | "later";
+export type RoadmapStage = "now" | "next" | "later";
 
 async function loadProblem(problemId: number, db: CruxDb) {
   const rows = await db.select().from(problems).where(eq(problems.id, problemId)).limit(1);
@@ -22,12 +22,12 @@ function assertNotTerminal(p: { id: number; status: string | null }, action: str
   }
 }
 
-export async function scheduleProblem(problemId: number, tier: RoadmapTier, db: CruxDb) {
+export async function scheduleProblem(problemId: number, stage: RoadmapStage, db: CruxDb) {
   const p = await loadProblem(problemId, db);
   assertNotTerminal(p, "reschedule");
   await db
     .update(problems)
-    .set({ status: tier, updatedAt: Date.now() })
+    .set({ status: stage, updatedAt: Date.now() })
     .where(eq(problems.id, problemId));
 }
 

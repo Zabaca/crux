@@ -387,8 +387,8 @@ export function ProblemActions({ wsId: _wsId, problemId, status, solutions }: Pr
         fields={[
           { name: "id", hidden: true, defaultValue: String(problemId) },
           {
-            name: "tier",
-            label: "tier",
+            name: "stage",
+            label: "stage",
             type: "select",
             required: true,
             options: [
