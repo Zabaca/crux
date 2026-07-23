@@ -34,7 +34,7 @@ export const ProblemInput = z.object({
   description: z.string().min(1),
 });
 
-export const RoadmapTier = z.enum(["now", "next", "later"]);
+export const RoadmapStage = z.enum(["now", "next", "later"]);
 
 export const EvidenceInput = z.object({
   observationId: z.string().min(1),

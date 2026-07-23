@@ -20,7 +20,7 @@ export default async function Home() {
           </EmptyState>
         ) : (
           <ul className="space-y-3">
-            {wss.map(({ workstream: ws, tierCounts }) => (
+            {wss.map(({ workstream: ws, stageCounts }) => (
               <li key={ws.id}>
                 <Link href={`/w/${ws.id}`} className="block">
                   <Card className="hover:border-primary/40 transition-colors">
@@ -36,34 +36,36 @@ export default async function Home() {
                             {ws.description}
                           </p>
                         ) : null}
-                        {(tierCounts.now > 0 ||
-                          tierCounts.next > 0 ||
-                          tierCounts.later > 0 ||
-                          tierCounts.unscheduled > 0) && (
+                        {(stageCounts.now > 0 ||
+                          stageCounts.next > 0 ||
+                          stageCounts.later > 0 ||
+                          stageCounts.unscheduled > 0) && (
                           <div className="flex gap-3 text-xs text-muted-foreground pt-1">
-                            {tierCounts.now > 0 && (
+                            {stageCounts.now > 0 && (
                               <span>
-                                <span className="font-mono text-foreground">{tierCounts.now}</span>{" "}
+                                <span className="font-mono text-foreground">{stageCounts.now}</span>{" "}
                                 now
                               </span>
                             )}
-                            {tierCounts.next > 0 && (
+                            {stageCounts.next > 0 && (
                               <span>
-                                <span className="font-mono text-foreground">{tierCounts.next}</span>{" "}
+                                <span className="font-mono text-foreground">
+                                  {stageCounts.next}
+                                </span>{" "}
                                 next
                               </span>
                             )}
-                            {tierCounts.later > 0 && (
+                            {stageCounts.later > 0 && (
                               <span>
                                 <span className="font-mono text-foreground">
-                                  {tierCounts.later}
+                                  {stageCounts.later}
                                 </span>{" "}
                                 later
                               </span>
                             )}
-                            {tierCounts.unscheduled > 0 && (
+                            {stageCounts.unscheduled > 0 && (
                               <span>
-                                <span className="font-mono">{tierCounts.unscheduled}</span>{" "}
+                                <span className="font-mono">{stageCounts.unscheduled}</span>{" "}
                                 unscheduled
                               </span>
                             )}

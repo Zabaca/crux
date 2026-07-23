@@ -50,15 +50,15 @@ export const contextCommand = defineCommand({
       type: "boolean",
       description: "Include archived Observations in the unlinked-observations section.",
     },
-    tier: {
+    stage: {
       type: "string",
       alias: "t",
       description:
-        "Comma-separated tier buckets to include: now,next,later,unscheduled,done,abandoned. Defaults to 'now'.",
+        "Comma-separated stage buckets to include: now,next,later,unscheduled,done,abandoned. Defaults to 'now'.",
     },
     all: {
       type: "boolean",
-      description: "Emit all tier buckets plus recent_observations_unlinked.",
+      description: "Emit all stage buckets plus recent_observations_unlinked.",
     },
     json: { type: "boolean" },
   },
@@ -69,25 +69,25 @@ export const contextCommand = defineCommand({
     recordQuery("CONTEXT_SHOW", wsVal);
     const showArchived = Boolean(args["show-archived"]);
 
-    const VALID_TIERS = new Set(["now", "next", "later", "unscheduled", "done", "abandoned"]);
-    let requestedTiers: Set<string>;
+    const VALID_STAGES = new Set(["now", "next", "later", "unscheduled", "done", "abandoned"]);
+    let requestedStages: Set<string>;
     if (args.all) {
-      requestedTiers = new Set(VALID_TIERS);
-    } else if (args.tier) {
-      const parts = (args.tier as string)
+      requestedStages = new Set(VALID_STAGES);
+    } else if (args.stage) {
+      const parts = (args.stage as string)
         .split(",")
         .map((s) => s.trim())
         .filter(Boolean);
       for (const p of parts) {
-        if (!VALID_TIERS.has(p)) {
+        if (!VALID_STAGES.has(p)) {
           throw new Error(
-            `Invalid tier value: "${p}". Valid values: ${[...VALID_TIERS].join(", ")}`,
+            `Invalid stage value: "${p}". Valid values: ${[...VALID_STAGES].join(", ")}`,
           );
         }
       }
-      requestedTiers = new Set(parts);
+      requestedStages = new Set(parts);
     } else {
-      requestedTiers = new Set(["now"]);
+      requestedStages = new Set(["now"]);
     }
     const includeExtras = Boolean(args.all);
     const db = getDb();
@@ -256,14 +256,16 @@ export const contextCommand = defineCommand({
       workstream: wsRow,
       seed_version: SEED_VERSION,
     };
-    if (requestedTiers.has("now")) output.now = digestProblems.filter((p) => p.status === "now");
-    if (requestedTiers.has("next")) output.next = digestProblems.filter((p) => p.status === "next");
-    if (requestedTiers.has("later"))
+    if (requestedStages.has("now")) output.now = digestProblems.filter((p) => p.status === "now");
+    if (requestedStages.has("next"))
+      output.next = digestProblems.filter((p) => p.status === "next");
+    if (requestedStages.has("later"))
       output.later = digestProblems.filter((p) => p.status === "later");
-    if (requestedTiers.has("unscheduled"))
+    if (requestedStages.has("unscheduled"))
       output.unscheduled = digestProblems.filter((p) => p.status == null);
-    if (requestedTiers.has("done")) output.done = digestProblems.filter((p) => p.status === "done");
-    if (requestedTiers.has("abandoned"))
+    if (requestedStages.has("done"))
+      output.done = digestProblems.filter((p) => p.status === "done");
+    if (requestedStages.has("abandoned"))
       output.abandoned = digestProblems.filter((p) => p.status === "abandoned");
     if (includeExtras) {
       output.recent_observations_unlinked = unlinked;

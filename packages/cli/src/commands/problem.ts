@@ -9,7 +9,7 @@ import {
   solutions,
   workstreams,
 } from "@crux/core/db/schema";
-import { OkWithStatusOutput, ProblemShowOutput, RoadmapTier } from "@crux/core/validation";
+import { OkWithStatusOutput, ProblemShowOutput, RoadmapStage } from "@crux/core/validation";
 import { NotFoundError } from "@crux/core/transitions";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
@@ -155,15 +155,15 @@ const scheduleCmd = defineCommand({
   meta: { name: "schedule", description: "Schedule a problem onto the roadmap." },
   args: {
     id: { type: "positional", required: true },
-    tier: { type: "string", required: true, description: "now | next | later" },
+    stage: { type: "string", required: true, description: "now | next | later" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const tier = RoadmapTier.parse(args.tier);
-    const payload: ScheduleProblemPayload = { id: args.id, tier };
+    const stage = RoadmapStage.parse(args.stage);
+    const payload: ScheduleProblemPayload = { id: args.id, stage };
     const { result } = await dispatch({ kind: "SCHEDULE_PROBLEM", payload });
-    emit(result, OkWithStatusOutput, `scheduled ${args.id} → ${tier}`);
+    emit(result, OkWithStatusOutput, `scheduled ${args.id} → ${stage}`);
   },
 });
 
