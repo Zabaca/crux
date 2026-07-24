@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Cloud crux: one Worker holding the site and the JSON API together
+  // (ADR-0004). Today it serves only a stub /health route — the Astro shell
+  // (CRUX-9557JH) and the API over dispatch() (CRUX-IA2KFI) land here later.
+  //
+  // Deployed through zbc, not by hand: packages/infra/environments/production/
+  // cloud.ts is the instance, and `zbc apply production` runs wrangler for you.
+  // This file stays the source of truth for the Worker's topology.
+  "name": "crux-cloud",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-23",
+  "observability": { "enabled": true },
+  // D1 has no zbc module, so the database is created once by hand
+  // (`wrangler d1 create crux-production`) and bound here by id — the shape
+  // ADR-0004 settled on. The schema arrives with CRUX-JELCAK; until then this
+  // database is real and empty.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "crux-production",
+      "database_id": "18dc8b49-7e2a-418b-aceb-5720dd3b9373"
+    }
+  ]
+}

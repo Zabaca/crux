@@ -1,0 +1,11 @@
+{
+  // zbc's template extends ../../tsconfig.json; this repo's shared config is
+  // tsconfig.base.json (there is no root tsconfig.json).
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": ".",
+    "types": ["node"]
+  },
+  "include": ["src/**/*", "modules/**/*", "environments/**/*"]
+}

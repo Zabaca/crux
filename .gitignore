@@ -2,6 +2,7 @@
 node_modules/
 dist/
 .next/
+.wrangler/
 .DS_Store
 
 # Local libSQL database — migrations are committed, data is not.
