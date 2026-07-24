@@ -14,6 +14,9 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 - **Abandonment** — giving up on a Problem itself, with the reason. The graveyard keeps its dignity: abandoned ≠ deleted.
 - **Outcome** — what shipping actually produced; closes the loop. Only exists once a Solution has shipped, and may spawn follow-up Problems.
 
+- **Workspace** — a crux deployment and the members invited to it. Deliberately *not* a schema entity and not a container above Workstream: the deployment is the tenant boundary, and every member sees every Workstream in it (ADR-0003). A group that shouldn't share a corpus gets its own deployment.
+- **Member** — a user invited to a Workspace. Membership is coarse by design: it grants the whole deployment, never a subset of Workstreams.
+
 ## Lifecycle vocabulary
 
 - **Stage** — a Problem's place on the roadmap: **now**, **next**, or **later**. A Problem starts **unscheduled** (not on the roadmap); scheduling places it in a stage; it ends **done** or **abandoned** (terminal).

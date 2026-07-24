@@ -95,7 +95,10 @@ reports it as rot, and the web UI's `/docs` section renders the same tree live.
 
 - [`CONTEXT.md`](CONTEXT.md) — the glossary. Canonical vocabulary for this repo.
 - Decisions — [ADR-0001: single dual-audience doc](docs/adr/0001-single-dual-audience-doc.md),
-  [ADR-0002: README-rooted doc tree](docs/adr/0002-readme-rooted-doc-tree.md).
+  [ADR-0002: README-rooted doc tree](docs/adr/0002-readme-rooted-doc-tree.md),
+  [ADR-0003: cloud crux is client-server and cloud-only](docs/adr/0003-cloud-crux-client-server.md),
+  [ADR-0004: the Cloudflare stack](docs/adr/0004-cloudflare-stack.md),
+  [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
