@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
 import { defineCommand, runCommand, showUsage } from "citty";
+import { bindLocalDb } from "@crux/core/db/local";
 import { handleError } from "./errors.js";
 import { userCommand } from "./commands/user.js";
 import { workstreamCommand } from "./commands/workstream.js";
@@ -43,6 +44,9 @@ const main = defineCommand({
 });
 
 async function bootstrap() {
+  // The CLI still talks to a local libSQL file; `getDb()` no longer
+  // self-initializes because a D1 binding only exists inside a Worker.
+  bindLocalDb();
   const rawArgs = process.argv.slice(2);
   if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
     let cmd: {

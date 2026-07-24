@@ -9,12 +9,15 @@
   "scripts": {
     "migrate": "drizzle-kit migrate --config .config/drizzle.config.ts",
     "generate": "drizzle-kit generate --config .config/drizzle.config.ts",
+    "generate:d1": "drizzle-kit generate --config .config/drizzle.d1.config.ts",
     "seed": "bun run scripts/seed-ws-crux.ts",
     "lint": "oxlint -c .config/oxlint.json",
     "format": "bunx oxfmt .",
     "crux": "bun run packages/cli/src/index.ts",
     "docs:check": "bun run scripts/docs-check.ts",
-    "test": "bun test packages && cd apps/web && bun test",
+    "test": "bun run test:workers && bun test packages/core/src packages/cli/src && cd apps/web && bun test",
+    "test:workers": "vitest run --config packages/core/vitest.config.ts",
+    "typecheck": "tsc --noEmit -p packages/core/tsconfig.json && tsc --noEmit -p packages/core/test/tsconfig.json",
     "prepare": "husky"
   },
   "dependencies": {
@@ -24,10 +27,16 @@
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
+    "@cloudflare/workers-types": "^5.20260724.1",
     "@types/bun": "latest",
+    "@vitest/runner": "^4.1.0",
+    "@vitest/snapshot": "^4.1.0",
     "drizzle-kit": "^0.31.10",
     "husky": "^9.1.0",
     "oxlint": "^0.15.0",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.0",
+    "wrangler": "^4.114.0"
   }
 }

@@ -1,5 +1,5 @@
 import { inArray } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
+import { atomically, type CruxDb, type CruxWrite } from "../db/client.js";
 import { eliminations, eliminationSolutions, solutions } from "../db/schema.js";
 import { InvariantError, ReferentialError } from "./errors.js";
 
@@ -46,22 +46,27 @@ export async function createElimination(
   }
 
   const now = Date.now();
-  await db.transaction(async (tx) => {
-    await tx.insert(eliminations).values({
+  const writes: CruxWrite[] = [
+    db.insert(eliminations).values({
       id: input.id,
       problemId: input.problemId,
       rationale: input.rationale,
       context: input.context ?? null,
       createdById: input.eliminatedById,
       createdAt: now,
-    });
-    for (const sid of input.eliminatedSolutionIds) {
-      await tx.insert(eliminationSolutions).values({ eliminationId: input.id, solutionId: sid });
-    }
-    await tx
+    }),
+  ];
+  for (const sid of input.eliminatedSolutionIds) {
+    writes.push(
+      db.insert(eliminationSolutions).values({ eliminationId: input.id, solutionId: sid }),
+    );
+  }
+  writes.push(
+    db
       .update(solutions)
       .set({ status: "rejected", updatedAt: now })
-      .where(inArray(solutions.id, [...input.eliminatedSolutionIds]));
-  });
+      .where(inArray(solutions.id, [...input.eliminatedSolutionIds])),
+  );
+  await atomically(db, writes);
   return input.id;
 }

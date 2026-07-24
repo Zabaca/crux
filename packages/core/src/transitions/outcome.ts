@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
+import { atomically, type CruxDb, type CruxWrite } from "../db/client.js";
 import { outcomes, outcomeFollowUpProblems, solutions } from "../db/schema.js";
 import { InvariantError, NotFoundError } from "./errors.js";
 
@@ -48,8 +48,8 @@ export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Prom
   }
 
   const now = Date.now();
-  await db.transaction(async (tx) => {
-    await tx.insert(outcomes).values({
+  const writes: CruxWrite[] = [
+    db.insert(outcomes).values({
       id: input.id,
       solutionId: input.solutionId,
       observedImpact: input.observedImpact,
@@ -57,12 +57,11 @@ export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Prom
       learnings: input.learnings ?? null,
       recordedById: input.createdById,
       observedAt: now,
-    });
-    if (input.followUpProblemIds && input.followUpProblemIds.length > 0) {
-      for (const pid of input.followUpProblemIds) {
-        await tx.insert(outcomeFollowUpProblems).values({ outcomeId: input.id, problemId: pid });
-      }
-    }
-  });
+    }),
+  ];
+  for (const pid of input.followUpProblemIds ?? []) {
+    writes.push(db.insert(outcomeFollowUpProblems).values({ outcomeId: input.id, problemId: pid }));
+  }
+  await atomically(db, writes);
   return input.id;
 }

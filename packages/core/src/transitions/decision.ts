@@ -1,5 +1,5 @@
 import { eq, inArray } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
+import { atomically, type CruxDb, type CruxWrite } from "../db/client.js";
 import { decisions, decisionRejectedSolutions, solutions } from "../db/schema.js";
 import { InvariantError, ReferentialError } from "./errors.js";
 
@@ -65,8 +65,8 @@ export async function createDecision(input: CreateDecisionInput, db: CruxDb): Pr
   }
 
   const now = Date.now();
-  await db.transaction(async (tx) => {
-    await tx.insert(decisions).values({
+  const writes: CruxWrite[] = [
+    db.insert(decisions).values({
       id,
       problemId,
       chosenSolutionId,
@@ -75,21 +75,26 @@ export async function createDecision(input: CreateDecisionInput, db: CruxDb): Pr
       decidedById,
       supersedesDecisionId,
       createdAt: now,
-    });
-    for (const sid of rejectedSolutionIds) {
-      await tx.insert(decisionRejectedSolutions).values({ decisionId: id, solutionId: sid });
-    }
-    await tx
+    }),
+  ];
+  for (const sid of rejectedSolutionIds) {
+    writes.push(db.insert(decisionRejectedSolutions).values({ decisionId: id, solutionId: sid }));
+  }
+  writes.push(
+    db
       .update(solutions)
       .set({ status: "chosen", updatedAt: now })
-      .where(eq(solutions.id, chosenSolutionId));
-    if (rejectedSolutionIds.length > 0) {
-      await tx
+      .where(eq(solutions.id, chosenSolutionId)),
+  );
+  if (rejectedSolutionIds.length > 0) {
+    writes.push(
+      db
         .update(solutions)
         .set({ status: "rejected", updatedAt: now })
-        .where(inArray(solutions.id, [...rejectedSolutionIds]));
-    }
-  });
+        .where(inArray(solutions.id, [...rejectedSolutionIds])),
+    );
+  }
+  await atomically(db, writes);
 
   return id;
 }

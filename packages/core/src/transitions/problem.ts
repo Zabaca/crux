@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
+import { atomically, type CruxDb } from "../db/client.js";
 import { problems, abandonments } from "../db/schema.js";
 import { TransitionError, InvariantError, NotFoundError } from "./errors.js";
 import { chosenSolutionIsShipped } from "./predicates.js";
@@ -64,17 +64,17 @@ export async function abandonProblem(
   const p = await loadProblem(problemId, db);
   assertNotTerminal(p, "abandon");
   const now = Date.now();
-  await db.transaction(async (tx) => {
-    await tx.insert(abandonments).values({
+  await atomically(db, [
+    db.insert(abandonments).values({
       id: `ABN-${problemId}`,
       problemId,
       rationale,
       abandonedById: userId,
       abandonedAt: now,
-    });
-    await tx
+    }),
+    db
       .update(problems)
       .set({ status: "abandoned", updatedAt: now })
-      .where(eq(problems.id, problemId));
-  });
+      .where(eq(problems.id, problemId)),
+  ]);
 }

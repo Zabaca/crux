@@ -75,6 +75,13 @@ bun run crux context -w crux --json
 
 Dev work is pinned to the repo-local `.crux.db` two ways so your real user-level db is never touched: a committed `.env` sets `CRUX_DB_URL=file:.crux.db` for `bun run …` scripts, and `bin/crux` detects a `.git` checkout and sets the same URL absolutely before forwarding to the CLI. Plugin consumers are unaffected — Bun only loads `.env` from their project's cwd, not from the plugin source.
 
+Tests split by runtime. `bun run test:workers` runs the invariant suite inside
+workerd against a local Miniflare D1 (no network, no Cloudflare account);
+`bun test` covers everything that needs a filesystem or a subprocess. `bun run
+test` runs both, and `bun run typecheck` covers `packages/core`. A schema change
+regenerates both migration chains — `bun run generate` for local libSQL and
+`bun run generate:d1` for D1. See [ADR-0006](docs/adr/0006-invariants-run-in-workerd.md).
+
 There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux already exists). If you genuinely want a fresh db, delete `.crux.db` by hand — the friction is deliberate, because destroying dogfooded state is a real failure mode.
 
 ## Layout
@@ -98,7 +105,8 @@ reports it as rot, and the web UI's `/docs` section renders the same tree live.
   [ADR-0002: README-rooted doc tree](docs/adr/0002-readme-rooted-doc-tree.md),
   [ADR-0003: cloud crux is client-server and cloud-only](docs/adr/0003-cloud-crux-client-server.md),
   [ADR-0004: the Cloudflare stack](docs/adr/0004-cloudflare-stack.md),
-  [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md).
+  [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md),
+  [ADR-0006: the invariant suite runs in workerd](docs/adr/0006-invariants-run-in-workerd.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -115,7 +123,7 @@ reports it as rot, and the web UI's `/docs` section renders the same tree live.
 
 ## Status
 
-MVP. Single-user local libSQL. No multi-tenant, no web UI, no test suite (transition logic is exercised end-to-end via the seed script). Design thinking for WS-crux itself is seeded in the db (`bun run seed`) and serves as the initial dogfood corpus.
+MVP. Single-user local libSQL, moving to a Cloudflare D1 deployment. No multi-tenant, no web UI. The invariant suite runs inside workerd against a local D1 ([ADR-0006](docs/adr/0006-invariants-run-in-workerd.md)); the local libSQL path is still there until the cloud one replaces it. Design thinking for WS-crux itself is seeded in the db (`bun run seed`) and serves as the initial dogfood corpus.
 
 See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 

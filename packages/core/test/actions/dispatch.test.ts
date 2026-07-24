@@ -4,9 +4,9 @@
  * These tests do NOT require a database for the allowed-list enforcement tests.
  * DB-backed mutation tests are in cli.test.ts integration layer.
  */
-import { describe, test, expect, beforeEach, afterEach } from "bun:test";
-import { ActionNotAllowedError } from "../dispatch.js";
-import { isActionAllowed } from "../allowed.js";
+import { describe, test, expect, beforeEach, afterEach } from "vitest";
+import { ActionNotAllowedError } from "../../src/actions/dispatch.js";
+import { isActionAllowed } from "../../src/actions/allowed.js";
 
 describe("ActionNotAllowedError", () => {
   test("has correct code and fields", () => {
@@ -56,13 +56,16 @@ describe("CRUX_COLLAB flag — allowed list logic", () => {
 
 describe("ActionSchema validation", () => {
   test("valid VIEW action parses", async () => {
-    const { ActionSchema } = await import("../schemas.js");
-    const result = ActionSchema.safeParse({ kind: "SELECT_WORKSTREAM", payload: { slug: "crux" } });
+    const { ActionSchema } = await import("../../src/actions/schemas.js");
+    const result = ActionSchema.safeParse({
+      kind: "SELECT_WORKSTREAM",
+      payload: { id: "WS-crux" },
+    });
     expect(result.success).toBe(true);
   });
 
   test("valid MUTATION action parses", async () => {
-    const { ActionSchema } = await import("../schemas.js");
+    const { ActionSchema } = await import("../../src/actions/schemas.js");
     const result = ActionSchema.safeParse({
       kind: "ADD_PROBLEM",
       payload: { workstream: "crux", slug: "p1", title: "P", description: "d" },
@@ -71,7 +74,7 @@ describe("ActionSchema validation", () => {
   });
 
   test("unknown kind fails", async () => {
-    const { ActionSchema } = await import("../schemas.js");
+    const { ActionSchema } = await import("../../src/actions/schemas.js");
     const result = ActionSchema.safeParse({ kind: "BOGUS_ACTION", payload: {} });
     expect(result.success).toBe(false);
   });

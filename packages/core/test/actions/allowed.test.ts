@@ -1,5 +1,5 @@
-import { describe, test, expect } from "bun:test";
-import { getAllowedActions, isActionAllowed, leafStateName } from "../allowed.js";
+import { describe, test, expect } from "vitest";
+import { getAllowedActions, isActionAllowed, leafStateName } from "../../src/actions/allowed.js";
 
 describe("leafStateName", () => {
   test("string value returns itself", () => {

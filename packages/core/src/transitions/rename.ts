@@ -2,14 +2,15 @@
  * Slug-rename transition for workstreams.
  *
  * Renaming a workstream changes its primary key (id = "WS-<slug>"), which
- * means every FK referrer must be updated in lockstep. Because libSQL FKs are
- * declared without ON UPDATE CASCADE, we briefly disable FK enforcement, run
- * all the updates inside a transaction, run `PRAGMA foreign_key_check` to
- * verify integrity before commit, then re-enable FK enforcement.
+ * means every FK referrer must be updated in lockstep. FKs are declared without
+ * ON UPDATE CASCADE, so the rename runs as one atomic batch shaped copy →
+ * repoint → drop: the new row exists before anything points at it and the old
+ * one goes away only once nothing does, so no intermediate state violates a
+ * foreign key.
  */
-import { eq, sql } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
-import { workstreams } from "../db/schema.js";
+import { eq } from "drizzle-orm";
+import { atomically, type CruxDb, type CruxWrite } from "../db/client.js";
+import { observations, problems, workstreams } from "../db/schema.js";
 import { NotFoundError, TransitionError } from "./errors.js";
 
 export type RenameUpdates = {
@@ -25,10 +26,16 @@ export type RenameResult = {
   newSlug: string;
 };
 
-const WORKSTREAM_REFERRERS: ReadonlyArray<{ table: string; columns: string[] }> = [
-  { table: "observations", columns: ["workstream_id"] },
-  { table: "problems", columns: ["workstream_id"] },
-];
+/** Every table carrying a workstream id, which must move with the PK. */
+function referrerUpdates(db: CruxDb, oldId: string, newId: string): CruxWrite[] {
+  return [
+    db
+      .update(observations)
+      .set({ workstreamId: newId })
+      .where(eq(observations.workstreamId, oldId)),
+    db.update(problems).set({ workstreamId: newId }).where(eq(problems.workstreamId, oldId)),
+  ];
+}
 
 export async function renameWorkstream(
   oldSlug: string,
@@ -71,44 +78,24 @@ export async function renameWorkstream(
   const newId = `WS-${newSlug}`;
   const now = Date.now();
 
-  await db.run(sql`PRAGMA foreign_keys = OFF`);
-  try {
-    await db.transaction(async (tx) => {
-      if (oldId !== newId) {
-        for (const ref of WORKSTREAM_REFERRERS) {
-          for (const col of ref.columns) {
-            await tx.run(
-              sql`UPDATE ${sql.raw(ref.table)} SET ${sql.raw(col)} = ${newId} WHERE ${sql.raw(col)} = ${oldId}`,
-            );
-          }
-        }
-      }
+  const edits = {
+    title: updates.title ?? existing.title,
+    description: updates.description ?? existing.description,
+    updatedAt: now,
+  };
 
-      const setFragments: ReturnType<typeof sql>[] = [];
-      if (oldId !== newId) {
-        setFragments.push(sql`id = ${newId}`);
-        setFragments.push(sql`slug = ${newSlug}`);
-      }
-      if (updates.title !== undefined) setFragments.push(sql`title = ${updates.title}`);
-      if (updates.description !== undefined)
-        setFragments.push(sql`description = ${updates.description}`);
-      setFragments.push(sql`updated_at = ${now}`);
-      const setClause = sql.join(setFragments, sql`, `);
-      await tx.run(sql`UPDATE workstreams SET ${setClause} WHERE id = ${oldId}`);
+  const writes: CruxWrite[] =
+    oldId === newId
+      ? [db.update(workstreams).set(edits).where(eq(workstreams.id, oldId))]
+      : [
+          // Copy → repoint → drop. Every step is valid under enforced foreign
+          // keys, so the batch never needs FK enforcement relaxed.
+          db.insert(workstreams).values({ ...existing, ...edits, id: newId, slug: newSlug }),
+          ...referrerUpdates(db, oldId, newId),
+          db.delete(workstreams).where(eq(workstreams.id, oldId)),
+        ];
 
-      const violations = await tx.all(sql`PRAGMA foreign_key_check`);
-      if (Array.isArray(violations) && violations.length > 0) {
-        throw new TransitionError(`rename produced FK violations`, {
-          kind: "workstream",
-          oldSlug,
-          newSlug,
-          violations,
-        });
-      }
-    });
-  } finally {
-    await db.run(sql`PRAGMA foreign_keys = ON`);
-  }
+  await atomically(db, writes);
 
   return { kind: "workstream", oldId, newId, oldSlug, newSlug };
 }

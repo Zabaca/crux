@@ -7,6 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./db": "./src/db/client.ts",
+    "./db/local": "./src/db/local-libsql.ts",
+    "./db/migrate": "./src/db/migrate.ts",
     "./db/migrations-path": "./src/db/migrations-path.ts",
     "./db/test-utils": "./src/db/test-utils.ts",
     "./db/schema": "./src/db/schema.ts",
