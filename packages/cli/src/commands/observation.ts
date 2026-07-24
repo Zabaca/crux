@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { observations, workstreams } from "@crux/core/db/schema";
 import { NotFoundError } from "@crux/core/transitions";
 import { eq } from "drizzle-orm";
@@ -54,7 +54,7 @@ const addCmd = defineCommand({
       sourceType: args["source-type"],
       tags: asTags(args.tag),
     };
-    const { result } = await dispatch({ kind: "ADD_OBSERVATION", payload });
+    const { result } = await dispatch({ kind: "ADD_OBSERVATION", payload }, { db: getDb() });
     emit(result, `added ${(result as { id: string }).id}`);
   },
 });
@@ -112,7 +112,7 @@ const archiveCmd = defineCommand({
       id: args.id,
       rationale: args.rationale,
     };
-    const { result } = await dispatch({ kind: "ARCHIVE_OBSERVATION", payload });
+    const { result } = await dispatch({ kind: "ARCHIVE_OBSERVATION", payload }, { db: getDb() });
     emit(result, `archived ${args.id}`);
   },
 });

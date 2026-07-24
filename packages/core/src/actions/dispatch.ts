@@ -13,6 +13,7 @@
  *  6. Return { revision, viewState?, result? }.
  */
 import { ActionSchema, isViewAction, type Action } from "./schemas.js";
+import type { CruxDb } from "../db/client.js";
 import { isActionAllowed, getAllowedActions } from "./allowed.js";
 import {
   loadViewMeta,
@@ -59,7 +60,7 @@ export type DispatchResult = {
  */
 export async function dispatch(
   rawAction: unknown,
-  options: { path?: string; enforceAllow?: boolean } = {},
+  options: { db: CruxDb; path?: string; enforceAllow?: boolean },
 ): Promise<DispatchResult> {
   // Parse + validate action shape
   const action = ActionSchema.parse(rawAction) as Action;
@@ -96,7 +97,7 @@ export async function dispatch(
     meta.context = snap.context;
   } else {
     // Route through mutation runner
-    result = await runMutation(action);
+    result = await runMutation(action, options.db);
   }
 
   // Persist sidecar fields

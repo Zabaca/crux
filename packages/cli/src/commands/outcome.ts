@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { outcomeFollowUpProblems, outcomes } from "@crux/core/db/schema";
 import { OkWithIdOutput } from "@crux/core/validation";
 import { NotFoundError } from "@crux/core/transitions";
@@ -37,7 +37,7 @@ const addCmd = defineCommand({
       learnings: args.learnings,
       followUpProblemIds: asList(args["follow-up-problems"]),
     };
-    const { result } = await dispatch({ kind: "ADD_OUTCOME", payload });
+    const { result } = await dispatch({ kind: "ADD_OUTCOME", payload }, { db: getDb() });
     emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });

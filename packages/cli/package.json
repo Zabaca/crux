@@ -19,6 +19,7 @@
     "react": "^19.2.5"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260724.1",
     "@types/react": "^19.2.14",
     "ink-testing-library": "^4.0.0"
   }

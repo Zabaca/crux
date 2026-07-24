@@ -1,8 +1,12 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist"
+    "rootDir": ".",
+    "outDir": "./dist",
+    // Core is built against D1 now, so `D1Database` has to be in scope. `bun`
+    // stays because config/user.ts and view-state/persistence.ts are still
+    // node-shaped — they leave when the CLI does.
+    "types": ["bun", "@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "workers-test/**/*.ts", "vitest.config.ts"]
 }

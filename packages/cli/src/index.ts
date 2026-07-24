@@ -15,7 +15,6 @@ import { outcomeCommand } from "./commands/outcome.js";
 import { initCommand } from "./commands/init.js";
 import { browseCommand } from "./commands/browse.js";
 import { viewCommand } from "./commands/view.js";
-import { webCommand } from "./commands/web.js";
 
 const main = defineCommand({
   meta: {
@@ -38,7 +37,6 @@ const main = defineCommand({
     context: contextCommand,
     browse: browseCommand,
     view: viewCommand,
-    web: webCommand,
   },
 });
 
@@ -50,7 +48,7 @@ async function bootstrap() {
       subCommands?: Record<string, unknown>;
       args?: unknown;
       run?: unknown;
-    } = main;
+    } = main as unknown as typeof cmd;
     let parent: typeof cmd | undefined;
     for (const arg of rawArgs) {
       if (arg.startsWith("-")) break;

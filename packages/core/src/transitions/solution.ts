@@ -1,5 +1,6 @@
 import { eq } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
+import type { BatchItem } from "drizzle-orm/batch";
+import { runBatch, type CruxDb } from "../db/client.js";
 import { solutions, eliminations, eliminationSolutions } from "../db/schema.js";
 import { InvariantError, NotFoundError, TransitionError } from "./errors.js";
 
@@ -21,22 +22,22 @@ export async function eliminateSolutions(
     throw new InvariantError("Elimination must target at least one Solution", {});
   }
   const now = Date.now();
-  await db.transaction(async (tx) => {
-    await tx.insert(eliminations).values({
+  const writes: BatchItem<"sqlite">[] = [
+    db.insert(eliminations).values({
       id: input.id,
       problemId: input.problemId,
       rationale: input.rationale,
       createdById: input.createdById,
       createdAt: now,
-    });
-    for (const sid of input.solutionIds) {
-      await tx.insert(eliminationSolutions).values({ eliminationId: input.id, solutionId: sid });
-      await tx
-        .update(solutions)
-        .set({ status: "rejected", updatedAt: now })
-        .where(eq(solutions.id, sid));
-    }
-  });
+    }),
+  ];
+  for (const sid of input.solutionIds) {
+    writes.push(
+      db.insert(eliminationSolutions).values({ eliminationId: input.id, solutionId: sid }),
+      db.update(solutions).set({ status: "rejected", updatedAt: now }).where(eq(solutions.id, sid)),
+    );
+  }
+  await runBatch(db, writes);
 }
 
 /**

@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { problems, solutions } from "@crux/core/db/schema";
 import { OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
 import { NotFoundError } from "@crux/core/transitions";
@@ -30,7 +30,7 @@ const addCmd = defineCommand({
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "ADD_SOLUTION", payload });
+    const { result } = await dispatch({ kind: "ADD_SOLUTION", payload }, { db: getDb() });
     emit(result, OkWithIdOutput, `added ${(result as { id: number }).id}`);
   },
 });
@@ -76,7 +76,7 @@ const shipCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const payload: ShipSolutionPayload = { id: args.id };
-    const { result } = await dispatch({ kind: "SHIP_SOLUTION", payload });
+    const { result } = await dispatch({ kind: "SHIP_SOLUTION", payload }, { db: getDb() });
     emit(result, OkWithStatusOutput, `shipped ${args.id}`);
   },
 });
@@ -100,7 +100,7 @@ const editCmd = defineCommand({
       ...(args.description !== undefined && { description: args.description }),
       ...(args.title !== undefined && { title: args.title }),
     };
-    const { result } = await dispatch({ kind: "EDIT_SOLUTION", payload });
+    const { result } = await dispatch({ kind: "EDIT_SOLUTION", payload }, { db: getDb() });
     emit(result, OkWithIdOutput, `edited ${args.id}`);
   },
 });

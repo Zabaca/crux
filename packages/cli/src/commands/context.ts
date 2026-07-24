@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import {
   abandonments,
   decisionRejectedSolutions,
@@ -146,7 +146,7 @@ export const contextCommand = defineCommand({
               .from(outcomeFollowUpProblems)
               .where(inArray(outcomeFollowUpProblems.outcomeId, outcomeIds))
           : [];
-        const followUpsByOutcome = new Map<string, string[]>();
+        const followUpsByOutcome = new Map<string, number[]>();
         for (const f of followUps) {
           const list = followUpsByOutcome.get(f.outcomeId) ?? [];
           list.push(f.problemId);
@@ -195,7 +195,7 @@ export const contextCommand = defineCommand({
               .from(eliminationSolutions)
               .where(inArray(eliminationSolutions.eliminationId, elimIds))
           : [];
-        const targetsByElim = new Map<string, string[]>();
+        const targetsByElim = new Map<string, number[]>();
         for (const j of elimJoins) {
           const list = targetsByElim.get(j.eliminationId) ?? [];
           list.push(j.solutionId);

@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { workstreams } from "@crux/core/db/schema";
 import { OkWithIdOutput, RenameOutput } from "@crux/core/validation";
 import { NotFoundError } from "@crux/core/transitions";
@@ -28,7 +28,7 @@ const addCmd = defineCommand({
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "ADD_WORKSTREAM", payload });
+    const { result } = await dispatch({ kind: "ADD_WORKSTREAM", payload }, { db: getDb() });
     emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });
@@ -77,7 +77,7 @@ const renameCmd = defineCommand({
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "RENAME_WORKSTREAM", payload });
+    const { result } = await dispatch({ kind: "RENAME_WORKSTREAM", payload }, { db: getDb() });
     emit(
       result,
       RenameOutput,
@@ -103,7 +103,10 @@ const selectCmd = defineCommand({
       throw new NotFoundError(`workstream not found: ${args.slug}`, { id: args.slug });
     const id = rows[0]!.id;
     const payload: SelectWorkstreamPayload = { id };
-    const { viewState, revision } = await dispatch({ kind: "SELECT_WORKSTREAM", payload });
+    const { viewState, revision } = await dispatch(
+      { kind: "SELECT_WORKSTREAM", payload },
+      { db: getDb() },
+    );
     emit({ ok: true, value: viewState, revision, context: { workstreamId: id } }, `selected ${id}`);
   },
 });

@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { createActor, type Snapshot } from "xstate";
-import { getDb } from "../db/client.js";
+import type { CruxDb } from "../db/client.js";
 import { problems, workstreams } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { viewMachine, ViewEventSchema, type ViewEvent } from "./machine.js";
@@ -87,12 +87,15 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
   void _la;
   void _rq;
   // Normalize: XState v5 requires status/children/historyValue; old files omit them.
-  let parsed = {
+  // XState types a persisted snapshot as `Snapshot<unknown>`, which has no
+  // `context` — but the machine's own context is exactly what has to be
+  // migrated here, so this stays a loose record until it is handed back.
+  let parsed: Record<string, unknown> = {
     status: "active",
     historyValue: {},
     children: {},
     ...xstateFields,
-  } as PersistedViewSnapshot;
+  };
 
   // Migrate legacy context fields from slugs to IDs.
   if (parsed.context && typeof parsed.context === "object") {
@@ -114,7 +117,9 @@ export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
   }
 
   try {
-    const actor = createActor(viewMachine, { snapshot: parsed });
+    const actor = createActor(viewMachine, {
+      snapshot: parsed as unknown as PersistedViewSnapshot,
+    });
     actor.start();
     const snap = actor.getSnapshot();
     actor.stop();
@@ -298,7 +303,7 @@ export class ViewEventRefusedError extends Error {
  */
 export async function sendViewEvent(
   event: ViewEvent,
-  options: { path?: string } = {},
+  options: { db: CruxDb; path?: string },
 ): Promise<ViewSnapshot> {
   const parsed = ViewEventSchema.safeParse(event);
   if (!parsed.success) {
@@ -316,10 +321,10 @@ export async function sendViewEvent(
   let problemExistsInWorkstream = false;
 
   if (event.type === "SELECT_WORKSTREAM") {
-    workstreamExists = await wsExists(event.id);
+    workstreamExists = await wsExists(event.id, options.db);
   } else if (event.type === "OPEN_PROBLEM") {
     const wsId = current.context.workstreamId;
-    problemExistsInWorkstream = wsId ? await probExists(wsId, event.id) : false;
+    problemExistsInWorkstream = wsId ? await probExists(wsId, event.id, options.db) : false;
   }
 
   const machineWithGuards = viewMachine.provide({
@@ -430,8 +435,8 @@ function sameState(a: ViewSnapshot, b: ViewSnapshot): boolean {
 
 // --- db-backed guard helpers ---
 
-async function wsExists(id: string): Promise<boolean> {
-  const rows = await getDb()
+async function wsExists(id: string, db: CruxDb): Promise<boolean> {
+  const rows = await db
     .select({ id: workstreams.id })
     .from(workstreams)
     .where(eq(workstreams.id, id))
@@ -439,10 +444,10 @@ async function wsExists(id: string): Promise<boolean> {
   return rows.length > 0;
 }
 
-async function probExists(workstreamId: string, problemId: string): Promise<boolean> {
+async function probExists(workstreamId: string, problemId: string, db: CruxDb): Promise<boolean> {
   const numId = parseInt(problemId, 10);
   if (isNaN(numId)) return false;
-  const rows = await getDb()
+  const rows = await db
     .select({ id: problems.id })
     .from(problems)
     .where(and(eq(problems.workstreamId, workstreamId), eq(problems.id, numId)))

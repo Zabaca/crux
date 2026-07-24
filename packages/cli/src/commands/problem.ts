@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import {
   decisionRejectedSolutions,
   decisions,
@@ -55,7 +55,7 @@ const addCmd = defineCommand({
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "ADD_PROBLEM", payload });
+    const { result } = await dispatch({ kind: "ADD_PROBLEM", payload }, { db: getDb() });
     emit(result, `added ${(result as { id: number }).id}`);
   },
 });
@@ -162,7 +162,7 @@ const scheduleCmd = defineCommand({
     if (args.json) setJsonMode(true);
     const stage = RoadmapStage.parse(args.stage);
     const payload: ScheduleProblemPayload = { id: args.id, stage };
-    const { result } = await dispatch({ kind: "SCHEDULE_PROBLEM", payload });
+    const { result } = await dispatch({ kind: "SCHEDULE_PROBLEM", payload }, { db: getDb() });
     emit(result, OkWithStatusOutput, `scheduled ${args.id} → ${stage}`);
   },
 });
@@ -173,7 +173,7 @@ const unscheduleCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const payload: UnscheduleProblemPayload = { id: args.id };
-    const { result } = await dispatch({ kind: "UNSCHEDULE_PROBLEM", payload });
+    const { result } = await dispatch({ kind: "UNSCHEDULE_PROBLEM", payload }, { db: getDb() });
     emit(result, OkWithStatusOutput, `unscheduled ${args.id}`);
   },
 });
@@ -184,7 +184,7 @@ const doneCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const payload: MarkProblemDonePayload = { id: args.id };
-    const { result } = await dispatch({ kind: "MARK_PROBLEM_DONE", payload });
+    const { result } = await dispatch({ kind: "MARK_PROBLEM_DONE", payload }, { db: getDb() });
     emit(result, OkWithStatusOutput, `done ${args.id}`);
   },
 });
@@ -199,7 +199,7 @@ const abandonCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const payload: AbandonProblemPayload = { id: args.id, rationale: args.rationale };
-    const { result } = await dispatch({ kind: "ABANDON_PROBLEM", payload });
+    const { result } = await dispatch({ kind: "ABANDON_PROBLEM", payload }, { db: getDb() });
     emit(result, OkWithStatusOutput, `abandoned ${args.id}`);
   },
 });

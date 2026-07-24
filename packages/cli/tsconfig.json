@@ -3,8 +3,13 @@
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
-    "jsx": "react-jsx"
+    "jsx": "react-jsx",
+    // core is consumed as TypeScript source, so its ambient `D1Database` type
+    // has to resolve here too.
+    "types": ["bun", "@cloudflare/workers-types"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"],
-  "references": [{ "path": "../core" }]
+  // No `references` to ../core: it is not a composite project, so the
+  // reference only ever produced TS6306. `@crux/core` resolves through the
+  // workspace symlink like any other dependency.
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

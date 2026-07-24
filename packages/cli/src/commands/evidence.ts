@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { evidence, problems } from "@crux/core/db/schema";
 import { NotFoundError } from "@crux/core/transitions";
 import { OkWithIdOutput } from "@crux/core/validation";
@@ -26,7 +26,7 @@ const linkCmd = defineCommand({
       problem: prVal,
       note: args.note,
     };
-    const { result } = await dispatch({ kind: "ADD_EVIDENCE", payload });
+    const { result } = await dispatch({ kind: "ADD_EVIDENCE", payload }, { db: getDb() });
     emit(result, OkWithIdOutput, `linked ${(result as { id: string }).id}`);
   },
 });

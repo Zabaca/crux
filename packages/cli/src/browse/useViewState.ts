@@ -1,3 +1,4 @@
+import { getDb } from "../db.js";
 import { useEffect, useState } from "react";
 import {
   formatStateValue,
@@ -52,7 +53,7 @@ export function useViewStateFile(): {
   }, []);
 
   const send = async (event: ViewEvent) => {
-    const snap = await sendViewEvent(event);
+    const snap = await sendViewEvent(event, { db: getDb() });
     setMachineView(snapshotToView(snap));
   };
 

@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { abandonments, problems, workstreams } from "@crux/core/db/schema";
 import { NotFoundError } from "@crux/core/transitions";
 import { eq, inArray } from "drizzle-orm";

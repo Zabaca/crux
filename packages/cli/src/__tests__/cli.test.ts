@@ -6,7 +6,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { tmpdir } from "node:os";
 
-import { setDb } from "@crux/core/db";
+import { setDb } from "../db.js";
 import { createTestDb, type CruxTestDb } from "@crux/core/db/test-utils";
 import { users } from "@crux/core/db/schema";
 import { setCaptureWriter, setJsonMode, emit } from "../output.js";

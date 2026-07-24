@@ -117,8 +117,7 @@ reports `503 degraded` instead of a hollow `ok`.
 - [`packages/core`](packages/core) — schema, transitions, validation, config loader.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
-- [`scripts/`](scripts/) — seeding.
-- [`apps/web`](apps/web) — the read-only web UI (roadmap + docs).
+- [`scripts/`](scripts/) — seeding, and the one-shot corpus load into D1.
 - [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker. A stub today; the Astro site and JSON API land here.
 
 ## Docs
@@ -126,14 +125,18 @@ reports `503 degraded` instead of a hollow `ok`.
 Documentation is whatever is reachable from this file: a walker starts here and
 follows internal links and `@import`s ([ADR-0002](docs/adr/0002-readme-rooted-doc-tree.md)).
 A doc that exists but isn't linked from the tree doesn't count — `bun run docs:check`
-reports it as rot, and the web UI's `/docs` section renders the same tree live.
+reports it as rot. The walker has one caller today: the Next.js app that also
+rendered the tree at `/docs` was deleted with the move to D1, and the Astro
+`/docs` route ([ADR-0005](docs/adr/0005-docs-derived-at-deploy.md)) will call the
+same walker at build time when it lands.
 
 - [`CONTEXT.md`](CONTEXT.md) — the glossary. Canonical vocabulary for this repo.
 - Decisions — [ADR-0001: single dual-audience doc](docs/adr/0001-single-dual-audience-doc.md),
   [ADR-0002: README-rooted doc tree](docs/adr/0002-readme-rooted-doc-tree.md),
   [ADR-0003: cloud crux is client-server and cloud-only](docs/adr/0003-cloud-crux-client-server.md),
   [ADR-0004: the Cloudflare stack](docs/adr/0004-cloudflare-stack.md),
-  [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md).
+  [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md),
+  [ADR-0006: workerd tests and the D1 schema](docs/adr/0006-workerd-tests-and-d1-schema.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),

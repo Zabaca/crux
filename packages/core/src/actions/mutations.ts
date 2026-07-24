@@ -1,7 +1,7 @@
 /**
  * runMutation — maps a MutationAction to the appropriate transition call.
  */
-import { getDb } from "../db/client.js";
+import type { CruxDb } from "../db/client.js";
 import { requireUser } from "../config/user.js";
 import {
   workstreams,
@@ -29,8 +29,10 @@ import {
 } from "../transitions/index.js";
 import type { MutationAction } from "./schemas.js";
 
-async function countRows(tableName: "observations" | "eliminations" | "outcomes"): Promise<number> {
-  const db = getDb();
+async function countRows(
+  tableName: "observations" | "eliminations" | "outcomes",
+  db: CruxDb,
+): Promise<number> {
   if (tableName === "observations") {
     const rows = await db.select({ id: observations.id }).from(observations);
     const nums = rows.map((r) => Number(r.id.replace(/^OBS-/, ""))).filter(Number.isFinite);
@@ -49,8 +51,7 @@ async function countRows(tableName: "observations" | "eliminations" | "outcomes"
   return 0;
 }
 
-async function resolveWs(slugOrId: string) {
-  const db = getDb();
+async function resolveWs(slugOrId: string, db: CruxDb) {
   const byId = (
     await db.select().from(workstreams).where(eq(workstreams.id, slugOrId)).limit(1)
   )[0];
@@ -66,22 +67,21 @@ function toIntId(id: string | number): number {
   return typeof id === "number" ? id : parseInt(id, 10);
 }
 
-async function resolveProblem(id: string | number) {
+async function resolveProblem(id: string | number, db: CruxDb) {
   const numId = toIntId(id);
-  const rows = await getDb().select().from(problems).where(eq(problems.id, numId)).limit(1);
+  const rows = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
   if (!rows[0]) throw new NotFoundError(`problem not found: ${id}`, { id });
   return rows[0];
 }
 
-async function resolveSolution(id: string | number) {
+async function resolveSolution(id: string | number, db: CruxDb) {
   const numId = toIntId(id);
-  const rows = await getDb().select().from(solutions).where(eq(solutions.id, numId)).limit(1);
+  const rows = await db.select().from(solutions).where(eq(solutions.id, numId)).limit(1);
   if (!rows[0]) throw new NotFoundError(`solution not found: ${id}`, { id });
   return rows[0];
 }
 
-export async function runMutation(action: MutationAction): Promise<unknown> {
-  const db = getDb();
+export async function runMutation(action: MutationAction, db: CruxDb): Promise<unknown> {
   const user = requireUser().user;
 
   switch (action.kind) {
@@ -109,7 +109,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_PROBLEM": {
       const p = action.payload;
-      const ws = await resolveWs(p.workstream);
+      const ws = await resolveWs(p.workstream, db);
       const result = await db
         .insert(problems)
         .values({
@@ -124,31 +124,31 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "SCHEDULE_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id);
+      const prob = await resolveProblem(p.id, db);
       await scheduleProblem(prob.id, p.stage as RoadmapStage, db);
       return { ok: true, id: prob.id, status: p.stage };
     }
     case "UNSCHEDULE_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id);
+      const prob = await resolveProblem(p.id, db);
       await unscheduleProblem(prob.id, db);
       return { ok: true, id: prob.id, status: null };
     }
     case "MARK_PROBLEM_DONE": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id);
+      const prob = await resolveProblem(p.id, db);
       await markProblemDone(prob.id, db);
       return { ok: true, id: prob.id, status: "done" };
     }
     case "ABANDON_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id);
+      const prob = await resolveProblem(p.id, db);
       await abandonProblem(prob.id, p.rationale, user.id, db);
       return { ok: true, id: prob.id, status: "abandoned" };
     }
     case "ADD_SOLUTION": {
       const p = action.payload;
-      const prob = await resolveProblem(p.problem);
+      const prob = await resolveProblem(p.problem, db);
       const result = await db
         .insert(solutions)
         .values({
@@ -163,7 +163,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "SHIP_SOLUTION": {
       const p = action.payload;
-      const sol = await resolveSolution(p.id);
+      const sol = await resolveSolution(p.id, db);
       await shipSolution(sol.id, db);
       return { ok: true, id: sol.id, status: "shipped" };
     }
@@ -175,10 +175,10 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_DECISION": {
       const p = action.payload;
-      const prob = await resolveProblem(p.problem);
-      const chosenSol = await resolveSolution(p.chosen);
+      const prob = await resolveProblem(p.problem, db);
+      const chosenSol = await resolveSolution(p.chosen, db);
       const rejectedIds = p.rejected
-        ? await Promise.all(p.rejected.map((s) => resolveSolution(s).then((r) => r.id)))
+        ? await Promise.all(p.rejected.map((s) => resolveSolution(s, db).then((r) => r.id)))
         : [];
       const decisionCount = (
         await db
@@ -203,8 +203,8 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_OUTCOME": {
       const p = action.payload;
-      const sol = await resolveSolution(p.solution);
-      const n = await countRows("outcomes");
+      const sol = await resolveSolution(p.solution, db);
+      const n = await countRows("outcomes", db);
       const id = `OUT-${String(n + 1).padStart(3, "0")}`;
       await recordOutcome(
         {
@@ -222,8 +222,8 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_OBSERVATION": {
       const p = action.payload;
-      const ws = await resolveWs(p.workstream);
-      const n = await countRows("observations");
+      const ws = await resolveWs(p.workstream, db);
+      const n = await countRows("observations", db);
       const id = `OBS-${String(n + 1).padStart(3, "0")}`;
       await db.insert(observations).values({
         id,
@@ -243,7 +243,7 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_EVIDENCE": {
       const p = action.payload;
-      const prob = await resolveProblem(p.problem);
+      const prob = await resolveProblem(p.problem, db);
       const obsRows = await db
         .select()
         .from(observations)
@@ -269,9 +269,9 @@ export async function runMutation(action: MutationAction): Promise<unknown> {
     }
     case "ADD_ELIMINATION": {
       const p = action.payload;
-      const solRows = await Promise.all(p.solutions.map((s) => resolveSolution(s)));
+      const solRows = await Promise.all(p.solutions.map((s) => resolveSolution(s, db)));
       const firstSol = solRows[0]!;
-      const n = await countRows("eliminations");
+      const n = await countRows("eliminations", db);
       const id = `ELIM-${String(n + 1).padStart(3, "0")}`;
       await createElimination(
         {
