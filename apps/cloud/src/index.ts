@@ -5,7 +5,7 @@
  */
 
 export interface Env {
-  /** D1 binding — the cloud corpus. Empty until CRUX-JELCAK applies the schema. */
+  /** D1 binding — the cloud corpus. Empty until CRUX-B2IA0X applies the schema. */
   DB: D1Database;
 }
 

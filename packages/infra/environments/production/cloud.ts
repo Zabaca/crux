@@ -6,11 +6,11 @@ import { cloudflareModule } from "../../modules/cloudflare";
 // bound there by id.
 //
 // No build step yet — the Worker is a bare src/index.ts. When the Astro shell
-// lands (CRUX-9557JH) it gains a `build` block, the same way zbc's landing
+// lands (CRUX-6D86GE) it gains a `build` block, the same way zbc's landing
 // instance does.
 //
 // No workerSecrets either: nothing in the Worker reads a secret until auth
-// arrives (CRUX-OVUPUK). CLOUDFLARE_API_TOKEN in secrets.yaml is the deploy
+// arrives (CRUX-6D86GE). CLOUDFLARE_API_TOKEN in secrets.yaml is the deploy
 // credential, not a Worker binding.
 export default cloudflareModule.instance({
   name: "cloud",
