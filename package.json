@@ -14,7 +14,8 @@
     "format": "bunx oxfmt .",
     "crux": "bun run packages/cli/src/index.ts",
     "docs:check": "bun run scripts/docs-check.ts",
-    "test": "bun test packages && cd apps/web && bun test",
+    "test": "bun test packages apps/cloud && cd apps/web && bun test",
+    "deploy": "bunx @zabaca/zbc apply production",
     "prepare": "husky"
   },
   "dependencies": {

@@ -1,0 +1,13 @@
+# age public keys that can decrypt this repo's secrets. Private keys never
+# leave the machine that generated them; the public keys below are committed.
+#
+# After editing this list, re-encrypt every secrets file with the new set:
+#
+#   sops updatekeys packages/infra/environments/production/secrets.yaml
+#
+# CI is not a recipient yet — crux deploys by hand from an operator's machine
+# (ADR-0004). Deploy-on-merge generates a CI keypair, stores the private half as
+# the GitHub Actions secret SOPS_AGE_KEY, and adds its public key here.
+creation_rules:
+  - age: >-
+      age1cq0k9s88fmx7kkaqqvuf290lelyt8gkeglwvsd2r3ezuqyla7aps7x4q2j

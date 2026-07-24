@@ -77,14 +77,49 @@ Dev work is pinned to the repo-local `.crux.db` two ways so your real user-level
 
 There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux already exists). If you genuinely want a fresh db, delete `.crux.db` by hand — the friction is deliberate, because destroying dogfooded state is a real failure mode.
 
+## Deploy (cloud crux)
+
+Cloud crux is one Cloudflare Worker with a D1 database, deployed through
+[zbc](https://github.com/Zabaca/zbc) ([ADR-0004](docs/adr/0004-cloudflare-stack.md)).
+Production only — there is no preview environment. One command, from an
+operator's machine:
+
+```sh
+bun run deploy          # bunx @zabaca/zbc apply production
+```
+
+**Never run zbc with `bunx --bun`.** zbc shells out to wrangler, and wrangler on
+the Bun runtime exits 0 after uploading a version while silently skipping the
+deploy. zbc's cloudflare module catches that — it fails unless wrangler prints
+its `Deployed … triggers` confirmation — but the clean path is to let `bunx` pick
+the Node runtime, which `bun run deploy` does.
+
+- [`apps/cloud`](apps/cloud) is the Worker. Its topology lives in
+  [`wrangler.jsonc`](apps/cloud/wrangler.jsonc), which is the source of truth for
+  it — including the D1 binding. D1 has no zbc module, so the database was
+  created once (`wrangler d1 create crux-production`) and is bound there by id.
+- [`packages/infra/environments/production/cloud.ts`](packages/infra/environments/production/cloud.ts)
+  is the zbc instance: which package to deploy, into which account.
+- `CLOUDFLARE_API_TOKEN` lives SOPS/age-encrypted in
+  [`secrets.yaml`](packages/infra/environments/production/secrets.yaml); the
+  recipients are listed in [`.sops.yaml`](.sops.yaml). To add a machine or CI,
+  add its age public key there and run
+  `sops updatekeys packages/infra/environments/production/secrets.yaml`.
+
+`GET /health` is the deployment's liveness check. It round-trips the D1 binding
+rather than answering from memory, so a Worker that cannot read its corpus
+reports `503 degraded` instead of a hollow `ok`.
+
 ## Layout
 
 - [`.claude-plugin/`](.claude-plugin/) — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
 - [`skills/crux/`](skills/crux/) — the Crux skill that teaches Claude when and how to operate the CLI.
 - [`packages/core`](packages/core) — schema, transitions, validation, config loader.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty.
+- [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding.
 - [`apps/web`](apps/web) — the read-only web UI (roadmap + docs).
+- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker. A stub today; the Astro site and JSON API land here.
 
 ## Docs
 
