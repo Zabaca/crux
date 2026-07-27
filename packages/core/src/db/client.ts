@@ -1,37 +1,49 @@
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { join } from "node:path";
+import type { BatchItem } from "drizzle-orm/batch";
+import { drizzle } from "drizzle-orm/d1";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import * as schema from "./schema.js";
-import { resolveCruxHome } from "../config/user.js";
-
-export type CruxDb = ReturnType<typeof drizzle<typeof schema>>;
 
 /**
- * Resolve the Crux libSQL url.
- * Honors `CRUX_DB_URL` (explicit override), else `$CRUX_HOME/crux.db`
- * where `CRUX_HOME` defaults to `~/.claude/.crux`.
+ * A Crux database handle.
+ *
+ * Deliberately the driver-agnostic drizzle supertype rather than a concrete
+ * driver's type: the cloud runs on D1, while the CLI and the corpus loader
+ * still hold libSQL handles against local files. Both satisfy this, so every
+ * transition and query in core is written once and runs on either.
+ *
+ * Core does not resolve connections. A D1 binding has no URL and exists only
+ * for the life of a request, so there is nothing here to cache and no ambient
+ * database to reach for — callers construct a handle and pass it in.
  */
-export function resolveDbUrl(override?: string): string {
-  if (override) return override;
-  if (process.env.CRUX_DB_URL) return process.env.CRUX_DB_URL;
-  return `file:${join(resolveCruxHome(), "crux.db")}`;
-}
+export type CruxDb = BaseSQLiteDatabase<"async", unknown, typeof schema> & {
+  // `batch` lives on each concrete driver rather than on the shared supertype,
+  // with an identical signature on both. See `runBatch` for why core needs it.
+  batch<U extends BatchItem<"sqlite">, T extends Readonly<[U, ...U[]]>>(batch: T): Promise<unknown>;
+};
 
-let singleton: CruxDb | null = null;
-
-export function getDb(url?: string): CruxDb {
-  if (singleton) return singleton;
-  const client = createClient({ url: resolveDbUrl(url) });
-  singleton = drizzle(client, { schema });
-  return singleton;
+/** Wrap a D1 binding as a Crux database handle. */
+export function createD1Db(binding: D1Database): CruxDb {
+  return drizzle(binding, { schema }) as unknown as CruxDb;
 }
 
 /**
- * Override the singleton db handle — used by tests to inject an ephemeral db.
- * Pass `null` to reset so the next `getDb()` call re-initializes from the URL.
+ * Run statements atomically — all of them commit, or none do.
+ *
+ * D1 has no interactive transactions: it rejects `BEGIN TRANSACTION` outright
+ * ("please use the state.storage.transaction() APIs instead"), so drizzle's
+ * `db.transaction(cb)` throws the moment the callback opens. `batch()` is the
+ * atomic primitive D1 does offer — one implicit transaction around a list of
+ * statements — and libSQL implements it with the same signature.
+ *
+ * The trade is that statements are fixed up front and cannot read each other's
+ * results. Every transition that needed atomicity already computed its writes
+ * before opening a transaction, so nothing was lost in the swap.
+ *
+ * An empty list is a no-op; `batch` itself rejects one.
  */
-export function setDb(db: CruxDb | null): void {
-  singleton = db;
+export async function runBatch(db: CruxDb, statements: BatchItem<"sqlite">[]): Promise<void> {
+  if (statements.length === 0) return;
+  await db.batch(statements as [BatchItem<"sqlite">, ...BatchItem<"sqlite">[]]);
 }
 
 export { schema };

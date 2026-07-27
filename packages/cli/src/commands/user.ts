@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { users } from "@crux/core/db/schema";
 import { configPath, loadUserConfig, slugifyName, writeUserConfig } from "@crux/core/config";
 import { UserInitInput } from "@crux/core/validation";

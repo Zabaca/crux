@@ -1,5 +1,5 @@
+import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { getDb } from "@crux/core";
 import { decisions } from "@crux/core/db/schema";
 import { OkWithIdOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
@@ -42,7 +42,7 @@ const addCmd = defineCommand({
       rejected: asList(args.rejected),
       context: args.context,
     };
-    const { result } = await dispatch({ kind: "ADD_DECISION", payload });
+    const { result } = await dispatch({ kind: "ADD_DECISION", payload }, { db: getDb() });
     emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });

@@ -1,4 +1,4 @@
-import { getDb } from "@crux/core";
+import { getDb } from "../db.js";
 import {
   abandonments,
   decisionRejectedSolutions,

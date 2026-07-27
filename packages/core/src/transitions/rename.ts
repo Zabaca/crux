@@ -1,15 +1,25 @@
 /**
  * Slug-rename transition for workstreams.
  *
- * Renaming a workstream changes its primary key (id = "WS-<slug>"), which
- * means every FK referrer must be updated in lockstep. Because libSQL FKs are
- * declared without ON UPDATE CASCADE, we briefly disable FK enforcement, run
- * all the updates inside a transaction, run `PRAGMA foreign_key_check` to
- * verify integrity before commit, then re-enable FK enforcement.
+ * Renaming a workstream changes its primary key (id = "WS-<slug>"), so every FK
+ * referrer has to move with it, and the intermediate states are all invalid:
+ * point the referrers at the new id and they dangle until the parent row is
+ * rewritten, rewrite the parent first and the referrers dangle instead. The
+ * whole thing therefore has to land as one commit with FK checks held until the
+ * end.
+ *
+ * `PRAGMA defer_foreign_keys = on` is how that is expressed on D1, which
+ * enforces foreign keys with no way to switch them off. It applies to the
+ * surrounding transaction only, which means it has to be the first statement of
+ * the `batch()` it belongs to. The database then does the verifying at commit
+ * and refuses the batch outright if anything dangles — replacing the older
+ * dance of disabling enforcement globally and auditing by hand with
+ * `PRAGMA foreign_key_check`.
  */
 import { eq, sql } from "drizzle-orm";
-import type { CruxDb } from "../db/client.js";
-import { workstreams } from "../db/schema.js";
+import type { BatchItem } from "drizzle-orm/batch";
+import { runBatch, type CruxDb } from "../db/client.js";
+import { observations, problems, workstreams } from "../db/schema.js";
 import { NotFoundError, TransitionError } from "./errors.js";
 
 export type RenameUpdates = {
@@ -25,9 +35,24 @@ export type RenameResult = {
   newSlug: string;
 };
 
-const WORKSTREAM_REFERRERS: ReadonlyArray<{ table: string; columns: string[] }> = [
-  { table: "observations", columns: ["workstream_id"] },
-  { table: "problems", columns: ["workstream_id"] },
+/**
+ * Every column that points at `workstreams.id`, as typed updates rather than
+ * table/column name strings. drizzle's D1 `batch()` calls `.stmt.bind(...)` on
+ * each statement, which a raw `db.run(sql`…`)` carrying parameters does not
+ * have — so parameterised raw SQL cannot go in a batch at all. Query builders
+ * can, and they cost nothing here: this list is a handful of static columns,
+ * and the compiler now checks them against the schema.
+ */
+const WORKSTREAM_REFERRERS: ReadonlyArray<
+  (db: CruxDb, oldId: string, newId: string) => BatchItem<"sqlite">
+> = [
+  (db, oldId, newId) =>
+    db
+      .update(observations)
+      .set({ workstreamId: newId })
+      .where(eq(observations.workstreamId, oldId)),
+  (db, oldId, newId) =>
+    db.update(problems).set({ workstreamId: newId }).where(eq(problems.workstreamId, oldId)),
 ];
 
 export async function renameWorkstream(
@@ -71,44 +96,23 @@ export async function renameWorkstream(
   const newId = `WS-${newSlug}`;
   const now = Date.now();
 
-  await db.run(sql`PRAGMA foreign_keys = OFF`);
-  try {
-    await db.transaction(async (tx) => {
-      if (oldId !== newId) {
-        for (const ref of WORKSTREAM_REFERRERS) {
-          for (const col of ref.columns) {
-            await tx.run(
-              sql`UPDATE ${sql.raw(ref.table)} SET ${sql.raw(col)} = ${newId} WHERE ${sql.raw(col)} = ${oldId}`,
-            );
-          }
-        }
-      }
+  // Must lead the batch: the deferral applies to the transaction it opens in.
+  const writes: BatchItem<"sqlite">[] = [db.run(sql`PRAGMA defer_foreign_keys = on`)];
 
-      const setFragments: ReturnType<typeof sql>[] = [];
-      if (oldId !== newId) {
-        setFragments.push(sql`id = ${newId}`);
-        setFragments.push(sql`slug = ${newSlug}`);
-      }
-      if (updates.title !== undefined) setFragments.push(sql`title = ${updates.title}`);
-      if (updates.description !== undefined)
-        setFragments.push(sql`description = ${updates.description}`);
-      setFragments.push(sql`updated_at = ${now}`);
-      const setClause = sql.join(setFragments, sql`, `);
-      await tx.run(sql`UPDATE workstreams SET ${setClause} WHERE id = ${oldId}`);
-
-      const violations = await tx.all(sql`PRAGMA foreign_key_check`);
-      if (Array.isArray(violations) && violations.length > 0) {
-        throw new TransitionError(`rename produced FK violations`, {
-          kind: "workstream",
-          oldSlug,
-          newSlug,
-          violations,
-        });
-      }
-    });
-  } finally {
-    await db.run(sql`PRAGMA foreign_keys = ON`);
+  if (oldId !== newId) {
+    for (const referrer of WORKSTREAM_REFERRERS) writes.push(referrer(db, oldId, newId));
   }
+
+  const set: Partial<typeof workstreams.$inferInsert> = { updatedAt: now };
+  if (oldId !== newId) {
+    set.id = newId;
+    set.slug = newSlug;
+  }
+  if (updates.title !== undefined) set.title = updates.title;
+  if (updates.description !== undefined) set.description = updates.description;
+  writes.push(db.update(workstreams).set(set).where(eq(workstreams.id, oldId)));
+
+  await runBatch(db, writes);
 
   return { kind: "workstream", oldId, newId, oldSlug, newSlug };
 }

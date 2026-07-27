@@ -1,7 +1,7 @@
+import { getDb } from "../db.js";
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { KeyBar, Screen, type KeyHint } from "@crux/tui-ds/components";
-import { getDb } from "@crux/core";
 import { workstreams } from "@crux/core/db/schema";
 import { eq } from "drizzle-orm";
 import { getProblemById, getWorkstreamBySlug, type Workstream } from "./queries.js";
