@@ -28,6 +28,16 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_slug_unique ON users (slug)`,
 
+  `CREATE TABLE IF NOT EXISTS api_tokens (
+    id text PRIMARY KEY NOT NULL,
+    user_id text NOT NULL REFERENCES users(id),
+    token_hash text NOT NULL,
+    name text,
+    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
+    revoked_at integer
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS api_tokens_token_hash_unique ON api_tokens (token_hash)`,
+
   `CREATE TABLE IF NOT EXISTS workstreams (
     id text PRIMARY KEY NOT NULL,
     slug text NOT NULL,

@@ -14,6 +14,7 @@
     "./transitions": "./src/transitions/index.ts",
     "./validation": "./src/validation/index.ts",
     "./config": "./src/config/user.ts",
+    "./auth": "./src/auth/tokens.ts",
     "./docs": "./src/docs/index.ts",
     "./view-state": "./src/view-state/index.ts",
     "./actions": "./src/actions/index.ts",

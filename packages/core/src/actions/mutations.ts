@@ -81,8 +81,18 @@ async function resolveSolution(id: string | number, db: CruxDb) {
   return rows[0];
 }
 
-export async function runMutation(action: MutationAction, db: CruxDb): Promise<unknown> {
-  const user = requireUser().user;
+/**
+ * Who a mutation is attributed to. The cloud passes the token-resolved user; the
+ * CLI omits it and falls back to the local `config.toml` identity.
+ */
+export type Actor = { id: string };
+
+export async function runMutation(
+  action: MutationAction,
+  db: CruxDb,
+  actor?: Actor,
+): Promise<unknown> {
+  const user = actor ?? requireUser().user;
 
   switch (action.kind) {
     case "ADD_WORKSTREAM": {

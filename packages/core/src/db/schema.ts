@@ -21,6 +21,23 @@ export const users = sqliteTable("users", {
     .default(sql`(unixepoch() * 1000)`),
 });
 
+/**
+ * API bearer tokens for the CLI. Only the SHA-256 hash of each token is stored;
+ * `revoked_at` null means active. See `auth/tokens.ts`.
+ */
+export const apiTokens = sqliteTable("api_tokens", {
+  id: text("id").primaryKey(), // TOK-<random>
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  tokenHash: text("token_hash").notNull().unique(),
+  name: text("name"),
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  revokedAt: integer("revoked_at"),
+});
+
 export const workstreams = sqliteTable("workstreams", {
   id: text("id").primaryKey(), // WS-<slug>
   slug: text("slug").notNull().unique(),
