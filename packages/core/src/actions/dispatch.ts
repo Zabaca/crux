@@ -16,13 +16,15 @@ import { ActionSchema, isViewAction, type Action } from "./schemas.js";
 import type { CruxDb } from "../db/client.js";
 import { isActionAllowed, getAllowedActions } from "./allowed.js";
 import {
-  loadViewMeta,
-  saveViewMeta,
-  sendViewEvent,
+  computeSaveViewMetaBlob,
+  loadViewMetaFromBlob,
+  resolveViewStatePath,
+  sendViewEventWithStore,
   type ViewMeta,
 } from "../view-state/persistence.js";
+import { FileViewStore, type ViewStore } from "../view-state/store.js";
 import type { ViewEvent } from "../view-state/machine.js";
-import { runMutation } from "./mutations.js";
+import { runMutation, type Actor } from "./mutations.js";
 
 /** Error thrown when an action is not allowed in the current view state. */
 export class ActionNotAllowedError extends Error {
@@ -60,13 +62,23 @@ export type DispatchResult = {
  */
 export async function dispatch(
   rawAction: unknown,
-  options: { db: CruxDb; path?: string; enforceAllow?: boolean },
+  options: {
+    db: CruxDb;
+    path?: string;
+    viewStore?: ViewStore;
+    actor?: Actor;
+    enforceAllow?: boolean;
+  },
 ): Promise<DispatchResult> {
   // Parse + validate action shape
   const action = ActionSchema.parse(rawAction) as Action;
 
+  // View-state lives behind a store seam — the filesystem locally, a Durable
+  // Object in the cloud. No fs call remains on this path when a store is given.
+  const store = options.viewStore ?? new FileViewStore(options.path ?? resolveViewStatePath());
+
   // Load current meta (revision, lastAction, recentQueries) + view state value
-  const meta = loadViewMeta(options.path);
+  const meta = loadViewMetaFromBlob(await store.read());
 
   // Enforce allowed list when explicitly requested OR when collab mode is on.
   // CLI keeps env-flag gating; UI passes enforceAllow=true unconditionally.
@@ -89,7 +101,7 @@ export async function dispatch(
   if (isViewAction(action)) {
     // Route through XState machine
     const event = { type: action.kind, ...(action.payload ?? {}) } as ViewEvent;
-    const snap = await sendViewEvent(event, options);
+    const snap = await sendViewEventWithStore(event, { db: options.db, store });
     viewState = snap.value;
 
     // Update meta with new value
@@ -97,16 +109,16 @@ export async function dispatch(
     meta.context = snap.context;
   } else {
     // Route through mutation runner
-    result = await runMutation(action, options.db);
+    result = await runMutation(action, options.db, options.actor);
   }
 
-  // Persist sidecar fields
+  // Persist sidecar fields (re-read: a view action already wrote the snapshot).
   const updatedMeta: ViewMeta = {
     ...meta,
     revision: nextRevision,
     lastAction: { kind: action.kind, ts: Date.now() },
   };
-  saveViewMeta(updatedMeta, options.path);
+  await store.write(computeSaveViewMetaBlob(await store.read(), updatedMeta));
 
   return { revision: nextRevision, viewState, result };
 }

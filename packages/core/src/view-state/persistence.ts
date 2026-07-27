@@ -6,6 +6,7 @@ import { problems, workstreams } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { viewMachine, ViewEventSchema, type ViewEvent } from "./machine.js";
 import { resolveCruxHome } from "../config/user.js";
+import { FileViewStore, type ViewBlob, type ViewStore } from "./store.js";
 
 type ViewSnapshot = ReturnType<ReturnType<typeof createActor<typeof viewMachine>>["getSnapshot"]>;
 type PersistedViewSnapshot = ReturnType<
@@ -61,26 +62,24 @@ export function resolveViewStatePath(): string {
  * created on first event.
  */
 export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
-  if (!existsSync(path)) {
-    // Run the initial transition via a throwaway actor so we get a real snapshot.
-    const actor = createActor(viewMachine);
-    actor.start();
-    const snap = actor.getSnapshot();
-    actor.stop();
-    return snap;
-  }
-  const raw = readFileSync(path, "utf8");
-  let all: Record<string, unknown>;
-  try {
-    all = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
-    // Corrupt file — return initial state
-    const actor = createActor(viewMachine);
-    actor.start();
-    const snap = actor.getSnapshot();
-    actor.stop();
-    return snap;
-  }
+  return loadStateFromBlob(readRawOrEmpty(path));
+}
+
+/** Initial machine snapshot from a throwaway actor. */
+function initialSnapshot(): ViewSnapshot {
+  const actor = createActor(viewMachine);
+  actor.start();
+  const snap = actor.getSnapshot();
+  actor.stop();
+  return snap;
+}
+
+/**
+ * Pure counterpart of `loadState`: restore an XState snapshot from an already-read
+ * blob. An empty blob (missing/corrupt storage) yields the initial state. No fs.
+ */
+export function loadStateFromBlob(all: ViewBlob): ViewSnapshot {
+  if (!all || Object.keys(all).length === 0) return initialSnapshot();
   // Strip sidecar fields before passing to XState — they confuse the state restoration.
   const { revision: _r, lastAction: _la, recentQueries: _rq, ...xstateFields } = all;
   void _r;
@@ -176,10 +175,21 @@ export function saveState(
   snapshot: ViewSnapshot,
   opts: { lastActionKind?: string } = {},
 ): void {
+  atomicWrite(path, computeSaveStateBlob(readRawOrEmpty(path), snapshot, opts));
+}
+
+/**
+ * Pure counterpart of `saveState`: merge a snapshot over an existing blob and
+ * return the blob to persist. No fs.
+ */
+export function computeSaveStateBlob(
+  existing: ViewBlob,
+  snapshot: ViewSnapshot,
+  opts: { lastActionKind?: string } = {},
+): ViewBlob {
   const persisted = getPersistedSnapshotFrom(snapshot) as unknown as Record<string, unknown>;
-  const existing = readRawOrEmpty(path);
   const stampLastAction = typeof opts.lastActionKind === "string";
-  const merged: Record<string, unknown> = {
+  return {
     ...persisted,
     revision: stampLastAction
       ? (typeof existing.revision === "number" ? existing.revision : 0) + 1
@@ -189,7 +199,6 @@ export function saveState(
       : (existing.lastAction ?? null),
     recentQueries: existing.recentQueries ?? [],
   };
-  atomicWrite(path, merged);
 }
 
 function getPersistedSnapshotFrom(snapshot: ViewSnapshot): PersistedViewSnapshot {
@@ -215,21 +224,15 @@ const DEFAULT_VALUE = { viewing: "workstream_list" };
  * Migrates legacy workstreamSlug/problemSlug to workstreamId/problemId on read.
  */
 export function loadViewMeta(path?: string): ViewMeta {
-  const resolvedPath = path ?? resolveViewStatePath();
-  if (!existsSync(resolvedPath)) {
-    return {
-      value: DEFAULT_VALUE,
-      context: DEFAULT_CONTEXT,
-      revision: 0,
-      lastAction: null,
-      recentQueries: [],
-    };
-  }
-  const raw = readFileSync(resolvedPath, "utf8");
-  let parsed: Record<string, unknown>;
-  try {
-    parsed = JSON.parse(raw) as Record<string, unknown>;
-  } catch {
+  return loadViewMetaFromBlob(readRawOrEmpty(path ?? resolveViewStatePath()));
+}
+
+/**
+ * Pure counterpart of `loadViewMeta`: derive ViewMeta from an already-read blob.
+ * An empty blob yields defaults. Migrates legacy slug-based context on read. No fs.
+ */
+export function loadViewMetaFromBlob(parsed: ViewBlob): ViewMeta {
+  if (!parsed || Object.keys(parsed).length === 0) {
     return {
       value: DEFAULT_VALUE,
       context: DEFAULT_CONTEXT,
@@ -275,14 +278,20 @@ export function loadViewMeta(path?: string): ViewMeta {
  */
 export function saveViewMeta(meta: ViewMeta, path?: string): void {
   const resolvedPath = path ?? resolveViewStatePath();
-  const existing = readRawOrEmpty(resolvedPath);
-  const merged: Record<string, unknown> = {
+  atomicWrite(resolvedPath, computeSaveViewMetaBlob(readRawOrEmpty(resolvedPath), meta));
+}
+
+/**
+ * Pure counterpart of `saveViewMeta`: merge sidecar fields over an existing blob
+ * (XState fields survive) and return the blob to persist. No fs.
+ */
+export function computeSaveViewMetaBlob(existing: ViewBlob, meta: ViewMeta): ViewBlob {
+  return {
     ...existing,
     revision: meta.revision,
     lastAction: meta.lastAction,
     recentQueries: meta.recentQueries,
   };
-  atomicWrite(resolvedPath, merged);
 }
 
 /** Error thrown when a view event is refused by a guard or illegal in the current state. */
@@ -305,6 +314,20 @@ export async function sendViewEvent(
   event: ViewEvent,
   options: { db: CruxDb; path?: string },
 ): Promise<ViewSnapshot> {
+  return sendViewEventWithStore(event, {
+    db: options.db,
+    store: new FileViewStore(options.path ?? resolveViewStatePath()),
+  });
+}
+
+/**
+ * Store-based counterpart of `sendViewEvent` — the fs-free dispatch path. Reads
+ * and writes view-state through the injected `ViewStore` instead of the disk.
+ */
+export async function sendViewEventWithStore(
+  event: ViewEvent,
+  options: { db: CruxDb; store: ViewStore },
+): Promise<ViewSnapshot> {
   const parsed = ViewEventSchema.safeParse(event);
   if (!parsed.success) {
     const msg = parsed.error.issues
@@ -313,8 +336,8 @@ export async function sendViewEvent(
     throw new ViewEventRefusedError("INVALID_PAYLOAD", msg);
   }
 
-  const path = options.path ?? resolveViewStatePath();
-  const current = loadState(path);
+  const blob = await options.store.read();
+  const current = loadStateFromBlob(blob);
 
   // Async-validate guards against the db before entering XState.
   let workstreamExists = false;
@@ -365,7 +388,7 @@ export async function sendViewEvent(
     );
   }
 
-  saveState(path, next, { lastActionKind: event.type });
+  await options.store.write(computeSaveStateBlob(blob, next, { lastActionKind: event.type }));
   return next;
 }
 

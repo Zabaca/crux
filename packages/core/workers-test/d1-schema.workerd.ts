@@ -15,6 +15,7 @@ import { applyD1Schema } from "../src/db/d1/index.js";
  */
 const EXPECTED_TABLES = [
   "users",
+  "api_tokens",
   "workstreams",
   "observations",
   "problems",

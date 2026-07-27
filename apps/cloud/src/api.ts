@@ -1,0 +1,149 @@
+/**
+ * The versioned JSON API (`/v1/*`). Every route is bearer-authenticated: the CLI
+ * presents `Authorization: Bearer <token>`, the token resolves to a users row,
+ * and that user is the actor for the request. Writes go through core's
+ * `dispatch()` — no invariant is reimplemented here — with view-state living in
+ * the caller's ViewStateDO. Reads mirror the CLI's `--json` shapes exactly.
+ */
+import { createD1Db, type CruxDb } from "@crux/core/db";
+import { authenticateToken } from "@crux/core/auth";
+import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
+import { loadViewMetaFromBlob, loadStateFromBlob, formatStateValue } from "@crux/core/view-state";
+import { CruxError } from "@crux/core/transitions";
+import { ZodError } from "zod";
+import { DurableObjectViewStore } from "./view-state-do.js";
+
+export interface Env {
+  DB: D1Database;
+  VIEW_STATE: DurableObjectNamespace;
+}
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json; charset=utf-8" },
+  });
+}
+
+/** HTTP status for each stable error code. The CLI reconstructs the error from
+ * the envelope's `code`, so the status is advisory — the body is the contract. */
+const STATUS_BY_CODE: Record<string, number> = {
+  UNAUTHENTICATED: 401,
+  VALIDATION_ERROR: 400,
+  NOT_FOUND: 404,
+  ACTION_NOT_ALLOWED: 409,
+  ALREADY_EXISTS: 409,
+  ILLEGAL_TRANSITION: 422,
+  INVARIANT_VIOLATION: 422,
+  REFERENTIAL_MISMATCH: 422,
+  UNKNOWN: 500,
+};
+
+function errorBody(code: string, message: string, details?: unknown): Response {
+  const body =
+    details === undefined ? { error: { code, message } } : { error: { code, message, details } };
+  return json(body, STATUS_BY_CODE[code] ?? 500);
+}
+
+/** Map any thrown error to the same `{error:{code,message,details}}` envelope the
+ * CLI's local path produces, so a server-side rejection reads identically. */
+function toErrorResponse(err: unknown): Response {
+  if (err instanceof ActionNotAllowedError) {
+    return errorBody(err.code, err.message, {
+      state: err.state,
+      attempted: err.attempted,
+      allowedView: err.allowedView,
+      allowedMutation: err.allowedMutation,
+      globals: err.globals,
+    });
+  }
+  if (err instanceof ZodError) {
+    const message = err.issues
+      .map((i) => `${i.path.join(".") || "(root)"}: ${i.message}`)
+      .join("; ");
+    return errorBody("VALIDATION_ERROR", message, { issues: err.issues });
+  }
+  if (err instanceof CruxError) {
+    return errorBody(err.code, err.message, err.details);
+  }
+  const message = err instanceof Error ? err.message : String(err);
+  return errorBody("UNKNOWN", message);
+}
+
+function bearer(request: Request): string | null {
+  const header = request.headers.get("authorization");
+  if (!header) return null;
+  const match = /^Bearer\s+(.+)$/i.exec(header);
+  return match ? match[1]!.trim() : null;
+}
+
+/** Resolve the per-user ViewStateDO stub. */
+function stubFor(env: Env, userId: string): DurableObjectStub {
+  return env.VIEW_STATE.get(env.VIEW_STATE.idFromName(userId));
+}
+
+/** Resolve the per-user ViewStateDO as a ViewStore. */
+function viewStoreFor(env: Env, userId: string): DurableObjectViewStore {
+  return new DurableObjectViewStore(stubFor(env, userId));
+}
+
+/**
+ * Handle a `/v1/*` request. Returns null for paths this module does not own, so
+ * the top-level Worker can fall through to `/health` and 404.
+ */
+export async function handleApi(
+  request: Request,
+  env: Env,
+  deps: { db?: CruxDb } = {},
+): Promise<Response | null> {
+  const url = new URL(request.url);
+  const { pathname } = url;
+  if (pathname !== "/v1" && !pathname.startsWith("/v1/")) return null;
+
+  const db = deps.db ?? createD1Db(env.DB);
+  const token = bearer(request);
+  const authed = await authenticateToken(db, token);
+  if (!authed) {
+    return errorBody("UNAUTHENTICATED", "missing or invalid bearer token");
+  }
+
+  // POST /v1/dispatch — every write, straight through dispatch().
+  if (pathname === "/v1/dispatch" && request.method === "POST") {
+    try {
+      const action = await request.json();
+      const result = await dispatch(action, {
+        db,
+        viewStore: viewStoreFor(env, authed.userId),
+        actor: { id: authed.userId },
+      });
+      return json(result);
+    } catch (err) {
+      return toErrorResponse(err);
+    }
+  }
+
+  // GET /v1/view — the current view-state, same shape as `crux view get`.
+  if (pathname === "/v1/view" && request.method === "GET") {
+    const store = viewStoreFor(env, authed.userId);
+    const blob = await store.read();
+    const meta = loadViewMetaFromBlob(blob);
+    const snap = loadStateFromBlob(blob);
+    const allowed = getAllowedActions(snap.value);
+    return json({
+      value: snap.value,
+      context: snap.context,
+      revision: meta.revision,
+      lastAction: meta.lastAction,
+      allowedActions: [...allowed.allowedView, ...allowed.allowedMutation],
+      globalActions: allowed.globals,
+      stateLabel: formatStateValue(snap.value),
+    });
+  }
+
+  // GET /v1/view/stream — the push stream, proxied from the user's DO.
+  if (pathname === "/v1/view/stream" && request.method === "GET") {
+    return stubFor(env, authed.userId).fetch("https://view-state/stream");
+  }
+
+  return errorBody("NOT_FOUND", `no such route: ${request.method} ${pathname}`);
+}
