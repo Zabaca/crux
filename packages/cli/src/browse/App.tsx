@@ -1,10 +1,12 @@
-import { getDb } from "../db.js";
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Text, useApp, useInput } from "ink";
 import { KeyBar, Screen, type KeyHint } from "@crux/tui-ds/components";
-import { workstreams } from "@crux/core/db/schema";
-import { eq } from "drizzle-orm";
-import { getProblemById, getWorkstreamBySlug, type Workstream } from "./queries.js";
+import {
+  getProblemById,
+  getWorkstreamById,
+  getWorkstreamBySlug,
+  type Workstream,
+} from "./queries.js";
 import {
   IntakeQueueView,
   ObservationDetailView,
@@ -13,7 +15,7 @@ import {
   WorkstreamDashboard,
   WorkstreamPicker,
 } from "./views.js";
-import { useViewStateFile } from "./useViewState.js";
+import { useViewState } from "./useViewState.js";
 
 type View =
   | { kind: "picker" }
@@ -35,18 +37,13 @@ type View =
     }
   | { kind: "intake"; workstream: Workstream };
 
-async function getWorkstreamById(id: string): Promise<Workstream | null> {
-  const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, id)).limit(1);
-  return rows[0] ?? null;
-}
-
 export function App({ initialSlug }: { initialSlug?: string }): React.ReactElement {
   const { exit } = useApp();
   const [view, setView] = useState<View>({ kind: "picker" });
   const [showArchived, setShowArchived] = useState(false);
   const [bootError, setBootError] = useState<string | null>(null);
   const [booted, setBooted] = useState(!initialSlug);
-  const { machineView, send } = useViewStateFile();
+  const { machineView, send } = useViewState();
 
   const lastAppliedMachineView = useRef<string>("");
 

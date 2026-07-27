@@ -1,6 +1,6 @@
 ---
 name: dev-start
-description: Onboarding flow for a new Crux checkout — clone, install, migrate, seed, run first command.
+description: Onboarding flow for a new Crux checkout — clone, install, point at a deployment, run first command.
 ---
 
 # Crux dev-start
@@ -15,26 +15,28 @@ bun install
 
 Requires Bun ≥ 1.1.
 
-## 2. Create + migrate the local database
+## 2. Point the CLI at a deployment
 
-Dev work is already pinned to a repo-local `.crux.db` — the committed `.env` sets `CRUX_DB_URL=file:.crux.db` so `bun run …` scripts never touch your user-level db, and `bin/crux` forces the same URL whenever it detects a `.git` checkout. Nothing to configure.
-
-The libSQL file is gitignored; migrations are committed under `packages/core/src/db/migrations/`.
+There is no local database. Every command talks to a crux deployment over HTTP,
+so what a fresh checkout needs is a URL and the bearer token minted for you:
 
 ```sh
-bun run generate   # only if migrations/ is empty or schema has changed
-bun run migrate
+bun run crux init --url https://<your-deployment> --token <token>
 ```
 
-This creates `.crux.db` at the repo root.
+That checks the coordinates work before writing `[api]` into `config.toml`.
+`CRUX_API_URL` / `CRUX_API_TOKEN` override the file for one invocation.
+
+To work against a throwaway corpus instead of the real one, run the Worker
+locally — its D1 binding is a local file — and point the CLI at it:
+
+```sh
+cd apps/cloud && bunx wrangler dev     # then: export CRUX_API_URL=http://localhost:8787
+```
 
 ## 3. Seed (optional)
 
-```sh
-bun run seed
-```
-
-`scripts/seed-ws-crux.ts` is empty in the public repo. The script is a no-op by default. Populate it with your own starter corpus if you want a non-empty db on a fresh checkout — see the schema at `packages/core/src/db/schema.ts` and the transitions at `packages/core/src/transitions/` for shape and invariants.
+`scripts/seed-ws-crux.ts` is empty in the public repo and `bun run seed` is a no-op. Populate it with your own starter corpus if you want one — see the schema at `packages/core/src/db/schema.ts` and the transitions at `packages/core/src/transitions/` for shape and invariants.
 
 ## 4. Write your user config
 
@@ -42,7 +44,7 @@ bun run seed
 bun run crux user init --name "Your Name" --email "you@example.com"
 ```
 
-Writes `$XDG_CONFIG_HOME/crux/config.toml` (falling back to `~/.config/crux/config.toml`) and inserts a matching User row.
+Writes the `[user]` section of `$CRUX_HOME/config.toml`. The `users` row itself belongs to the deployment — it is created when a Member is invited and a token minted, and the token is what identifies the actor on every request.
 
 ## 5. Smoke-test context
 
@@ -54,6 +56,6 @@ Expect PRB-thinking-residue-gap with its evidence, solutions, and DEC-001 inline
 
 ## Troubleshooting
 
-- `CRUX_DB_URL` env var overrides the database location.
-- There is no reset script on purpose — destroying dogfooded state is a real failure mode we've hit. If you genuinely want a fresh db, delete `.crux.db` by hand, then `bun run migrate && bun run seed`.
+- `CRUX_API_URL` / `CRUX_API_TOKEN` override the deployment for one invocation; `CRUX_HOME` moves `config.toml`.
+- There is no reset command on purpose — destroying dogfooded state is a real failure mode we've hit. D1 has point-in-time restore if you need to undo something.
 - Transition errors carry a stable `code` string — grep `packages/core/src/transitions/errors.ts`.

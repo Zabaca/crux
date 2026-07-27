@@ -1,12 +1,8 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { evidence, problems } from "@crux/core/db/schema";
-import { NotFoundError } from "@crux/core/transitions";
 import { OkWithIdOutput } from "@crux/core/validation";
-import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { dispatch } from "@crux/core/actions";
 import type { AddEvidencePayload } from "@crux/core/actions";
+import { api } from "../api-client.js";
 import { problemArg, hintCtx } from "../ctx-defaults.js";
 
 const linkCmd = defineCommand({
@@ -19,14 +15,14 @@ const linkCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const prVal = problemArg(args.problem);
+    const prVal = await problemArg(args.problem);
     hintCtx(undefined, prVal);
     const payload: AddEvidencePayload = {
       observation: args.observation,
       problem: prVal,
       note: args.note,
     };
-    const { result } = await dispatch({ kind: "ADD_EVIDENCE", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "ADD_EVIDENCE", payload });
     emit(result, OkWithIdOutput, `linked ${(result as { id: string }).id}`);
   },
 });
@@ -39,16 +35,12 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const db = getDb();
-    if (args.problem) {
-      const numId = parseInt(String(args.problem), 10);
-      const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
-      if (pr.length === 0)
-        throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
-      emit(await db.select().from(evidence).where(eq(evidence.problemId, pr[0]!.id)));
-      return;
-    }
-    emit(await db.select().from(evidence));
+    emit(
+      await api().query({
+        kind: "EVIDENCE_LIST",
+        ...(args.problem ? { problem: args.problem } : {}),
+      }),
+    );
   },
 });
 

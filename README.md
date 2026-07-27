@@ -55,10 +55,27 @@ First time you use it in a conversation, Claude walks you through four checks an
 
 1. Bun runtime — `command -v bun`. Crux runs on Bun. If it's not installed, Claude surfaces the install command for your platform (`curl -fsSL https://bun.sh/install | bash` works on macOS and Linux; `brew install oven-sh/bun/bun` on Homebrew; PowerShell one-liner on Windows). After install, restart your shell so the new PATH takes effect.
 2. Plugin deps — runs `bun install` in the plugin dir if `node_modules` is absent.
-3. Database — runs `crux init` if `~/.local/share/crux/crux.db` doesn't exist (XDG-compliant user-level db).
+3. Deployment — runs `crux init --url <deployment> --token <token>` if `[api]` is missing from `config.toml`. The corpus lives in the cloud (ADR-0003); this is what points your machine at it.
 4. User identity — prompts for your name/email, runs `crux user init`.
 
 After that first run, all four checks are no-ops and the CLI is ready.
+
+## The client-server split
+
+There is no local database. Every `crux` command is an HTTP call to the
+deployment ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)): reads go to
+`POST /v1/query` as a *named* read, writes to `POST /v1/dispatch` as an action,
+and view-state lives in a per-user Durable Object behind `/v1/view`. Both
+entry points are in core — `query()` beside `dispatch()` — so an invariant and a
+`--json` shape each exist in exactly one place, which is the only arrangement
+that survives two people writing at once.
+
+What the CLI still owns is argument parsing, the request it sends, and the
+terminal: the server's `{error:{code,message,details}}` envelope is rebuilt into
+the same error objects as before, so codes and exit codes are unchanged.
+
+`crux init` writes `[api] url` / `token` into `config.toml` after checking they
+work. `CRUX_API_URL` and `CRUX_API_TOKEN` override the file for one invocation.
 
 ## Develop from source
 
@@ -66,16 +83,16 @@ For contributors working on Crux itself:
 
 ```sh
 bun install
-bun run generate       # if migrations/ is empty
-bun run migrate        # creates .crux.db in the repo root
-bun run seed           # no-op by default; populate scripts/seed-ws-crux.ts to seed your own corpus
 bun run crux user init --name "Your Name" --email "you@example.com"
+bun run crux init --url https://<your-deployment> --token <token>
 bun run crux context -w crux --json
 ```
 
-Dev work is pinned to the repo-local `.crux.db` two ways so your real user-level db is never touched: a committed `.env` sets `CRUX_DB_URL=file:.crux.db` for `bun run …` scripts, and `bin/crux` detects a `.git` checkout and sets the same URL absolutely before forwarding to the CLI. Plugin consumers are unaffected — Bun only loads `.env` from their project's cwd, not from the plugin source.
-
-There is no reset script. `bun run seed` is idempotent (it no-ops if WS-crux already exists). If you genuinely want a fresh db, delete `.crux.db` by hand — the friction is deliberate, because destroying dogfooded state is a real failure mode.
+The cloud schema is end-state DDL applied by `applyD1Schema`
+([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)) — there is no
+migrations directory and no drizzle-kit. To develop against a throwaway corpus
+rather than the real one, run the Worker locally (`cd apps/cloud && bunx wrangler dev`),
+whose D1 binding is a local file, and point `CRUX_API_URL` at it.
 
 ## Deploy (cloud crux)
 
@@ -114,11 +131,11 @@ reports `503 degraded` instead of a hollow `ok`.
 
 - [`.claude-plugin/`](.claude-plugin/) — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
 - [`skills/crux/`](skills/crux/) — the Crux skill that teaches Claude when and how to operate the CLI.
-- [`packages/core`](packages/core) — schema, transitions, validation, config loader.
-- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty.
+- [`packages/core`](packages/core) — schema, transitions, `dispatch()` and `query()`, validation, config loader.
+- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, and the HTTP client every command goes through.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
-- [`scripts/`](scripts/) — seeding, and the one-shot corpus load into D1.
-- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker. A stub today; the Astro site and JSON API land here.
+- [`scripts/`](scripts/) — seeding and the doc-tree rot check.
+- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker: `/health`, the `/v1` JSON API, and the view-state Durable Object. The Astro site lands here.
 
 ## Docs
 
@@ -147,13 +164,16 @@ same walker at build time when it lands.
 - **Transitions are code, not documentation.** Invariants live as plain functions in [`packages/core/src/transitions/`](packages/core/src/transitions/).
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
 - **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded.
-- **libSQL file gitignored.** Migrations committed. Turso embedded replicas for team mode.
+- **One corpus, reached over HTTP.** No local database, no replicas — the transition layer runs in exactly one place ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)).
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.
 - **Claude is a tool, not an actor.** Attributions resolve to the human user.
 
 ## Status
 
-MVP. Single-user local libSQL. No multi-tenant, no web UI, no test suite (transition logic is exercised end-to-end via the seed script). Design thinking for WS-crux itself is seeded in the db (`bun run seed`) and serves as the initial dogfood corpus.
+MVP. Single-tenant cloud deployment, CLI-only — no web UI yet. Transitions, reads
+and token auth are tested inside workerd against a real D1
+([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)); the CLI is tested
+against a stub deployment. `bun run test` runs both runners.
 
 See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 

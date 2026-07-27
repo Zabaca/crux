@@ -1,24 +1,27 @@
 /**
- * Integration tests for CLI commands via direct module import.
+ * The CLI is a thin client (ADR-0003): it owns argument parsing, the request it
+ * sends, and how a response — or an error envelope — reaches the terminal. It
+ * owns no corpus logic at all, so these tests drive commands through their
+ * `run()` against a stub transport and assert exactly that: the request issued,
+ * the payload emitted unchanged, and the error class rebuilt from the wire.
+ *
+ * The shapes those requests produce are tested where they are produced, against
+ * a real D1 — `packages/core/workers-test/reads.workerd.ts`.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { tmpdir } from "node:os";
 
-import { setDb } from "../db.js";
-import { createTestDb, type CruxTestDb } from "@crux/core/db/test-utils";
-import { users } from "@crux/core/db/schema";
-import { setCaptureWriter, setJsonMode, emit } from "../output.js";
-import { OkWithIdOutput, ProblemShowOutput, ContextOutput } from "@crux/core/validation";
+import { createApiClient, setApiClient, ApiError } from "../api-client.js";
+import { setCaptureWriter, setJsonMode } from "../output.js";
+import { EXIT_CODES } from "../errors.js";
+import { CruxError } from "@crux/core/transitions";
 import { ActionNotAllowedError } from "@crux/core/actions";
 
 import { workstreamCommand } from "../commands/workstream.js";
 import { problemCommand } from "../commands/problem.js";
 import { observationCommand } from "../commands/observation.js";
-import { evidenceCommand } from "../commands/evidence.js";
 import { contextCommand } from "../commands/context.js";
 import { solutionCommand } from "../commands/solution.js";
+import { viewCommand } from "../commands/view.js";
 
 type AnyCmd = {
   run?: (ctx: { args: Record<string, unknown>; rawArgs?: string[] }) => Promise<void>;
@@ -26,12 +29,7 @@ type AnyCmd = {
 };
 
 async function runCmd(parent: AnyCmd, sub: string, args: Record<string, unknown>): Promise<void> {
-  let cmd: AnyCmd;
-  if (sub === "run") {
-    cmd = parent;
-  } else {
-    cmd = parent.subCommands![sub]!;
-  }
+  const cmd = sub === "run" ? parent : parent.subCommands![sub]!;
   await cmd.run!({ args, rawArgs: [] });
 }
 
@@ -48,632 +46,376 @@ async function capture<T>(fn: () => Promise<void>): Promise<T> {
   return result as T;
 }
 
-const TEST_USER = { id: "USR-test", slug: "test", name: "Test User", email: "test@example.com" };
+/** One recorded HTTP call. */
+type Call = { url: string; method: string; body: unknown; auth: string | undefined };
 
-let db: CruxTestDb;
-let testCleanup: () => void;
-let xdgDir: string;
+/** A stub deployment: `routes` maps "<METHOD> <path>" to a response body. */
+function stubServer(routes: Record<string, unknown | (() => Response)>) {
+  const calls: Call[] = [];
+  const transport = async (url: string, init: RequestInit): Promise<Response> => {
+    const method = (init.method ?? "GET").toUpperCase();
+    const path = new URL(url).pathname;
+    const headers = init.headers as Record<string, string>;
+    calls.push({
+      url,
+      method,
+      body: init.body ? JSON.parse(init.body as string) : undefined,
+      auth: headers?.authorization,
+    });
+    const handler = routes[`${method} ${path}`];
+    if (handler === undefined) return new Response("{}", { status: 404 });
+    if (typeof handler === "function") return (handler as () => Response)();
+    return new Response(JSON.stringify(handler), { status: 200 });
+  };
+  setApiClient(createApiClient({ baseUrl: "https://crux.test/", token: "tok-1", transport }));
+  return calls;
+}
 
-beforeEach(async () => {
-  ({ db, cleanup: testCleanup } = await createTestDb());
-  setDb(db as unknown as Parameters<typeof setDb>[0]);
-  await db.insert(users).values(TEST_USER);
+/** The error envelope the Worker sends for a given code. */
+function envelope(
+  status: number,
+  code: string,
+  message: string,
+  details?: unknown,
+): () => Response {
+  return () =>
+    new Response(JSON.stringify({ error: { code, message, ...(details ? { details } : {}) } }), {
+      status,
+    });
+}
 
-  xdgDir = mkdtempSync(join(tmpdir(), "crux-xdg-"));
-  const cfgDir = join(xdgDir, "crux");
-  mkdirSync(cfgDir, { recursive: true });
-  writeFileSync(
-    join(cfgDir, "config.toml"),
-    `[user]\nid = "${TEST_USER.id}"\nslug = "${TEST_USER.slug}"\nname = "${TEST_USER.name}"\nemail = "${TEST_USER.email}"\n`,
-  );
-  process.env.XDG_CONFIG_HOME = xdgDir;
+/** The smallest digest `ContextOutput` accepts — the stub's stand-in corpus. */
+const DIGEST = {
+  workstream: { id: "WS-smoke", slug: "smoke", title: "Smoke WS" },
+  seed_version: "2026-04-21",
+  now: [],
+};
 
+/** A `/v1/view` body with a workstream selected — what `wsArg()` needs. */
+const VIEW_WITH_WS = {
+  value: { viewing: "workstream_dashboard" },
+  context: { workstreamId: "WS-smoke", problemId: null },
+  revision: 3,
+  lastAction: { kind: "SELECT_WORKSTREAM", ts: 1 },
+  allowedActions: ["OPEN_PROBLEM"],
+  globalActions: ["ADD_OBSERVATION"],
+};
+
+beforeEach(() => {
   setJsonMode(false);
   setCaptureWriter(null);
 });
 
 afterEach(() => {
-  setDb(null);
-  testCleanup();
-  rmSync(xdgDir, { recursive: true, force: true });
-  delete process.env.XDG_CONFIG_HOME;
+  setApiClient(null);
   setJsonMode(false);
   setCaptureWriter(null);
 });
 
 // ---------------------------------------------------------------------------
-// Smoke: full round-trip
+// Reads go out as named queries; the payload is emitted unchanged
 // ---------------------------------------------------------------------------
 
-describe("smoke: workstream → problem → observation → evidence link → context", () => {
-  test("creates entities and context returns them all", async () => {
-    // workstream add
-    const wsResult = await capture<{ ok: boolean; id: string }>(() =>
-      runCmd(workstreamCommand as AnyCmd, "add", {
-        slug: "smoke",
-        title: "Smoke WS",
-        json: false,
-      }),
-    );
-    expect(wsResult.ok).toBe(true);
-    expect(wsResult.id).toBe("WS-smoke");
+describe("reads", () => {
+  test("workstream list asks for WORKSTREAM_LIST and prints what came back", async () => {
+    const rows = [{ id: "WS-smoke", slug: "smoke", title: "Smoke WS" }];
+    const calls = stubServer({ "POST /v1/query": { result: rows } });
 
-    // problem add — no slug, returns integer id
-    const pResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-smoke",
-        title: "First Problem",
-        description: "A problem",
-        json: false,
-      }),
-    );
-    expect(pResult.ok).toBe(true);
-    expect(typeof pResult.id).toBe("number");
-    const problemId = pResult.id;
+    const out = await capture(() => runCmd(workstreamCommand as AnyCmd, "list", { json: true }));
 
-    // observation add
-    const obsResult = await capture<{ ok: boolean; id: string }>(() =>
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.url).toBe("https://crux.test/v1/query");
+    expect(calls[0]!.auth).toBe("Bearer tok-1");
+    expect(calls[0]!.body).toEqual({ kind: "WORKSTREAM_LIST" });
+    expect(out).toEqual(rows);
+  });
+
+  test("problem list carries the selected workstream and the status filter", async () => {
+    const calls = stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/query": { result: [] },
+    });
+
+    await capture(() => runCmd(problemCommand as AnyCmd, "list", { status: "now", json: true }));
+
+    expect(calls.map((c) => c.body).at(-1)).toEqual({
+      kind: "PROBLEM_LIST",
+      workstream: "WS-smoke",
+      status: "now",
+    });
+  });
+
+  test("context defaults to the `now` bucket and --all opens every one", async () => {
+    const calls = stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/query": { result: DIGEST },
+    });
+
+    await capture(() => runCmd(contextCommand as AnyCmd, "run", { json: true }));
+    expect(calls.at(-1)!.body).toEqual({
+      kind: "CONTEXT",
+      workstream: "WS-smoke",
+      stages: ["now"],
+      includeExtras: false,
+      showArchived: false,
+    });
+
+    await capture(() =>
+      runCmd(contextCommand as AnyCmd, "run", { all: true, "show-archived": true, json: true }),
+    );
+    expect(calls.at(-1)!.body).toEqual({
+      kind: "CONTEXT",
+      workstream: "WS-smoke",
+      stages: ["now", "next", "later", "unscheduled", "done", "abandoned"],
+      includeExtras: true,
+      showArchived: true,
+    });
+  });
+
+  test("context --stage passes exactly the buckets asked for", async () => {
+    const calls = stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/query": { result: DIGEST },
+    });
+    await capture(() =>
+      runCmd(contextCommand as AnyCmd, "run", { stage: "now, done", json: true }),
+    );
+    expect((calls.at(-1)!.body as { stages: string[] }).stages).toEqual(["now", "done"]);
+  });
+
+  test("problem show emits the digest the server sent, untouched", async () => {
+    const shown = {
+      id: 7,
+      workstreamId: "WS-smoke",
+      title: "P",
+      description: "D",
+      status: null,
+      createdById: "USR-test",
+      createdAt: 1,
+      updatedAt: 1,
+      solutions: [],
+      latest_decision: null,
+    };
+    stubServer({ "POST /v1/query": { result: shown } });
+    const out = await capture(() =>
+      runCmd(problemCommand as AnyCmd, "show", { id: "7", json: true }),
+    );
+    expect(out).toEqual(shown);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Writes go out as actions
+// ---------------------------------------------------------------------------
+
+describe("writes", () => {
+  test("workstream add dispatches ADD_WORKSTREAM and emits the result", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": { revision: 1, result: { ok: true, id: "WS-smoke" } },
+    });
+
+    const out = await capture(() =>
+      runCmd(workstreamCommand as AnyCmd, "add", { slug: "smoke", title: "Smoke WS", json: true }),
+    );
+
+    expect(calls[0]!.url).toBe("https://crux.test/v1/dispatch");
+    expect(calls[0]!.body).toEqual({
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "smoke", title: "Smoke WS", description: undefined },
+    });
+    expect(out).toEqual({ ok: true, id: "WS-smoke" });
+  });
+
+  test("observation add splits comma-separated tags and uses the selected workstream", async () => {
+    const calls = stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/dispatch": { revision: 2, result: { ok: true, id: "OBS-1" } },
+    });
+
+    await capture(() =>
       runCmd(observationCommand as AnyCmd, "add", {
-        workstream: "smoke",
         content: "Something observed",
-        json: false,
+        tag: "alpha, beta",
+        json: true,
       }),
     );
-    expect(obsResult.ok).toBe(true);
-    expect(obsResult.id).toMatch(/^OBS-/);
-    const obsId = obsResult.id;
 
-    // evidence link (problem is integer id)
-    const evResult = await capture<{ ok: boolean; id: string }>(() =>
-      runCmd(evidenceCommand as AnyCmd, "link", {
-        observation: obsId,
-        problem: String(problemId),
-        json: false,
-      }),
-    );
-    expect(evResult.ok).toBe(true);
-    expect(evResult.id).toMatch(/^EVD-/);
-
-    // context
-    const ctx = await capture<{
-      workstream: { slug: string };
-      unscheduled: Array<Record<string, unknown>>;
-      now: Array<Record<string, unknown>>;
-    }>(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-smoke",
-        stage: "unscheduled",
-        json: false,
-      }),
-    );
-    expect(ctx.workstream.slug).toBe("smoke");
-    expect(ctx.unscheduled.length).toBe(1);
-    expect(ctx.unscheduled[0]!.id).toBe(problemId);
-    expect(ctx.unscheduled[0]!.title).toBe("First Problem");
+    expect(calls.at(-1)!.body).toMatchObject({
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-smoke", content: "Something observed", tags: ["alpha", "beta"] },
+    });
   });
 });
 
 // ---------------------------------------------------------------------------
-// Regression OBS-030 (a): context entries have id/title/status at top level
+// The error envelope round-trip
 // ---------------------------------------------------------------------------
 
-describe("regression OBS-030 (a): context problem entries spread id/title/status", () => {
-  test("unscheduled problem entry has non-null id and title at top level", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "reg-a",
-      title: "Reg A",
-      json: false,
-    });
-    const pResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-reg-a",
-        title: "P One",
-        description: "desc",
-        json: false,
-      }),
-    );
-    const problemId = pResult.id;
+describe("server rejections reach the terminal unchanged", () => {
+  test("a NOT_FOUND envelope becomes a CruxError with exit code 23", async () => {
+    stubServer({ "POST /v1/query": envelope(404, "NOT_FOUND", "solution not found: 9") });
 
-    const ctx = await capture<{
-      unscheduled: Array<Record<string, unknown>>;
-      now: Array<Record<string, unknown>>;
-    }>(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-reg-a",
-        stage: "unscheduled",
-        json: false,
-      }),
+    const err = await runCmd(solutionCommand as AnyCmd, "show", { id: "9", json: true }).catch(
+      (e) => e,
     );
 
-    const entry = ctx.unscheduled[0]!;
-    expect(entry.id).toBe(problemId);
-    expect(entry.title).toBe("P One");
-    expect("id" in entry).toBe(true);
-    expect("title" in entry).toBe(true);
-    expect(entry.problem).toBeUndefined();
+    expect(err).toBeInstanceOf(CruxError);
+    expect((err as CruxError).code).toBe("NOT_FOUND");
+    expect((err as CruxError).message).toBe("solution not found: 9");
+    expect(EXIT_CODES[(err as CruxError).code]).toBe(23);
   });
 
-  test("scheduled (now) problem entry has non-null status at top level", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "reg-a2",
-      title: "Reg A2",
-      json: false,
-    });
-    const pResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-reg-a2",
-        title: "P Two",
-        description: "desc",
-        json: false,
-      }),
-    );
-    const problemId = pResult.id;
-    await runCmd(problemCommand as AnyCmd, "schedule", {
-      id: String(problemId),
-      stage: "now",
-      json: false,
+  test("an ILLEGAL_TRANSITION rejection keeps its code, message and details", async () => {
+    stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/dispatch": envelope(
+        422,
+        "ILLEGAL_TRANSITION",
+        "cannot ship a solution that was not chosen",
+        { solutionId: 4, status: "proposed" },
+      ),
     });
 
-    const ctx = await capture<{
-      now: Array<Record<string, unknown>>;
-    }>(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-reg-a2",
-        json: false,
+    const err = (await runCmd(solutionCommand as AnyCmd, "ship", { id: "4", json: true }).catch(
+      (e) => e,
+    )) as CruxError;
+
+    expect(err).toBeInstanceOf(CruxError);
+    expect(err.code).toBe("ILLEGAL_TRANSITION");
+    expect(err.details).toEqual({ solutionId: 4, status: "proposed" });
+    expect(EXIT_CODES[err.code]).toBe(20);
+  });
+
+  test("an ACTION_NOT_ALLOWED rejection is rebuilt with its allowed lists", async () => {
+    stubServer({
+      "POST /v1/dispatch": envelope(409, "ACTION_NOT_ALLOWED", "not allowed", {
+        state: { viewing: "workstream_list" },
+        attempted: "ADD_WORKSTREAM",
+        allowedView: ["SELECT_WORKSTREAM"],
+        allowedMutation: [],
+        globals: ["ADD_OBSERVATION"],
+      }),
+    });
+
+    const err = (await runCmd(workstreamCommand as AnyCmd, "add", {
+      slug: "x",
+      title: "X",
+      json: true,
+    }).catch((e) => e)) as ActionNotAllowedError;
+
+    expect(err).toBeInstanceOf(ActionNotAllowedError);
+    expect(err.attempted).toBe("ADD_WORKSTREAM");
+    expect(err.allowedView).toEqual(["SELECT_WORKSTREAM"]);
+    expect(err.globals).toEqual(["ADD_OBSERVATION"]);
+    expect(EXIT_CODES[err.code]).toBe(25);
+  });
+
+  test("an unusable token is reported as UNAUTHENTICATED, not as a corpus error", async () => {
+    stubServer({
+      "POST /v1/query": envelope(401, "UNAUTHENTICATED", "missing or invalid bearer token"),
+    });
+
+    const err = (await runCmd(workstreamCommand as AnyCmd, "list", { json: true }).catch(
+      (e) => e,
+    )) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("UNAUTHENTICATED");
+    expect(EXIT_CODES[err.code]).toBe(26);
+  });
+
+  test("an unreachable deployment names the deployment it could not reach", async () => {
+    setApiClient(
+      createApiClient({
+        baseUrl: "https://crux.test",
+        token: "tok-1",
+        transport: () => Promise.reject(new Error("ECONNREFUSED")),
       }),
     );
 
-    expect(ctx.now.length).toBe(1);
-    const entry = ctx.now[0]!;
-    expect(entry.id).toBe(problemId);
-    expect(entry.title).toBe("P Two");
-    expect(entry.status).toBe("now");
-    expect(entry.problem).toBeUndefined();
+    const err = (await runCmd(workstreamCommand as AnyCmd, "list", { json: true }).catch(
+      (e) => e,
+    )) as ApiError;
+
+    expect(err.code).toBe("API_UNREACHABLE");
+    expect(err.message).toContain("https://crux.test");
   });
 });
 
 // ---------------------------------------------------------------------------
-// Regression OBS-030 (b): problem show includes solutions[] and latest_decision
+// Config
 // ---------------------------------------------------------------------------
 
-describe("regression OBS-030 (b): problem show includes solutions and latest_decision", () => {
-  test("problem show with no solutions has solutions[] and null latest_decision", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "reg-b",
-      title: "Reg B",
-      json: false,
-    });
-    const pResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-reg-b",
-        title: "Prob B",
-        description: "desc",
-        json: false,
-      }),
-    );
-    const problemId = pResult.id;
-
-    const result = await capture<Record<string, unknown>>(() =>
-      runCmd(problemCommand as AnyCmd, "show", {
-        id: String(problemId),
-        json: false,
-      }),
-    );
-
-    expect("solutions" in result).toBe(true);
-    expect(Array.isArray(result.solutions)).toBe(true);
-    expect((result.solutions as unknown[]).length).toBe(0);
-    expect("latest_decision" in result).toBe(true);
-    expect(result.latest_decision).toBeNull();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Schema validation: emit() rejects malformed payloads at construction time
-// ---------------------------------------------------------------------------
-
-describe("schema validation: emit() rejects malformed payloads", () => {
-  test("OkWithIdOutput rejects payload missing 'id'", () => {
-    expect(() => emit({ ok: true }, OkWithIdOutput)).toThrow();
-  });
-
-  test("ProblemShowOutput rejects payload missing 'solutions'", () => {
-    const bareRow = { id: 1, title: "T", status: null };
-    expect(() => emit(bareRow, ProblemShowOutput)).toThrow();
-  });
-
-  test("ContextOutput rejects payload missing required fields (workstream + seed_version)", () => {
-    const malformed = {
-      workstream: { slug: "ws" },
-      now: [],
-    };
-    expect(() => emit(malformed, ContextOutput)).toThrow();
-  });
-
-  test("ContextOutput accepts payload with only now bucket (stage buckets are optional)", () => {
-    const nowOnly = {
-      workstream: { slug: "ws" },
-      now: [],
-      seed_version: "2026-04-30",
-    };
-    expect(() => emit(nowOnly, ContextOutput)).not.toThrow();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// SOL-context-now-only-default: --stage and --all flag behaviour
-// ---------------------------------------------------------------------------
-
-describe("context --stage / --all flag behaviour", () => {
-  test("default invocation emits only 'now' bucket; done/next/later/unscheduled/abandoned absent", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "stage-default",
-      title: "Stage Default WS",
-      json: false,
-    });
-    const pResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-stage-default",
-        title: "Now Problem",
-        description: "desc",
-        json: false,
-      }),
-    );
-    await runCmd(problemCommand as AnyCmd, "schedule", {
-      id: String(pResult.id),
-      stage: "now",
-      json: false,
-    });
-
-    const ctx = await capture<Record<string, unknown>>(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-stage-default",
-        json: false,
-      }),
-    );
-
-    expect(Array.isArray(ctx.now)).toBe(true);
-    expect(ctx.done).toBeUndefined();
-    expect(ctx.next).toBeUndefined();
-    expect(ctx.later).toBeUndefined();
-    expect(ctx.unscheduled).toBeUndefined();
-    expect(ctx.abandoned).toBeUndefined();
-    expect(ctx.recent_observations_unlinked).toBeUndefined();
-    expect(ctx.workstream).toBeDefined();
-    expect(typeof ctx.seed_version).toBe("string");
-  });
-
-  test("--all invocation emits all six stage buckets + recent_observations_unlinked", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "stage-all",
-      title: "Stage All WS",
-      json: false,
-    });
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "WS-stage-all",
-      title: "All Problem",
-      description: "desc",
-      json: false,
-    });
-
-    const ctx = await capture<Record<string, unknown>>(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-stage-all",
-        all: true,
-        json: false,
-      }),
-    );
-
-    expect(Array.isArray(ctx.now)).toBe(true);
-    expect(Array.isArray(ctx.next)).toBe(true);
-    expect(Array.isArray(ctx.later)).toBe(true);
-    expect(Array.isArray(ctx.unscheduled)).toBe(true);
-    expect(Array.isArray(ctx.done)).toBe(true);
-    expect(Array.isArray(ctx.abandoned)).toBe(true);
-    expect(Array.isArray(ctx.recent_observations_unlinked)).toBe(true);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// CRUX_COLLAB=1: guardAction enforcement
-// ---------------------------------------------------------------------------
-
-describe("CRUX_COLLAB=1: guardAction rejects mutations not allowed from workstream_list", () => {
-  const ORIG_COLLAB = process.env.CRUX_COLLAB;
-  const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
-
-  beforeEach(async () => {
-    process.env.CRUX_COLLAB = "1";
-    process.env.CRUX_VIEW_STATE_PATH = join(xdgDir, "nonexistent-view-state.json");
-  });
-  afterEach(() => {
-    if (ORIG_COLLAB !== undefined) process.env.CRUX_COLLAB = ORIG_COLLAB;
-    else delete process.env.CRUX_COLLAB;
-    if (ORIG_VIEW_STATE !== undefined) process.env.CRUX_VIEW_STATE_PATH = ORIG_VIEW_STATE;
-    else delete process.env.CRUX_VIEW_STATE_PATH;
-  });
-
-  test("ADD_PROBLEM from workstream_list throws ActionNotAllowedError", async () => {
-    let thrown: unknown;
+describe("api configuration", () => {
+  test("a missing url and token names both and the command that fixes them", async () => {
+    setApiClient(null);
+    const prevUrl = process.env.CRUX_API_URL;
+    const prevToken = process.env.CRUX_API_TOKEN;
+    const prevHome = process.env.CRUX_HOME;
+    delete process.env.CRUX_API_URL;
+    delete process.env.CRUX_API_TOKEN;
+    process.env.CRUX_HOME = "/nonexistent-crux-home";
     try {
-      await runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "any",
-        title: "Any",
-        description: "any",
-        json: false,
-      });
-    } catch (e) {
-      thrown = e;
+      const err = (await runCmd(workstreamCommand as AnyCmd, "list", { json: true }).catch(
+        (e) => e,
+      )) as ApiError;
+      expect(err.code).toBe("NO_API_CONFIG");
+      expect(err.message).toContain("url and token");
+      expect(err.message).toContain("crux init");
+      expect(EXIT_CODES[err.code]).toBe(2);
+    } finally {
+      if (prevUrl) process.env.CRUX_API_URL = prevUrl;
+      if (prevToken) process.env.CRUX_API_TOKEN = prevToken;
+      if (prevHome) process.env.CRUX_HOME = prevHome;
+      else delete process.env.CRUX_HOME;
     }
-    expect(thrown).toBeInstanceOf(ActionNotAllowedError);
-    expect((thrown as ActionNotAllowedError).attempted).toBe("ADD_PROBLEM");
   });
 
-  test("ADD_OBSERVATION from workstream_list succeeds (global action)", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "collab-ws",
-      title: "Collab WS",
-      json: false,
-    });
-    const result = await capture<{ ok: boolean; id: string }>(() =>
-      runCmd(observationCommand as AnyCmd, "add", {
-        workstream: "collab-ws",
-        content: "Observed something",
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-    expect(result.id).toMatch(/^OBS-/);
-  });
-
-  test("ADD_WORKSTREAM from workstream_list succeeds", async () => {
-    const result = await capture<{ ok: boolean; id: string }>(() =>
-      runCmd(workstreamCommand as AnyCmd, "add", {
-        slug: "new-ws",
-        title: "New WS",
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-    expect(result.id).toBe("WS-new-ws");
-  });
-
-  test("CRUX_COLLAB absent — ADD_PROBLEM from workstream_list succeeds (direct mode)", async () => {
-    delete process.env.CRUX_COLLAB;
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "direct-ws",
-      title: "Direct WS",
-      json: false,
-    });
-    const result = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-direct-ws",
-        title: "Direct Prob",
-        description: "desc",
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-    expect(typeof result.id).toBe("number");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Problem status mutations from workstream_dashboard
-// ---------------------------------------------------------------------------
-
-describe("CRUX_COLLAB=1: workstream_dashboard allows problem status mutations", () => {
-  const ORIG_COLLAB = process.env.CRUX_COLLAB;
-  const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
-  let viewStatePath: string;
-  let testProblemId: number;
-
-  beforeEach(async () => {
-    viewStatePath = join(xdgDir, `view-state-problem-ops-${Date.now()}-${Math.random()}.json`);
-    process.env.CRUX_VIEW_STATE_PATH = viewStatePath;
-    mkdirSync(dirname(viewStatePath), { recursive: true });
-
-    delete process.env.CRUX_COLLAB;
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "ws-prob-ops",
-      title: "Prob Ops WS",
-      json: false,
-    });
-    const pResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(problemCommand as AnyCmd, "add", {
-        workstream: "WS-ws-prob-ops",
-        title: "Test Problem",
-        description: "For testing ops",
-        json: false,
-      }),
-    );
-    testProblemId = pResult.id;
-
-    const viewState = {
-      status: "active",
-      value: { viewing: "workstream_dashboard" },
-      historyValue: {},
-      context: { workstreamId: "WS-ws-prob-ops", problemId: null },
-      children: {},
-      revision: 0,
-      lastAction: null,
-      recentQueries: [],
-    };
-    writeFileSync(viewStatePath, JSON.stringify(viewState, null, 2), "utf8");
-
-    process.env.CRUX_COLLAB = "1";
-  });
-
-  afterEach(() => {
-    if (viewStatePath) {
-      const fs = require("node:fs") as typeof import("node:fs");
-      if (fs.existsSync(viewStatePath)) {
-        fs.rmSync(viewStatePath, { force: true });
-      }
-    }
-    if (ORIG_COLLAB !== undefined) process.env.CRUX_COLLAB = ORIG_COLLAB;
-    else delete process.env.CRUX_COLLAB;
-    if (ORIG_VIEW_STATE !== undefined) process.env.CRUX_VIEW_STATE_PATH = ORIG_VIEW_STATE;
-    else delete process.env.CRUX_VIEW_STATE_PATH;
-  });
-
-  test("SCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
-    const result = await capture<{ ok: boolean }>(() =>
-      runCmd(problemCommand as AnyCmd, "schedule", {
-        id: String(testProblemId),
-        stage: "now",
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  test("UNSCHEDULE_PROBLEM from workstream_dashboard succeeds", async () => {
-    await runCmd(problemCommand as AnyCmd, "schedule", {
-      id: String(testProblemId),
-      stage: "now",
-      json: false,
-    });
-    const result = await capture<{ ok: boolean }>(() =>
-      runCmd(problemCommand as AnyCmd, "unschedule", {
-        id: String(testProblemId),
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  test("MARK_PROBLEM_DONE from workstream_dashboard succeeds", async () => {
-    delete process.env.CRUX_COLLAB;
-    const { decisionCommand } = await import("../commands/decision.js");
-    const sResult = await capture<{ ok: boolean; id: number }>(() =>
-      runCmd(solutionCommand as AnyCmd, "add", {
-        problem: String(testProblemId),
-        title: "Test Solution",
-        json: false,
-      }),
-    );
-    const solId = sResult.id;
-    await runCmd(decisionCommand as AnyCmd, "add", {
-      workstream: "WS-ws-prob-ops",
-      problem: String(testProblemId),
-      chosen: String(solId),
-      rationale: "best option",
-      json: false,
-    });
-    await runCmd(solutionCommand as AnyCmd, "ship", {
-      id: String(solId),
-      json: false,
-    });
-    process.env.CRUX_COLLAB = "1";
-
-    const result = await capture<{ ok: boolean }>(() =>
-      runCmd(problemCommand as AnyCmd, "done", {
-        id: String(testProblemId),
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  test("ABANDON_PROBLEM from workstream_dashboard succeeds", async () => {
-    const result = await capture<{ ok: boolean }>(() =>
-      runCmd(problemCommand as AnyCmd, "abandon", {
-        id: String(testProblemId),
-        rationale: "Test abandon",
-        json: false,
-      }),
-    );
-    expect(result.ok).toBe(true);
-  });
-
-  test("ADD_SOLUTION from workstream_dashboard throws ActionNotAllowedError", async () => {
-    let thrown: unknown;
+  test("a token alone is not enough, and the missing half is named", async () => {
+    setApiClient(null);
+    const prevHome = process.env.CRUX_HOME;
+    process.env.CRUX_HOME = "/nonexistent-crux-home";
+    process.env.CRUX_API_TOKEN = "tok-1";
     try {
-      await runCmd(solutionCommand as AnyCmd, "add", {
-        problem: String(testProblemId),
-        title: "Test Solution",
-        json: false,
-      });
-    } catch (e) {
-      thrown = e;
+      const err = (await runCmd(workstreamCommand as AnyCmd, "list", { json: true }).catch(
+        (e) => e,
+      )) as ApiError;
+      expect(err.message).toContain("[api] url missing");
+    } finally {
+      delete process.env.CRUX_API_TOKEN;
+      if (prevHome) process.env.CRUX_HOME = prevHome;
+      else delete process.env.CRUX_HOME;
     }
-    expect(thrown).toBeInstanceOf(ActionNotAllowedError);
-    expect((thrown as ActionNotAllowedError).attempted).toBe("ADD_SOLUTION");
   });
 });
 
 // ---------------------------------------------------------------------------
-// recordMutation: revision bump + lastAction write on every mutation
+// View state lives in the deployment
 // ---------------------------------------------------------------------------
 
-describe("recordMutation: mutation success bumps revision and writes lastAction", () => {
-  const ORIG_VIEW_STATE = process.env.CRUX_VIEW_STATE_PATH;
-  const ORIG_COLLAB = process.env.CRUX_COLLAB;
-  let viewStatePath: string;
-
-  beforeEach(() => {
-    viewStatePath = join(xdgDir, `view-state-${Date.now()}-${Math.random()}.json`);
-    process.env.CRUX_VIEW_STATE_PATH = viewStatePath;
-    delete process.env.CRUX_COLLAB;
+describe("view", () => {
+  test("view get reports the deployment's state without inventing fields", async () => {
+    stubServer({ "GET /v1/view": { ...VIEW_WITH_WS, stateLabel: "viewing.workstream_dashboard" } });
+    const out = await capture(() => runCmd(viewCommand as AnyCmd, "get", { json: true }));
+    expect(out).toEqual(VIEW_WITH_WS);
   });
 
-  afterEach(() => {
-    if (ORIG_VIEW_STATE !== undefined) process.env.CRUX_VIEW_STATE_PATH = ORIG_VIEW_STATE;
-    else delete process.env.CRUX_VIEW_STATE_PATH;
-    if (ORIG_COLLAB !== undefined) process.env.CRUX_COLLAB = ORIG_COLLAB;
-    else delete process.env.CRUX_COLLAB;
+  test("view path points at the endpoint that serves view state", async () => {
+    stubServer({});
+    const out = await capture(() => runCmd(viewCommand as AnyCmd, "path", { json: true }));
+    expect(out).toEqual({ path: "https://crux.test/v1/view" });
   });
 
-  function readViewMeta(): { revision?: number; lastAction?: { kind: string; ts: number } | null } {
-    const fs = require("node:fs") as typeof import("node:fs");
-    if (!fs.existsSync(viewStatePath)) return {};
-    return JSON.parse(fs.readFileSync(viewStatePath, "utf8")) as {
-      revision?: number;
-      lastAction?: { kind: string; ts: number } | null;
-    };
-  }
-
-  test("ADD_WORKSTREAM bumps revision from 0 → 1 and writes lastAction.kind=ADD_WORKSTREAM", async () => {
-    expect(readViewMeta().revision ?? 0).toBe(0);
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "rev-test",
-      title: "Rev Test",
-      json: false,
+  test("view reset posts to the deployment", async () => {
+    const calls = stubServer({
+      "POST /v1/view/reset": {
+        ok: true,
+        value: { viewing: "workstream_list" },
+        context: { workstreamId: null, problemId: null },
+      },
     });
-    const meta = readViewMeta();
-    expect(meta.revision).toBe(1);
-    expect(meta.lastAction?.kind).toBe("ADD_WORKSTREAM");
-    expect(typeof meta.lastAction?.ts).toBe("number");
-  });
-
-  test("two consecutive mutations increment revision (1 → 2)", async () => {
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "rev-two",
-      title: "Rev Two",
-      json: false,
-    });
-    expect(readViewMeta().revision).toBe(1);
-    await runCmd(problemCommand as AnyCmd, "add", {
-      workstream: "WS-rev-two",
-      title: "P1",
-      description: "d",
-      json: false,
-    });
-    const meta = readViewMeta();
-    expect(meta.revision).toBe(2);
-    expect(meta.lastAction?.kind).toBe("ADD_PROBLEM");
-  });
-
-  test("CRUX_COLLAB=1 also bumps revision (unconditional, gated only on guardAction)", async () => {
-    process.env.CRUX_COLLAB = "1";
-    await runCmd(workstreamCommand as AnyCmd, "add", {
-      slug: "collab-rev",
-      title: "Collab Rev",
-      json: false,
-    });
-    const meta = readViewMeta();
-    expect(meta.revision).toBe(1);
-    expect(meta.lastAction?.kind).toBe("ADD_WORKSTREAM");
+    await capture(() => runCmd(viewCommand as AnyCmd, "reset", { json: true }));
+    expect(calls[0]!.method).toBe("POST");
+    expect(calls[0]!.url).toBe("https://crux.test/v1/view/reset");
   });
 });

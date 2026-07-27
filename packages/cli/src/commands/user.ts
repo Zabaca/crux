@@ -1,13 +1,16 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { users } from "@crux/core/db/schema";
 import { configPath, loadUserConfig, slugifyName, writeUserConfig } from "@crux/core/config";
 import { UserInitInput } from "@crux/core/validation";
-import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
 
 const initCmd = defineCommand({
-  meta: { name: "init", description: "Create/update the local user config and User row." },
+  meta: {
+    name: "init",
+    // The users row is the deployment's, created when a Member is invited and a
+    // token minted; the token is what identifies the actor on every request. All
+    // this writes is the local half of that identity.
+    description: "Write the local user config.",
+  },
   args: {
     name: { type: "string", required: true, description: "Display name" },
     email: { type: "string", description: "Email address" },
@@ -19,16 +22,6 @@ const initCmd = defineCommand({
     const slug = slugifyName(parsed.name);
     const id = `USR-${slug}`;
     writeUserConfig({ user: { id, slug, name: parsed.name, email: parsed.email } });
-    const db = getDb();
-    const existing = await db.select().from(users).where(eq(users.id, id)).limit(1);
-    if (existing.length === 0) {
-      await db.insert(users).values({ id, slug, name: parsed.name, email: parsed.email });
-    } else {
-      await db
-        .update(users)
-        .set({ name: parsed.name, email: parsed.email })
-        .where(eq(users.id, id));
-    }
     emit(
       {
         ok: true,
@@ -46,7 +39,12 @@ const showCmd = defineCommand({
   run({ args }) {
     if (args.json) setJsonMode(true);
     const cfg = loadUserConfig();
-    emit(cfg ?? { user: null }, cfg ? `${cfg.user.id} (${cfg.user.name})` : "no user config");
+    // The `[user]` section only — `[api]` holds a bearer token, and this
+    // command's output ends up pasted into conversations.
+    emit(
+      cfg ? { user: cfg.user } : { user: null },
+      cfg ? `${cfg.user.id} (${cfg.user.name})` : "no user config",
+    );
   },
 });
 

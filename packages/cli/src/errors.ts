@@ -1,6 +1,7 @@
 import { CruxError } from "@crux/core/transitions";
 import { ActionNotAllowedError } from "@crux/core/actions";
 import { ZodError } from "zod";
+import { ApiError } from "./api-client.js";
 import { emitError } from "./output.js";
 
 export const EXIT_CODES: Record<string, number> = {
@@ -11,6 +12,9 @@ export const EXIT_CODES: Record<string, number> = {
   VALIDATION_ERROR: 24,
   ALREADY_EXISTS: 24,
   ACTION_NOT_ALLOWED: 25,
+  UNAUTHENTICATED: 26,
+  // A deployment that was never configured is a setup mistake, not a corpus one.
+  NO_API_CONFIG: 2,
   USAGE: 2,
   UNKNOWN: 1,
 };
@@ -44,6 +48,19 @@ export function handleError(err: unknown): never {
       `[VALIDATION_ERROR] ${message}`,
     );
     process.exit(EXIT_CODES.VALIDATION_ERROR);
+  }
+  if (err instanceof ApiError) {
+    emitError(
+      {
+        error: {
+          code: err.code,
+          message: err.message,
+          ...(err.details === undefined ? {} : { details: err.details }),
+        },
+      },
+      `[${err.code}] ${err.message}`,
+    );
+    process.exit(EXIT_CODES[err.code] ?? EXIT_CODES.UNKNOWN);
   }
   if (err instanceof CruxError) {
     emitError(

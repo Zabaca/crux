@@ -1,38 +1,36 @@
 import { defineCommand } from "citty";
-import {
-  formatStateValue,
-  loadState,
-  nextEvents,
-  resetState,
-  resolveViewStatePath,
-  VIEW_EVENT_PAYLOAD_HINTS,
-  type ViewEvent,
-} from "@crux/core/view-state";
+import { formatStateValue } from "@crux/core/view-state";
 import { emit, setJsonMode } from "../output.js";
 import { ViewStateOutput, ViewPathOutput } from "@crux/core/validation";
-import { loadViewMeta } from "@crux/core/view-state";
-import { getAllowedActions } from "@crux/core/actions";
+import { api } from "../api-client.js";
+
+type ViewPayload = {
+  value: unknown;
+  context: Record<string, unknown>;
+  revision: number;
+  lastAction: unknown;
+  allowedActions: string[];
+  globalActions: string[];
+};
 
 const getCmd = defineCommand({
   meta: { name: "get", description: "Print current view state." },
   args: { json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const snap = loadState();
-    const meta = loadViewMeta();
-    const allowed = getAllowedActions(snap.value);
+    const view = await api().get<ViewPayload>("/v1/view");
     const payload = {
-      value: snap.value,
-      context: snap.context,
-      revision: meta.revision,
-      lastAction: meta.lastAction,
-      allowedActions: [...allowed.allowedView, ...allowed.allowedMutation],
-      globalActions: allowed.globals,
+      value: view.value,
+      context: view.context,
+      revision: view.revision,
+      lastAction: view.lastAction,
+      allowedActions: view.allowedActions,
+      globalActions: view.globalActions,
     };
     emit(
       payload,
       ViewStateOutput,
-      `${formatStateValue(snap.value)}\t${JSON.stringify(snap.context)}`,
+      `${formatStateValue(view.value as never)}\t${JSON.stringify(view.context)}`,
     );
   },
 });
@@ -45,18 +43,16 @@ const nextCmd = defineCommand({
   args: { json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const snap = loadState();
-    const events = nextEvents(snap);
-    const withHints = events.map((type) => ({
-      type,
-      payload: VIEW_EVENT_PAYLOAD_HINTS[type as ViewEvent["type"]] ?? null,
-    }));
-    const text = withHints.length
-      ? withHints
+    const payload = await api().get<{
+      value: unknown;
+      events: Array<{ type: string; payload: unknown }>;
+    }>("/v1/view/next");
+    const text = payload.events.length
+      ? payload.events
           .map((e) => `${e.type}${e.payload ? `  ${JSON.stringify(e.payload)}` : "  (no payload)"}`)
           .join("\n")
       : "(none)";
-    emit({ value: snap.value, events: withHints }, ViewStateOutput, text);
+    emit(payload, ViewStateOutput, text);
   },
 });
 
@@ -65,18 +61,24 @@ const resetCmd = defineCommand({
   args: { json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const snap = resetState();
-    const payload = { ok: true, value: snap.value, context: snap.context };
-    emit(payload, ViewStateOutput, `reset → ${formatStateValue(snap.value)}`);
+    const payload = await api().post<{ ok: true; value: unknown; context: unknown }>(
+      "/v1/view/reset",
+    );
+    emit(payload, ViewStateOutput, `reset → ${formatStateValue(payload.value as never)}`);
   },
 });
 
 const pathCmd = defineCommand({
-  meta: { name: "path", description: "Print resolved view-state file path." },
+  meta: {
+    name: "path",
+    // View-state lives in a per-user Durable Object, not a file, so the honest
+    // answer to "where is it" is the endpoint that serves it.
+    description: "Print the endpoint serving this user's view state.",
+  },
   args: { json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const path = resolveViewStatePath();
+    const path = `${api().baseUrl}/v1/view`;
     emit({ path }, ViewPathOutput, path);
   },
 });

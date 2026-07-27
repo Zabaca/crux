@@ -8,7 +8,16 @@
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { authenticateToken } from "@crux/core/auth";
 import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
-import { loadViewMetaFromBlob, loadStateFromBlob, formatStateValue } from "@crux/core/view-state";
+import {
+  loadViewMetaFromBlob,
+  loadStateFromBlob,
+  formatStateValue,
+  nextEvents,
+  resetStateWithStore,
+  VIEW_EVENT_PAYLOAD_HINTS,
+  type ViewEvent,
+} from "@crux/core/view-state";
+import { query } from "@crux/core/reads";
 import { CruxError } from "@crux/core/transitions";
 import { ZodError } from "zod";
 import { DurableObjectViewStore } from "./view-state-do.js";
@@ -122,6 +131,19 @@ export async function handleApi(
     }
   }
 
+  // POST /v1/query — every read, straight through query().
+  if (pathname === "/v1/query" && request.method === "POST") {
+    try {
+      const result = await query(await request.json(), {
+        db,
+        viewStore: viewStoreFor(env, authed.userId),
+      });
+      return json({ result });
+    } catch (err) {
+      return toErrorResponse(err);
+    }
+  }
+
   // GET /v1/view — the current view-state, same shape as `crux view get`.
   if (pathname === "/v1/view" && request.method === "GET") {
     const store = viewStoreFor(env, authed.userId);
@@ -138,6 +160,24 @@ export async function handleApi(
       globalActions: allowed.globals,
       stateLabel: formatStateValue(snap.value),
     });
+  }
+
+  // GET /v1/view/next — legal events from the current state, with payload hints.
+  if (pathname === "/v1/view/next" && request.method === "GET") {
+    const snap = loadStateFromBlob(await viewStoreFor(env, authed.userId).read());
+    return json({
+      value: snap.value,
+      events: nextEvents(snap).map((type) => ({
+        type,
+        payload: VIEW_EVENT_PAYLOAD_HINTS[type as ViewEvent["type"]] ?? null,
+      })),
+    });
+  }
+
+  // POST /v1/view/reset — back to the initial state.
+  if (pathname === "/v1/view/reset" && request.method === "POST") {
+    const snap = await resetStateWithStore(viewStoreFor(env, authed.userId));
+    return json({ ok: true, value: snap.value, context: snap.context });
   }
 
   // GET /v1/view/stream — the push stream, proxied from the user's DO.

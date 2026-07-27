@@ -57,7 +57,10 @@ describe("CRUX_COLLAB flag — allowed list logic", () => {
 describe("ActionSchema validation", () => {
   test("valid VIEW action parses", async () => {
     const { ActionSchema } = await import("../schemas.js");
-    const result = ActionSchema.safeParse({ kind: "SELECT_WORKSTREAM", payload: { slug: "crux" } });
+    const result = ActionSchema.safeParse({
+      kind: "SELECT_WORKSTREAM",
+      payload: { id: "WS-crux" },
+    });
     expect(result.success).toBe(true);
   });
 

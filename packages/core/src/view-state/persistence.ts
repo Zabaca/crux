@@ -402,6 +402,19 @@ export function resetState(path: string = resolveViewStatePath()): ViewSnapshot 
   return snap;
 }
 
+/**
+ * Store-based counterpart of `resetState` — the fs-free reset path, used by the
+ * Worker where the blob lives in a Durable Object rather than on disk.
+ */
+export async function resetStateWithStore(store: ViewStore): Promise<ViewSnapshot> {
+  const actor = createActor(viewMachine);
+  actor.start();
+  const snap = actor.getSnapshot();
+  actor.stop();
+  await store.write(computeSaveStateBlob(await store.read(), snap, { lastActionKind: "RESET" }));
+  return snap;
+}
+
 /** Legal event types from the current snapshot. */
 export function nextEvents(snapshot: ViewSnapshot): string[] {
   // XState v5 doesn't expose `nextEvents` on snapshots anymore; derive by probing
