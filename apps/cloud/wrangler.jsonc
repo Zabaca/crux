@@ -2,7 +2,7 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   // Cloud crux: one Worker holding the site and the JSON API together
   // (ADR-0004). Today it serves only a stub /health route — the Astro shell
-  // (CRUX-6D86GE) and the API over dispatch() (CRUX-PMZ7WS) land here later.
+  // (CRUX-6D86GE) and the API over dispatch() (CRUX-1Z93XN) land here later.
   //
   // Deployed through zbc, not by hand: packages/infra/environments/production/
   // cloud.ts is the instance, and `zbc apply production` runs wrangler for you.
