@@ -20,7 +20,7 @@ async function call(path: string, init: RequestInit = {}): Promise<Response> {
     headers: {
       authorization: `Bearer ${token}`,
       "content-type": "application/json",
-      ...((init.headers as Record<string, string>) ?? {}),
+      ...(init.headers as Record<string, string> | undefined),
     },
   });
 }

@@ -56,7 +56,7 @@ export function writeConfig(patch: Partial<UserConfig>): string {
   const dir = configDir();
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   const p = configPath();
-  const merged = { ...(loadConfig() ?? {}), ...patch };
+  const merged = { ...loadConfig(), ...patch };
   writeFileSync(p, stringify(merged as unknown as Record<string, unknown>), "utf8");
   return p;
 }
