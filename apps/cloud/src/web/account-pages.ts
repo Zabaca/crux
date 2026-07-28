@@ -21,8 +21,9 @@ import type { Viewer } from "./layout.js";
 const date = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 /**
- * `/signin`. The form posts to Better Auth's `sign-in/email` endpoint with a
- * redirect, so no client JavaScript is needed to establish a session.
+ * `/signin`. A plain form post — no client JavaScript is involved in
+ * establishing a session. It posts to the Worker, which calls Better Auth and
+ * turns the result into a real redirect (see `router.ts`).
  */
 export function signInPage(opts: { next?: string; error?: string } = {}): {
   title: string;
