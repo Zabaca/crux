@@ -7,29 +7,25 @@
   ],
   "type": "module",
   "scripts": {
-    "migrate": "drizzle-kit migrate --config .config/drizzle.config.ts",
-    "generate": "drizzle-kit generate --config .config/drizzle.config.ts",
     "seed": "bun run scripts/seed-ws-crux.ts",
     "lint": "oxlint -c .config/oxlint.json",
     "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/tui-ds && tsc --noEmit -p apps/cloud",
     "format": "bunx oxfmt .",
     "crux": "bun run packages/cli/src/index.ts",
     "docs:check": "bun run scripts/docs-check.ts",
-    "test": "bun test packages apps/cloud scripts && bun run test:workers",
+    "test": "bun test packages && bun run test:workers",
     "deploy": "bunx @zabaca/zbc apply production",
     "prepare": "husky",
-    "test:workers": "cd packages/core && vitest run"
+    "test:workers": "cd packages/core && vitest run && cd ../../apps/cloud && vitest run"
   },
   "dependencies": {
-    "@libsql/client": "^0.14.0",
     "drizzle-orm": "^0.45.2",
     "smol-toml": "^1.3.0",
-    "zod": "^3.23.0"
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "^20.11.1",
     "@types/bun": "latest",
-    "drizzle-kit": "^0.31.10",
     "happy-dom": "20.11.1",
     "husky": "^9.1.0",
     "oxlint": "^0.15.0",

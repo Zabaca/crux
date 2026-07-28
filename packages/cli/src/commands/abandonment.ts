@@ -1,17 +1,7 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { abandonments, problems, workstreams } from "@crux/core/db/schema";
-import { NotFoundError } from "@crux/core/transitions";
-import { eq, inArray } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
+import { api } from "../api-client.js";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
-
-async function resolveWorkstream(id: string) {
-  const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, id)).limit(1);
-  const row = rows[0];
-  if (!row) throw new NotFoundError(`workstream not found: ${id}`, { id });
-  return row;
-}
 
 const listCmd = defineCommand({
   meta: { name: "list", description: "List abandonments in a workstream." },
@@ -20,24 +10,9 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg();
+    const wsVal = await wsArg();
     hintCtx(wsVal);
-    const ws = await resolveWorkstream(wsVal);
-    const db = getDb();
-    const wsProblems = await db
-      .select({ id: problems.id })
-      .from(problems)
-      .where(eq(problems.workstreamId, ws.id));
-    const problemIds = wsProblems.map((p) => p.id);
-    if (problemIds.length === 0) {
-      emit([]);
-      return;
-    }
-    const rows = await db
-      .select()
-      .from(abandonments)
-      .where(inArray(abandonments.problemId, problemIds));
-    emit(rows);
+    emit(await api().query({ kind: "ABANDONMENT_LIST", workstream: wsVal }));
   },
 });
 
@@ -46,14 +21,7 @@ const showCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb()
-      .select()
-      .from(abandonments)
-      .where(eq(abandonments.id, args.id))
-      .limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`abandonment not found: ${args.id}`, { id: args.id });
-    emit(rows[0]!);
+    emit(await api().query({ kind: "ABANDONMENT_SHOW", id: args.id }));
   },
 });
 

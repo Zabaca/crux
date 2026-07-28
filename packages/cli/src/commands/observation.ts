@@ -1,25 +1,10 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { observations, workstreams } from "@crux/core/db/schema";
-import { NotFoundError } from "@crux/core/transitions";
-import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { dispatch } from "@crux/core/actions";
 import type { AddObservationPayload, ArchiveObservationPayload } from "@crux/core/actions";
+import { api } from "../api-client.js";
 import { wsArg, hintCtx } from "../ctx-defaults.js";
 
-async function resolveWorkstream(idOrSlug: string) {
-  const db = getDb();
-  const byId = (
-    await db.select().from(workstreams).where(eq(workstreams.id, idOrSlug)).limit(1)
-  )[0];
-  if (byId) return byId;
-  const bySlug = (
-    await db.select().from(workstreams).where(eq(workstreams.slug, idOrSlug)).limit(1)
-  )[0];
-  if (bySlug) return bySlug;
-  throw new NotFoundError(`workstream not found: ${idOrSlug}`, { id: idOrSlug });
-}
+type ObservationRow = { id: string; content: string };
 
 function asTags(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -45,7 +30,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg();
+    const wsVal = await wsArg();
     hintCtx(wsVal);
     const payload: AddObservationPayload = {
       workstream: wsVal,
@@ -54,7 +39,7 @@ const addCmd = defineCommand({
       sourceType: args["source-type"],
       tags: asTags(args.tag),
     };
-    const { result } = await dispatch({ kind: "ADD_OBSERVATION", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "ADD_OBSERVATION", payload });
     emit(result, `added ${(result as { id: string }).id}`);
   },
 });
@@ -66,13 +51,12 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg();
+    const wsVal = await wsArg();
     hintCtx(wsVal);
-    const ws = await resolveWorkstream(wsVal);
-    const rows = await getDb()
-      .select()
-      .from(observations)
-      .where(eq(observations.workstreamId, ws.id));
+    const rows = await api().query<ObservationRow[]>({
+      kind: "OBSERVATION_LIST",
+      workstream: wsVal,
+    });
     emit(rows, rows.map((r) => `${r.id}\t${r.content.slice(0, 60)}`).join("\n") || "(none)");
   },
 });
@@ -85,14 +69,7 @@ const showCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb()
-      .select()
-      .from(observations)
-      .where(eq(observations.id, args.id))
-      .limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`observation not found: ${args.id}`, { id: args.id });
-    emit(rows[0]!);
+    emit(await api().query({ kind: "OBSERVATION_SHOW", id: args.id }));
   },
 });
 
@@ -112,7 +89,7 @@ const archiveCmd = defineCommand({
       id: args.id,
       rationale: args.rationale,
     };
-    const { result } = await dispatch({ kind: "ARCHIVE_OBSERVATION", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "ARCHIVE_OBSERVATION", payload });
     emit(result, `archived ${args.id}`);
   },
 });

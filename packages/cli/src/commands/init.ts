@@ -1,59 +1,42 @@
 import { defineCommand } from "citty";
-import { createClient } from "@libsql/client";
-import { drizzle } from "drizzle-orm/libsql";
-import { migrate } from "drizzle-orm/libsql/migrator";
-import { mkdirSync, existsSync, readdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { resolveDbUrl } from "../db.js";
-import { MIGRATIONS_DIR } from "@crux/core/db/migrations-path";
+import { configPath, loadApiConfig, writeConfig } from "@crux/core/config";
 import { emit, setJsonMode } from "../output.js";
+import { ApiError, createApiClient } from "../api-client.js";
 
-function dbFilePath(url: string): string | null {
-  if (!url.startsWith("file:")) return null;
-  return url.slice("file:".length);
-}
-
+/**
+ * `crux init` used to create a local database and run migrations. There is no
+ * local database any more (ADR-0003), so what a fresh machine needs is the
+ * deployment's coordinates: a URL and the bearer token minted for this user.
+ */
 export const initCommand = defineCommand({
   meta: {
     name: "init",
-    description: "Create the Crux database (if needed) and run pending migrations.",
+    description: "Point this machine at a crux deployment.",
   },
   args: {
-    "db-url": { type: "string", description: "Override CRUX_DB_URL for this invocation." },
+    url: { type: "string", description: "Deployment base URL, e.g. https://crux.example.dev" },
+    token: { type: "string", description: "Bearer token minted for you by the deployment." },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const url = resolveDbUrl(args["db-url"]);
-    const filePath = dbFilePath(url);
-
-    let createdDir = false;
-    let dbExisted = false;
-    if (filePath) {
-      dbExisted = existsSync(filePath);
-      const parent = dirname(filePath);
-      if (!existsSync(parent)) {
-        mkdirSync(parent, { recursive: true });
-        createdDir = true;
-      }
+    const existing = loadApiConfig();
+    const url = (args.url as string | undefined) ?? existing.url;
+    const token = (args.token as string | undefined) ?? existing.token;
+    if (!url || !token) {
+      const missing = !url && !token ? "--url and --token" : !url ? "--url" : "--token";
+      throw new ApiError("NO_API_CONFIG", `crux init needs ${missing}`);
     }
 
-    const migrationFiles = readdirSync(MIGRATIONS_DIR).filter((f) => f.endsWith(".sql"));
-    const client = createClient({ url });
-    const db = drizzle(client);
-    await migrate(db, { migrationsFolder: MIGRATIONS_DIR });
-    client.close();
+    // Prove the coordinates work before writing them: a token typo that only
+    // surfaces on the next command is a worse failure than one that surfaces now.
+    const client = createApiClient({ baseUrl: url, token });
+    await client.query({ kind: "WORKSTREAM_LIST" });
 
+    writeConfig({ api: { url: client.baseUrl, token } });
     emit(
-      {
-        ok: true,
-        dbUrl: url,
-        dbPath: filePath,
-        createdParentDir: createdDir,
-        dbExisted,
-        migrationsApplied: migrationFiles.length,
-      },
-      `initialized ${url}${createdDir ? " (created parent dir)" : ""} — ${migrationFiles.length} migration(s) known`,
+      { ok: true, apiUrl: client.baseUrl, configPath: configPath() },
+      `crux is pointed at ${client.baseUrl} (written to ${configPath()})`,
     );
   },
 });

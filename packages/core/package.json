@@ -11,6 +11,7 @@
     "./db/migrations-path": "./src/db/migrations-path.ts",
     "./db/test-utils": "./src/db/test-utils.ts",
     "./db/schema": "./src/db/schema.ts",
+    "./reads": "./src/reads/index.ts",
     "./transitions": "./src/transitions/index.ts",
     "./validation": "./src/validation/index.ts",
     "./config": "./src/config/user.ts",

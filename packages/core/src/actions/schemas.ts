@@ -17,7 +17,9 @@ export const SelectWorkstreamAction = z.object({
 });
 export const OpenProblemAction = z.object({
   kind: z.literal("OPEN_PROBLEM"),
-  payload: z.object({ slug: z.string() }),
+  // `id`, matching OpenProblemEvent in machine.ts — dispatch spreads this
+  // payload straight into the view event, so any other key is unroutable.
+  payload: z.object({ id: z.string() }),
 });
 export const SelectIntakeAction = z.object({
   kind: z.literal("SELECT_INTAKE"),

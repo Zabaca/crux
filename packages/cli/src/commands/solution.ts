@@ -1,17 +1,15 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { problems, solutions } from "@crux/core/db/schema";
 import { OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
-import { eq } from "drizzle-orm";
 import { emit, setJsonMode, emitError } from "../output.js";
-import { dispatch } from "@crux/core/actions";
 import type {
   AddSolutionPayload,
   ShipSolutionPayload,
   EditSolutionPayload,
 } from "@crux/core/actions";
+import { api } from "../api-client.js";
 import { problemArg, hintCtx } from "../ctx-defaults.js";
+
+type SolutionRow = { id: number; status: string; title: string };
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a solution candidate to a problem." },
@@ -23,14 +21,14 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const prVal = problemArg(args.problem);
+    const prVal = await problemArg(args.problem);
     hintCtx(undefined, prVal);
     const payload: AddSolutionPayload = {
       problem: prVal,
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "ADD_SOLUTION", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "ADD_SOLUTION", payload });
     emit(result, OkWithIdOutput, `added ${(result as { id: number }).id}`);
   },
 });
@@ -43,17 +41,15 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const db = getDb();
+    const rows = await api().query<SolutionRow[]>({
+      kind: "SOLUTION_LIST",
+      ...(args.problem ? { problem: args.problem } : {}),
+    });
     if (args.problem) {
-      const numId = parseInt(String(args.problem), 10);
-      const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
-      if (pr.length === 0)
-        throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
-      const rows = await db.select().from(solutions).where(eq(solutions.problemId, pr[0]!.id));
       emit(rows, rows.map((r) => `${r.id}\t${r.status}\t${r.title}`).join("\n") || "(none)");
       return;
     }
-    emit(await db.select().from(solutions));
+    emit(rows);
   },
 });
 
@@ -62,11 +58,7 @@ const showCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const numId = parseInt(String(args.id), 10);
-    const rows = await getDb().select().from(solutions).where(eq(solutions.id, numId)).limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`solution not found: ${args.id}`, { id: args.id });
-    emit(rows[0]!);
+    emit(await api().query({ kind: "SOLUTION_SHOW", id: args.id }));
   },
 });
 
@@ -76,7 +68,7 @@ const shipCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const payload: ShipSolutionPayload = { id: args.id };
-    const { result } = await dispatch({ kind: "SHIP_SOLUTION", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "SHIP_SOLUTION", payload });
     emit(result, OkWithStatusOutput, `shipped ${args.id}`);
   },
 });
@@ -100,7 +92,7 @@ const editCmd = defineCommand({
       ...(args.description !== undefined && { description: args.description }),
       ...(args.title !== undefined && { title: args.title }),
     };
-    const { result } = await dispatch({ kind: "EDIT_SOLUTION", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "EDIT_SOLUTION", payload });
     emit(result, OkWithIdOutput, `edited ${args.id}`);
   },
 });

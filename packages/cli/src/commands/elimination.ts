@@ -1,12 +1,8 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { eliminations, eliminationSolutions, problems } from "@crux/core/db/schema";
 import { OkWithIdOutput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
-import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { dispatch } from "@crux/core/actions";
 import type { AddEliminationPayload } from "@crux/core/actions";
+import { api } from "../api-client.js";
 import { problemArg, hintCtx } from "../ctx-defaults.js";
 
 function asList(v: unknown): string[] {
@@ -30,14 +26,14 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const prVal = problemArg(args.problem);
+    const prVal = await problemArg(args.problem);
     hintCtx(undefined, prVal);
     const payload: AddEliminationPayload = {
       solutions: asList(args.solutions),
       rationale: args.rationale,
       context: args.context,
     };
-    const { result } = await dispatch({ kind: "ADD_ELIMINATION", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "ADD_ELIMINATION", payload });
     emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });
@@ -50,16 +46,12 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const db = getDb();
-    if (args.problem) {
-      const numId = parseInt(args.problem, 10);
-      const pr = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
-      if (pr.length === 0)
-        throw new NotFoundError(`problem not found: ${args.problem}`, { id: args.problem });
-      emit(await db.select().from(eliminations).where(eq(eliminations.problemId, pr[0]!.id)));
-      return;
-    }
-    emit(await db.select().from(eliminations));
+    emit(
+      await api().query({
+        kind: "ELIMINATION_LIST",
+        ...(args.problem ? { problem: args.problem } : {}),
+      }),
+    );
   },
 });
 
@@ -68,15 +60,7 @@ const showCmd = defineCommand({
   args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const db = getDb();
-    const rows = await db.select().from(eliminations).where(eq(eliminations.id, args.id)).limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`elimination not found: ${args.id}`, { id: args.id });
-    const joins = await db
-      .select({ solutionId: eliminationSolutions.solutionId })
-      .from(eliminationSolutions)
-      .where(eq(eliminationSolutions.eliminationId, args.id));
-    emit({ ...rows[0]!, eliminatedSolutionIds: joins.map((j) => j.solutionId) });
+    emit(await api().query({ kind: "ELIMINATION_SHOW", id: args.id }));
   },
 });
 

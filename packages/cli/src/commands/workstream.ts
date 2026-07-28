@@ -1,17 +1,16 @@
-import { getDb } from "../db.js";
 import { defineCommand } from "citty";
-import { workstreams } from "@crux/core/db/schema";
 import { OkWithIdOutput, RenameOutput } from "@crux/core/validation";
 import { NotFoundError } from "@crux/core/transitions";
-import { eq } from "drizzle-orm";
 import { emit, setJsonMode } from "../output.js";
-import { dispatch } from "@crux/core/actions";
 import type {
   AddWorkstreamPayload,
   RenameWorkstreamPayload,
   SelectWorkstreamPayload,
 } from "@crux/core/actions";
+import { api } from "../api-client.js";
 import { wsArg } from "../ctx-defaults.js";
+
+type WorkstreamRow = { id: string; slug: string; title: string };
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a workstream." },
@@ -28,7 +27,7 @@ const addCmd = defineCommand({
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "ADD_WORKSTREAM", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "ADD_WORKSTREAM", payload });
     emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
   },
 });
@@ -38,7 +37,7 @@ const listCmd = defineCommand({
   args: { json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb().select().from(workstreams);
+    const rows = await api().query<WorkstreamRow[]>({ kind: "WORKSTREAM_LIST" });
     emit(rows, rows.map((r) => `${r.id}\t${r.title}`).join("\n") || "(none)");
   },
 });
@@ -50,10 +49,8 @@ const showCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsId = wsArg();
-    const rows = await getDb().select().from(workstreams).where(eq(workstreams.id, wsId)).limit(1);
-    if (rows.length === 0) throw new NotFoundError(`workstream not found: ${wsId}`, { id: wsId });
-    emit(rows[0]!, `${rows[0]!.id}\t${rows[0]!.title}`);
+    const row = await api().query<WorkstreamRow>({ kind: "WORKSTREAM_SHOW", id: await wsArg() });
+    emit(row, `${row.id}\t${row.title}`);
   },
 });
 
@@ -77,7 +74,7 @@ const renameCmd = defineCommand({
       title: args.title,
       description: args.description,
     };
-    const { result } = await dispatch({ kind: "RENAME_WORKSTREAM", payload }, { db: getDb() });
+    const { result } = await api().dispatch({ kind: "RENAME_WORKSTREAM", payload });
     emit(
       result,
       RenameOutput,
@@ -94,20 +91,18 @@ const selectCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const rows = await getDb()
-      .select()
-      .from(workstreams)
-      .where(eq(workstreams.slug, args.slug))
-      .limit(1);
-    if (rows.length === 0)
-      throw new NotFoundError(`workstream not found: ${args.slug}`, { id: args.slug });
-    const id = rows[0]!.id;
-    const payload: SelectWorkstreamPayload = { id };
-    const { viewState, revision } = await dispatch(
-      { kind: "SELECT_WORKSTREAM", payload },
-      { db: getDb() },
+    const client = api();
+    const row = await client.query<WorkstreamRow | null>({
+      kind: "WORKSTREAM_BY_SLUG",
+      slug: args.slug,
+    });
+    if (!row) throw new NotFoundError(`workstream not found: ${args.slug}`, { id: args.slug });
+    const payload: SelectWorkstreamPayload = { id: row.id };
+    const { viewState, revision } = await client.dispatch({ kind: "SELECT_WORKSTREAM", payload });
+    emit(
+      { ok: true, value: viewState, revision, context: { workstreamId: row.id } },
+      `selected ${row.id}`,
     );
-    emit({ ok: true, value: viewState, revision, context: { workstreamId: id } }, `selected ${id}`);
   },
 });
 
