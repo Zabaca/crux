@@ -164,7 +164,8 @@ same walker at build time when it lands.
   [ADR-0004: the Cloudflare stack](docs/adr/0004-cloudflare-stack.md),
   [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md),
   [ADR-0006: workerd tests and the D1 schema](docs/adr/0006-workerd-tests-and-d1-schema.md),
-  [ADR-0007: one identity table, two front doors](docs/adr/0007-one-identity-table-two-front-doors.md).
+  [ADR-0007: one identity table, two front doors](docs/adr/0007-one-identity-table-two-front-doors.md),
+  [ADR-0008: Astro lands with the write surfaces](docs/adr/0008-astro-lands-with-the-write-surfaces.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -181,16 +182,19 @@ same walker at build time when it lands.
 
 ## Status
 
-MVP. Single-tenant cloud deployment. The CLI is the write surface; the browser
-is read-only so far — sign-in, invited Members, CLI-token management, and pages
-for Workstream, Problem, Solution and Observation, all server-rendered on the
-same Worker. Transitions, reads, token auth and the browser surfaces are tested
+MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting Members,
+minting and revoking CLI tokens, and read-only pages for Workstream, Problem,
+Solution and Observation — all server-rendered on the same Worker. The *corpus*
+is written only through the CLI; the browser's writes are all account
+management. Transitions, reads, token auth and the browser surfaces are tested
 inside workerd against a real D1
 ([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)); the CLI is tested
 against a stub deployment. `bun run test` runs both runners.
 
 The browser pages are plain server-rendered HTML today, not yet the Astro app
-ADR-0004 describes; Astro and its islands arrive with the write surfaces.
+ADR-0004 describes. Astro arrives with the write surfaces that need islands —
+[ADR-0008](docs/adr/0008-astro-lands-with-the-write-surfaces.md) records why, and
+what it costs the workerd test loop.
 
 See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 

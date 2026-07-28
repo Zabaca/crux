@@ -9,83 +9,28 @@
  * (ADR-0003), so these functions take no permission argument by design.
  */
 import { query } from "@crux/core/reads";
+import type {
+  ObservationDetail,
+  ProblemDetail,
+  ProblemSummary,
+  SolutionDetail,
+  WorkstreamRow,
+  WorkstreamSummary,
+} from "@crux/core/reads";
 import type { CruxDb } from "@crux/core/db";
 
-import { html, type Html } from "./html.js";
-
-// ---------------------------------------------------------------------------
-// Shapes of the reads used here (query() is typed `unknown` at its boundary).
-// ---------------------------------------------------------------------------
-
-type WorkstreamRow = { id: string; slug: string; title: string; description: string | null };
-type WorkstreamSummary = WorkstreamRow & { openProblemCount: number };
-type ProblemRow = {
-  id: number;
-  title: string;
-  description: string;
-  status: string | null;
-  workstreamId: string;
-};
-type ProblemSummary = ProblemRow & {
-  evidenceCount: number;
-  solutionCount: number;
-  decided: boolean;
-};
-type ObservationRow = {
-  id: string;
-  content: string;
-  source: string | null;
-  sourceType: string | null;
-  tags: string | null;
-  createdAt: number;
-  workstreamId: string;
-  archive?: { archivedAt: number | null; rationale: string | null } | null;
-};
-type SolutionRow = { id: number; title: string; description: string | null; status: string };
-type DecisionRow = {
-  id: string;
-  chosenSolutionId: number;
-  rationale: string;
-  context: string | null;
-  createdAt: number;
-  rejectedSolutionIds: number[];
-};
-type EliminationRow = {
-  id: string;
-  rationale: string;
-  context: string | null;
-  createdAt: number;
-  eliminatedSolutionIds: number[];
-};
-type ProblemDetail = {
-  problem: ProblemRow;
-  evidence: Array<{ id: string; note: string | null; observation: ObservationRow | null }>;
-  solutions: SolutionRow[];
-  latestDecision: DecisionRow | null;
-  eliminations: EliminationRow[];
-  abandonment: { id: string; rationale: string; abandonedAt: number } | null;
-};
-type SolutionDetail = {
-  solution: SolutionRow;
-  problem: ProblemRow;
-  choosingDecision: DecisionRow | null;
-  rejectingDecision: DecisionRow | null;
-  eliminatedBy: EliminationRow[];
-  outcome: {
-    id: string;
-    observedImpact: string;
-    expectedImpact: string | null;
-    learnings: string | null;
-  } | null;
-};
-type ObservationDetail = {
-  observation: ObservationRow;
-  evidenceLinks: Array<{ id: string; note: string | null; problem: ProblemRow }>;
-};
+import { html, isoDate as date, type Html } from "./html.js";
 
 /** Raised when a slug or id in the URL names nothing — rendered as a 404 page. */
 export class PageNotFound extends Error {}
 
+/**
+ * `query()` answers `unknown` — one entry point serves every read kind — so a
+ * result is narrowed with the types core exports for exactly this purpose.
+ * Those types are derived from the reads themselves and asserted there with
+ * `satisfies`, so a shape that changes upstream breaks this file's typecheck
+ * instead of silently rendering nothing.
+ */
 const ask = <T>(db: CruxDb, q: unknown): Promise<T> => query(q, { db }) as Promise<T>;
 
 // ---------------------------------------------------------------------------
@@ -98,8 +43,6 @@ const stageOf = (status: string | null): string => status ?? "unscheduled";
 const LANES = ["now", "next", "later", "unscheduled", "done", "abandoned"] as const;
 
 const badge = (value: string): Html => html`<span class="badge ${value}">${value}</span>`;
-
-const date = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
   html`<div class="crumb">

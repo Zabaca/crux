@@ -192,6 +192,23 @@ describe("sign in", () => {
     expect(cookieJar(res)).not.toContain("session_token");
   });
 
+  test("signing out ends the session, and only a POST does it", async () => {
+    const { cookie } = await inviteAndJoin("bye@example.com", "Leaving Member");
+    expect((await get("/w/crux", { headers: { cookie } })).status).toBe(200);
+
+    // A GET must not end a session — anything that prefetches links would.
+    const viaGet = await get("/signout", { headers: { cookie } });
+    expect(viaGet.status).toBe(404);
+    expect((await get("/w/crux", { headers: { cookie } })).status).toBe(200);
+
+    const out = await post("/signout", {}, cookie);
+    expect(out.status).toBe(302);
+    expect(out.headers.get("location")).toBe("/signin");
+
+    const after = await get("/w/crux", { headers: { cookie: cookieJar(out) || cookie } });
+    expect(after.status).toBe(302);
+  });
+
   test("`next` cannot bounce a Member off this deployment", async () => {
     const { cookie } = await inviteAndJoin("open@example.com", "Open Redirect");
     const res = await get("/signin?next=https://evil.example/steal", { headers: { cookie } });
@@ -226,6 +243,25 @@ describe("CLI tokens", () => {
     expect(revoked.status).toBe(200);
 
     expect((await useIt()).status).toBe(401);
+  });
+
+  test("a Member cannot revoke another Member's token", async () => {
+    const owner = await inviteAndJoin("owner@example.com", "Token Owner");
+    const ownerPage = await (await post("/tokens/mint", { name: "owner" }, owner.cookie)).text();
+    const ownerToken = /crux_[0-9a-f]{64}/.exec(ownerPage)![0];
+    const ownerTokenId = /TOK-[0-9a-f]{16}/.exec(ownerPage)![0];
+
+    const attacker = await inviteAndJoin("attacker@example.com", "Other Member");
+    const attempt = await post("/tokens/revoke", { id: ownerTokenId }, attacker.cookie);
+    expect(attempt.status).toBe(404);
+
+    // The owner's token still works — the id in the form is not authority.
+    const res = await SELF.fetch(`${BASE}/v1/query`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${ownerToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ kind: "WORKSTREAM_LIST" }),
+    });
+    expect(res.status).toBe(200);
   });
 
   test("a session and a bearer token resolve to the same users row", async () => {

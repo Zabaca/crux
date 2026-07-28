@@ -16,6 +16,7 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 
 - **Workspace** — a crux deployment and the members invited to it. Deliberately *not* a schema entity and not a container above Workstream: the deployment is the tenant boundary, and every member sees every Workstream in it (ADR-0003). A group that shouldn't share a corpus gets its own deployment.
 - **Member** — a user invited to a Workspace. Membership is coarse by design: it grants the whole deployment, never a subset of Workstreams.
+- **Invite** — a one-time, expiring permission to become a Member. It is the only way an account is created: nobody signs themselves up. Redeeming one creates the `users` row that a browser session *and* a CLI token both resolve to (ADR-0007); the invite is then spent, not deleted, so who invited whom survives.
 
 ## Lifecycle vocabulary
 

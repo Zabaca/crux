@@ -53,3 +53,8 @@ export function htmlResponse(body: Html, status = 200, headers: HeadersInit = {}
     headers: { "content-type": "text/html; charset=utf-8", ...headers },
   });
 }
+
+/** An ISO date (no time) for display. Corpus timestamps are epoch milliseconds. */
+export function isoDate(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 10);
+}

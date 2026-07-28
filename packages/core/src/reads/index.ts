@@ -97,6 +97,69 @@ export const QuerySchema = z.discriminatedUnion("kind", [
 export type QueryRequest = z.infer<typeof QuerySchema>;
 export type QueryKind = QueryRequest["kind"];
 
+// ---------------------------------------------------------------------------
+// Result shapes
+// ---------------------------------------------------------------------------
+
+/**
+ * The shapes the richer reads answer with.
+ *
+ * These exist because `query()` returns `unknown` — it has to, since one entry
+ * point serves twenty-odd kinds — and a caller that wants a typed result would
+ * otherwise redeclare the shape on its side and cast to it, which is drift with
+ * extra steps. They are *derived*, not restated: row types come from drizzle's
+ * `$inferSelect` and the composite parts from the helpers that build them, and
+ * each read below asserts its return with `satisfies`. A column rename or a
+ * helper that stops returning a field is a compile error here rather than a
+ * surprise at the far end.
+ */
+export type WorkstreamRow = typeof workstreams.$inferSelect;
+export type ProblemRow = typeof problems.$inferSelect;
+export type SolutionRow = typeof solutions.$inferSelect;
+export type ObservationRow = typeof observations.$inferSelect;
+export type AbandonmentRow = typeof abandonments.$inferSelect;
+
+export type ObservationWithArchive = ObservationRow & { archive: ArchiveBlock };
+export type DecisionWithRejected = Awaited<ReturnType<typeof latestDecisionFor>>;
+export type EliminationWithTargets = Awaited<ReturnType<typeof eliminationsFor>>[number];
+export type SolutionWithOutcome = Awaited<ReturnType<typeof solutionsWithOutcomes>>[number];
+export type EvidenceWithObservation = Awaited<ReturnType<typeof evidenceWithObservations>>[number];
+
+export type WorkstreamSummary = WorkstreamRow & { openProblemCount: number };
+
+export type ProblemSummary = ProblemRow & {
+  evidenceCount: number;
+  solutionCount: number;
+  decided: boolean;
+};
+
+export type ProblemDetail = {
+  problem: ProblemRow;
+  evidence: EvidenceWithObservation[];
+  solutions: SolutionWithOutcome[];
+  latestDecision: DecisionWithRejected;
+  eliminations: EliminationWithTargets[];
+  abandonment: AbandonmentRow | null;
+};
+
+export type OutcomeWithFollowUps =
+  | (typeof outcomes.$inferSelect & { followUpProblemIds: number[] })
+  | null;
+
+export type SolutionDetail = {
+  solution: SolutionRow;
+  problem: ProblemRow;
+  choosingDecision: DecisionWithRejected;
+  rejectingDecision: DecisionWithRejected;
+  eliminatedBy: EliminationWithTargets[];
+  outcome: OutcomeWithFollowUps;
+};
+
+export type ObservationDetail = {
+  observation: ObservationWithArchive;
+  evidenceLinks: Array<typeof evidence.$inferSelect & { problem: ProblemRow }>;
+};
+
 /** Read kinds that leave a trace in `recentQueries`, and the entry they write. */
 const RECORDED: Partial<Record<QueryKind, { kind: string; slug: (q: never) => string }>> = {
   PROBLEM_SHOW: { kind: "PROBLEM_SHOW", slug: (q: { id: string | number }) => String(q.id) },
@@ -414,7 +477,9 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
           openByWs.set(p.workstreamId, (openByWs.get(p.workstreamId) ?? 0) + 1);
         }
       }
-      return wsRows.map((w) => ({ ...w, openProblemCount: openByWs.get(w.id) ?? 0 }));
+      return wsRows.map(
+        (w) => ({ ...w, openProblemCount: openByWs.get(w.id) ?? 0 }) satisfies WorkstreamSummary,
+      );
     }
 
     case "OBSERVATION_LIST": {
@@ -442,7 +507,10 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       const evidenceLinks = evRows
         .map((e) => ({ ...e, problem: probById.get(e.problemId)! }))
         .filter((e) => e.problem);
-      return { observation: { ...obs, archive: toArchive(obs) }, evidenceLinks };
+      return {
+        observation: { ...obs, archive: toArchive(obs) },
+        evidenceLinks,
+      } satisfies ObservationDetail;
     }
 
     case "OBSERVATION_UNLINKED": {
@@ -507,12 +575,15 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         .where(inArray(decisions.problemId, ids));
       const decided = new Set(dec.map((d) => d.problemId));
       return rows
-        .map((r) => ({
-          ...r,
-          evidenceCount: evCount.get(r.id) ?? 0,
-          solutionCount: solCount.get(r.id) ?? 0,
-          decided: decided.has(r.id),
-        }))
+        .map(
+          (r) =>
+            ({
+              ...r,
+              evidenceCount: evCount.get(r.id) ?? 0,
+              solutionCount: solCount.get(r.id) ?? 0,
+              decided: decided.has(r.id),
+            }) satisfies ProblemSummary,
+        )
         .sort((a, b) => {
           const d = rankStatus(a.status) - rankStatus(b.status);
           return d !== 0 ? d : a.createdAt - b.createdAt;
@@ -538,7 +609,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         latestDecision: await latestDecisionFor(db, problemId),
         eliminations: await eliminationsFor(db, problemId),
         abandonment: abandonRow ?? null,
-      };
+      } satisfies ProblemDetail;
     }
 
     case "EVIDENCE_LIST": {
@@ -594,8 +665,8 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         .from(decisions)
         .where(eq(decisions.problemId, pr.id))
         .orderBy(desc(decisions.createdAt));
-      let choosingDecision: unknown = null;
-      let rejectingDecision: unknown = null;
+      let choosingDecision: DecisionWithRejected = null;
+      let rejectingDecision: DecisionWithRejected = null;
       for (const d of allDec) {
         const rej = await rejectedFor(db, d.id);
         if (d.chosenSolutionId === solutionId && !choosingDecision) {
@@ -634,7 +705,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       const outRow = (
         await db.select().from(outcomes).where(eq(outcomes.solutionId, solutionId)).limit(1)
       )[0];
-      let outcome: unknown = null;
+      let outcome: OutcomeWithFollowUps = null;
       if (outRow) {
         const fu = await db
           .select()
@@ -650,7 +721,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         rejectingDecision,
         eliminatedBy,
         outcome,
-      };
+      } satisfies SolutionDetail;
     }
 
     case "DECISION_LIST":

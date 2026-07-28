@@ -110,6 +110,8 @@ h2{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
 .notice.bad{border-color:rgba(255,123,114,.4);background:rgba(255,123,114,.08)}
 .notice code{word-break:break-all}
 .row-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.linkish{background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer}
+.linkish:hover{color:var(--ink);text-decoration:underline}
 @media (max-width:1080px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:800px){.board{grid-template-columns:1fr}.split{grid-template-columns:1fr}
   .rail{position:static}.kv{grid-template-columns:1fr}}
@@ -145,7 +147,9 @@ export function page(opts: {
         <a href="/members">Members</a>
         <a href="/tokens">Tokens</a>
         <span class="avatar" title="${opts.viewer.name}">${initials(opts.viewer.name)}</span>
-        <a href="/signout">Sign out</a>
+        <form method="post" action="/signout" style="display:contents">
+          <button type="submit" class="linkish">Sign out</button>
+        </form>
       </nav>`
     : html`<nav></nav>`;
 

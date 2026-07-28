@@ -41,6 +41,18 @@ construction rather than by review.
   answer 503 and say so; `/health`, `/v1` and the CLI are unaffected. Password
   hashing uses scrypt from `node:crypto`, so the Worker also needs
   `nodejs_compat`.
+- **Unmatched paths changed meaning.** Before the browser surfaces, anything
+  outside `/health` and `/v1` was a JSON `{"error":"not_found"}` 404. Those paths
+  now belong to the session gate: an anonymous request to one is redirected to
+  `/signin`, and a signed-in Member gets an HTML 404 page. The `/v1` and
+  `/health` contracts are untouched, but a client that probed an unknown path and
+  read the JSON body will see a redirect instead. The API's own unmatched routes
+  (`/v1/nope`) still answer `{"error":{"code":"NOT_FOUND"}}` as before.
 - **Revocation is asymmetric, and that is intended.** Revoking a CLI token stops
   that token; it does not end browser sessions, which are ended by signing out
   or by expiry.
+- **A token can only be revoked by its owner.** `revokeToken` takes the owner as
+  a required argument rather than an optional filter, because the id it revokes
+  arrives from a form field — an owner the caller could forget to pass is an
+  owner some caller eventually forgets. Revoking a token that does not exist and
+  revoking someone else's are indistinguishable to the caller.

@@ -20,11 +20,11 @@ import {
   createInvite,
   findPendingInvite,
   acceptInvite,
-  listInvites,
   normalizeEmail,
   slugFromEmail,
 } from "@crux/core/auth/invites";
 
+import type { Env } from "../api.js";
 import { html, htmlResponse, type Html } from "./html.js";
 import { page, type Viewer } from "./layout.js";
 import {
@@ -37,13 +37,24 @@ import {
 } from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage } from "./account-pages.js";
 
-export interface WebEnv {
-  DB: D1Database;
-  BETTER_AUTH_SECRET?: string;
-  CRUX_WORKSPACE_NAME?: string;
-}
+/** The bindings the browser surfaces read — a subset of the Worker's `Env`. */
+export type WebEnv = Pick<Env, "DB" | "BETTER_AUTH_SECRET" | "CRUX_WORKSPACE_NAME">;
 
 const SESSION_REQUIRED = "/signin";
+
+/**
+ * The linkable read surfaces, as pattern → loader. Each capture group becomes a
+ * decoded argument, so the four of them differ only in their URL and their page
+ * — which is the whole of the difference, and worth keeping visible as a table.
+ */
+const READ_ROUTES: ReadonlyArray<
+  readonly [RegExp, (db: CruxDb, ...params: string[]) => Promise<{ title: string; body: Html }>]
+> = [
+  [/^\/w\/([^/]+)$/, (db, slug) => workstreamPage(db, slug!)],
+  [/^\/w\/([^/]+)\/problems\/([^/]+)$/, (db, slug, id) => problemPage(db, slug!, id!)],
+  [/^\/w\/([^/]+)\/solutions\/([^/]+)$/, (db, slug, id) => solutionPage(db, slug!, id!)],
+  [/^\/w\/([^/]+)\/observations\/([^/]+)$/, (db, slug, id) => observationPage(db, slug!, id!)],
+];
 
 /** The Workspace's display name — the deployment's host unless one is set. */
 function workspaceName(env: WebEnv, url: URL): string {
@@ -152,9 +163,14 @@ export async function handleWeb(
     return render(signInPage({ next: safeNext(url.searchParams.get("next")) }));
   }
 
-  if (path === "/signout") {
-    await auth.api.signOut({ headers: request.headers });
-    return redirect("/signin");
+  // POST, not a link: signing out changes server state, and a GET that does
+  // that is fetched by anything that prefetches links.
+  if (path === "/signout" && request.method === "POST") {
+    const out = await auth.api.signOut({ headers: request.headers, asResponse: true });
+    const headers = new Headers();
+    for (const cookie of out.headers.getSetCookie()) headers.append("set-cookie", cookie);
+    headers.set("location", "/signin");
+    return new Response(null, { status: 302, headers });
   }
 
   if (path === "/invite") {
@@ -209,32 +225,21 @@ export async function handleWeb(
     if (path === "/tokens/revoke" && request.method === "POST") {
       const form = await request.formData();
       const id = String(form.get("id") ?? "");
-      await revokeToken(db, id);
-      return render(await tokensPage(db, viewer, { revoked: id }));
-    }
-
-    const w = /^\/w\/([^/]+)$/.exec(path);
-    if (w) return render(await workstreamPage(db, decodeURIComponent(w[1]!)));
-
-    const prob = /^\/w\/([^/]+)\/problems\/([^/]+)$/.exec(path);
-    if (prob) {
+      // Scoped to the viewer: the id comes from a form field, so an unscoped
+      // revoke would let any Member kill any other Member's token.
+      const revoked = await revokeToken(db, { tokenId: id, userId: viewer.id });
       return render(
-        await problemPage(db, decodeURIComponent(prob[1]!), decodeURIComponent(prob[2]!)),
+        await tokensPage(db, viewer, revoked ? { revoked: id } : { notYours: id }),
+        revoked ? 200 : 404,
       );
     }
 
-    const sol = /^\/w\/([^/]+)\/solutions\/([^/]+)$/.exec(path);
-    if (sol) {
-      return render(
-        await solutionPage(db, decodeURIComponent(sol[1]!), decodeURIComponent(sol[2]!)),
-      );
-    }
-
-    const obs = /^\/w\/([^/]+)\/observations\/([^/]+)$/.exec(path);
-    if (obs) {
-      return render(
-        await observationPage(db, decodeURIComponent(obs[1]!), decodeURIComponent(obs[2]!)),
-      );
+    for (const [pattern, load] of READ_ROUTES) {
+      const match = pattern.exec(path);
+      if (match) {
+        const [, ...params] = match;
+        return render(await load(db, ...params.map((p) => decodeURIComponent(p!))));
+      }
     }
   } catch (err) {
     if (err instanceof PageNotFound) return notFoundPage(env, url, viewer);
@@ -328,6 +333,3 @@ function safeNext(next: string | null): string | undefined {
   if (!next.startsWith("/") || next.startsWith("//")) return undefined;
   return next;
 }
-
-/** Re-exported so tests and the invite flow share one list of pending invites. */
-export { listInvites };

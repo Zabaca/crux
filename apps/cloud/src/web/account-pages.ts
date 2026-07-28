@@ -15,10 +15,8 @@ import { apiTokens } from "@crux/core/db/schema";
 import { authUsers } from "@crux/core/db/auth-schema";
 import { listInvites } from "@crux/core/auth/invites";
 
-import { html, type Html } from "./html.js";
+import { html, isoDate as date, type Html } from "./html.js";
 import type { Viewer } from "./layout.js";
-
-const date = (ms: number): string => new Date(ms).toISOString().slice(0, 10);
 
 /**
  * `/signin`. A plain form post — no client JavaScript is involved in
@@ -165,7 +163,7 @@ export async function membersPage(
 export async function tokensPage(
   db: CruxDb,
   viewer: Viewer,
-  opts: { minted?: string; revoked?: string } = {},
+  opts: { minted?: string; revoked?: string; notYours?: string } = {},
 ): Promise<{ title: string; body: Html }> {
   const rows = await db.select().from(apiTokens).where(eq(apiTokens.userId, viewer.id));
   const sorted = [...rows].sort((a, b) => b.createdAt - a.createdAt);
@@ -194,6 +192,14 @@ export async function tokensPage(
       opts.revoked
         ? html`<div class="notice">
             <span class="mono">${opts.revoked}</span> is revoked. It will not authenticate again.
+          </div>`
+        : ""
+    }
+    ${
+      opts.notYours
+        ? html`<div class="notice bad">
+            No token of yours has id <span class="mono">${opts.notYours}</span>. A Member can only
+            revoke their own tokens.
           </div>`
         : ""
     }
