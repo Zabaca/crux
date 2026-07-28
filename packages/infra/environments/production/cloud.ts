@@ -8,9 +8,13 @@ import { cloudflareModule } from "../../modules/cloudflare";
 // The build is `bun run build` at the repo root: it derives the doc tree
 // (ADR-0005) and then runs `astro build`, which reads apps/cloud/wrangler.jsonc
 // and writes a *resolved* copy of it — plus the bundled entry — into
-// apps/cloud/dist/server. That directory is therefore the deploy workdir:
-// wrangler discovers the generated wrangler.json there, while the hand-written
-// wrangler.jsonc upstream of it stays the source of truth for the topology.
+// apps/cloud/dist/server, along with a .wrangler/deploy/config.json pointing at
+// it. The deploy workdir is therefore the package root, not dist/server:
+// wrangler reads that redirect and follows it. Pointing wrangler straight at
+// dist/server makes it find both configs with different base paths and refuse
+// to guess ("Found both a user configuration file ... and a deploy
+// configuration file"). The hand-written wrangler.jsonc stays the source of
+// truth for the topology.
 //
 // No workerSecrets: BETTER_AUTH_SECRET is pushed by hand
 // (`wrangler secret put`) rather than held in secrets.yaml.
@@ -19,7 +23,7 @@ import { cloudflareModule } from "../../modules/cloudflare";
 export default cloudflareModule.instance({
   name: "cloud",
   config: {
-    workdir: "apps/cloud/dist/server",
+    workdir: "apps/cloud",
     build: { command: "bun run build", cwd: "." },
     accountId: "99a19e584439be0568f33aad0477372b",
   },
