@@ -51,7 +51,7 @@ describe("token lifecycle", () => {
   test("a revoked token stops working", async () => {
     const { token, id } = await mintToken(db, { userId: "USR-james" });
     expect(await authenticateToken(db, token)).not.toBeNull();
-    await revokeToken(db, id);
+    await revokeToken(db, { tokenId: id, userId: "USR-james" });
     expect(await authenticateToken(db, token)).toBeNull();
   });
 });

@@ -1,5 +1,25 @@
 # Human-readable surface — spec
 
+> **Superseded in part (2026-07-28).** This was written when the corpus was a
+> local libSQL file and the web surface was a Next.js app under `apps/web/`.
+> Both are gone: the corpus moved to D1 behind the API ([ADR-0003](adr/0003-cloud-crux-client-server.md)),
+> `apps/web/` was deleted, and the browser surface is now server-rendered on the
+> Worker in [`apps/cloud/src/web/`](../apps/cloud/src/web), session-gated and
+> reading through `query()` rather than the database.
+>
+> **What is still current:** the user stories, the ordering rules, the archive
+> semantics, the empty-state requirement, and the anti-goals. Those were built
+> to and still hold.
+>
+> **What is not:** the "Shared technical contract" clause to read libSQL
+> directly via `getDb()` — reads go through `query()` now, which is the same
+> rule one layer up. The Next.js/Tailwind/shadcn stack under **Web UI**, which
+> no longer exists. Story 7 (unpromoted Ideas), whose entity was merged into
+> Observation. And the verification plan's seeded corpus, which was removed
+> before the repo went public.
+>
+> The TUI half (`crux browse`) is unchanged and still accurate.
+
 This doc is the authoritative spec for two parallel implementations of a human-browseable view of Crux state: a Next.js web UI under `apps/web/` and an ink-based TUI under `packages/cli/src/commands/browse.ts`. Both ship in this repo and are read-only for v1.
 
 ## Why

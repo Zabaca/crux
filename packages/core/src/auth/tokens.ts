@@ -71,9 +71,25 @@ export async function mintToken(
   return { id, token };
 }
 
-/** Revoke a token by row id. A revoked token never authenticates again. */
-export async function revokeToken(db: CruxDb, tokenId: string): Promise<void> {
-  await db.update(apiTokens).set({ revokedAt: Date.now() }).where(eq(apiTokens.id, tokenId));
+/**
+ * Revoke one of `userId`'s tokens. A revoked token never authenticates again.
+ *
+ * The owner is a required argument rather than an optional filter, because the
+ * id being revoked arrives from a form field: a caller that could omit the
+ * owner would let any Member revoke any other Member's token by guessing a row
+ * id. Returns false when the token does not exist *or* belongs to someone else
+ * — the two are deliberately indistinguishable to the caller.
+ */
+export async function revokeToken(
+  db: CruxDb,
+  opts: { tokenId: string; userId: string },
+): Promise<boolean> {
+  const result = await db
+    .update(apiTokens)
+    .set({ revokedAt: Date.now() })
+    .where(and(eq(apiTokens.id, opts.tokenId), eq(apiTokens.userId, opts.userId)));
+  const meta = (result as { meta?: { changes?: number } } | undefined)?.meta;
+  return (meta?.changes ?? 0) > 0;
 }
 
 export type AuthedToken = { userId: string; tokenId: string };

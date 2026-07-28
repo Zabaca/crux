@@ -210,9 +210,12 @@ describe("unknown routes", () => {
     expect(await res.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
-  test("anything outside /v1 and /health is a plain 404", async () => {
-    const res = await SELF.fetch("https://crux.example/nope");
-    expect(res.status).toBe(404);
-    expect(await res.json()).toEqual({ error: "not_found" });
+  // Paths outside /v1 and /health belong to the browser surfaces now, so an
+  // unknown one is answered by the session gate rather than by the API's JSON
+  // 404 — an anonymous request never learns whether the path exists.
+  test("anything outside /v1 and /health goes to the session gate", async () => {
+    const res = await SELF.fetch("https://crux.example/nope", { redirect: "manual" });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/signin?next=%2Fnope");
   });
 });

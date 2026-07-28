@@ -9,7 +9,13 @@ export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: "./wrangler.jsonc" },
-      miniflare: { d1Databases: ["DB"], compatibilityFlags: ["nodejs_compat"] },
+      miniflare: {
+        d1Databases: ["DB"],
+        compatibilityFlags: ["nodejs_compat"],
+        // In production this is a Worker secret. The browser surfaces refuse to
+        // issue sessions without it, so the suite has to supply one.
+        bindings: { BETTER_AUTH_SECRET: "test-secret-not-used-in-production" },
+      },
     }),
   ],
   test: {

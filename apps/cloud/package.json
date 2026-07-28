@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@crux/core": "workspace:*",
+    "better-auth": "^1.6.25",
     "zod": "^4.3.6"
   },
   "devDependencies": {
