@@ -14,16 +14,17 @@
   // export condition, so the browser sessions do not work without this.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
-  // Per-user view-state lives in a Durable Object (CRUX-1Z93XN) — off the
-  // filesystem, which is the reason this work is ordered ahead of the UI.
+  // Per-user view-state lives in a Durable Object — off the filesystem. It
+  // survives Astro's bundle because astro.config.mjs names it in
+  // `workerEntryPoint.namedExports`.
   "durable_objects": {
     "bindings": [{ "name": "VIEW_STATE", "class_name": "ViewStateDO" }]
   },
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ViewStateDO"] }],
   // D1 has no zbc module, so the database is created once by hand
   // (`wrangler d1 create crux-production`) and bound here by id — the shape
-  // ADR-0004 settled on. The schema arrives with CRUX-B2IA0X; until then this
-  // database is real and empty.
+  // ADR-0004 settled on. Its schema is end-state DDL applied by
+  // `applyD1Schema` (ADR-0006).
   "d1_databases": [
     {
       "binding": "DB",

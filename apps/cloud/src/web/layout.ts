@@ -112,6 +112,26 @@ h2{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
 .row-inline{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 .linkish{background:none;border:0;padding:0;color:inherit;font:inherit;cursor:pointer}
 .linkish:hover{color:var(--ink);text-decoration:underline}
+.docs{grid-template-columns:250px 1fr}
+.docnav{position:sticky;top:20px;display:flex;flex-direction:column;gap:2px;font-size:12px}
+.docnav-item{padding:5px 9px;border-radius:7px;color:var(--muted);word-break:break-all}
+.docnav-item:hover{background:var(--col);color:var(--ink);text-decoration:none}
+.docnav-item.here{background:var(--col-2);color:var(--ink);font-weight:600}
+.doc .pad{padding:10px 30px 30px}
+.doc h1,.doc h2,.doc h3{color:var(--ink);text-transform:none;letter-spacing:-.01em}
+.doc h2{font-size:19px;font-weight:650;margin:30px 0 10px;border-top:1px solid var(--line-2);padding-top:22px}
+.doc h3{font-size:15px;font-weight:650;margin:22px 0 8px}
+.doc p,.doc li{color:#ccd4de}
+.doc a{color:var(--next);text-decoration:underline;text-underline-offset:2px}
+.doc code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;
+  background:var(--col-2);border:1px solid var(--line-2);border-radius:5px;padding:1px 5px}
+.doc pre{background:var(--col-2);border:1px solid var(--line-2);border-radius:9px;padding:13px 15px;overflow-x:auto}
+.doc pre code{background:none;border:0;padding:0}
+.doc table{border-collapse:collapse;width:100%;display:block;overflow-x:auto}
+.doc th,.doc td{border:1px solid var(--line-2);padding:7px 10px;text-align:left;font-size:13px}
+.doc th{color:var(--faint);font-weight:600}
+.doc blockquote{border-left:2px solid var(--line);margin:0;padding-left:14px;color:var(--muted)}
+.doc hr{border:0;border-top:1px solid var(--line-2);margin:26px 0}
 @media (max-width:1080px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:800px){.board{grid-template-columns:1fr}.split{grid-template-columns:1fr}
   .rail{position:static}.kv{grid-template-columns:1fr}}
@@ -144,6 +164,7 @@ export function page(opts: {
   const nav = opts.viewer
     ? html`<nav>
         <a href="/">Workstreams</a>
+        <a href="/docs">Docs</a>
         <a href="/members">Members</a>
         <a href="/tokens">Tokens</a>
         <span class="avatar" title="${opts.viewer.name}">${initials(opts.viewer.name)}</span>

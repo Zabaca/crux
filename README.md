@@ -88,6 +88,10 @@ bun run crux init --url https://<your-deployment> --token <token>
 bun run crux context -w crux --json
 ```
 
+`bun run build` derives the doc tree and runs `astro build`; `bun run test`
+does it for you, because the workerd suites run against the built bundle
+([ADR-0009](docs/adr/0009-astro-wraps-the-worker-entry.md)).
+
 The cloud schema is end-state DDL applied by `applyD1Schema`
 ([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)) — there is no
 migrations directory and no drizzle-kit. To develop against a throwaway corpus
@@ -113,7 +117,10 @@ the Node runtime, which `bun run deploy` does.
 
 - [`apps/cloud`](apps/cloud) is the Worker. Its topology lives in
   [`wrangler.jsonc`](apps/cloud/wrangler.jsonc), which is the source of truth for
-  it — including the D1 binding. D1 has no zbc module, so the database was
+  it — including the D1 binding. `zbc` builds first and then deploys from
+  `apps/cloud/dist/server`, where `astro build` writes the resolved copy of that
+  config alongside the bundled entry
+  ([ADR-0009](docs/adr/0009-astro-wraps-the-worker-entry.md)). D1 has no zbc module, so the database was
   created once (`wrangler d1 create crux-production`) and is bound there by id.
 - [`packages/infra/environments/production/cloud.ts`](packages/infra/environments/production/cloud.ts)
   is the zbc instance: which package to deploy, into which account.
@@ -145,17 +152,18 @@ reports `503 degraded` instead of a hollow `ok`.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, and the HTTP client every command goes through.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding and the doc-tree rot check.
-- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker: `/health`, the `/v1` JSON API, the browser surfaces under [`src/web/`](apps/cloud/src/web), and the view-state Durable Object. The Astro site lands here.
+- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker: `/health`, the `/v1` JSON API, the page templates under [`src/web/`](apps/cloud/src/web), the view-state Durable Object, and the Astro site (`astro/`) whose React islands are the board and the action dialogs.
 
 ## Docs
 
 Documentation is whatever is reachable from this file: a walker starts here and
 follows internal links and `@import`s ([ADR-0002](docs/adr/0002-readme-rooted-doc-tree.md)).
 A doc that exists but isn't linked from the tree doesn't count — `bun run docs:check`
-reports it as rot. The walker has one caller today: the Next.js app that also
-rendered the tree at `/docs` was deleted with the move to D1, and the Astro
-`/docs` route ([ADR-0005](docs/adr/0005-docs-derived-at-deploy.md)) will call the
-same walker at build time when it lands.
+reports it as rot. The walker has two callers and no third implementation: that
+check, and `scripts/build-docs.ts`, which runs it at build time so the deployment
+can serve the tree at `/docs` without a working tree to read
+([ADR-0005](docs/adr/0005-docs-derived-at-deploy.md)). Rot fails the build,
+naming the broken links and orphans.
 
 - [`CONTEXT.md`](CONTEXT.md) — the glossary. Canonical vocabulary for this repo.
 - Decisions — [ADR-0001: single dual-audience doc](docs/adr/0001-single-dual-audience-doc.md),
@@ -165,7 +173,8 @@ same walker at build time when it lands.
   [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md),
   [ADR-0006: workerd tests and the D1 schema](docs/adr/0006-workerd-tests-and-d1-schema.md),
   [ADR-0007: one identity table, two front doors](docs/adr/0007-one-identity-table-two-front-doors.md),
-  [ADR-0008: Astro lands with the write surfaces](docs/adr/0008-astro-lands-with-the-write-surfaces.md).
+  [ADR-0008: Astro lands with the write surfaces](docs/adr/0008-astro-lands-with-the-write-surfaces.md),
+  [ADR-0009: Astro wraps the Worker entry](docs/adr/0009-astro-wraps-the-worker-entry.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -183,18 +192,21 @@ same walker at build time when it lands.
 ## Status
 
 MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting Members,
-minting and revoking CLI tokens, and read-only pages for Workstream, Problem,
-Solution and Observation — all server-rendered on the same Worker. The *corpus*
-is written only through the CLI; the browser's writes are all account
-management. Transitions, reads, token auth and the browser surfaces are tested
-inside workerd against a real D1
-([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)); the CLI is tested
-against a stub deployment. `bun run test` runs both runners.
+minting and revoking CLI tokens, pages for Workstream, Problem, Solution and
+Observation, the doc tree at `/docs`, and the write surfaces — a drag-and-drop
+roadmap board at `/w/<slug>/board` and contextual action dialogs that file
+entities and record transitions. Every one of those writes goes through
+`POST /v1/dispatch`, the CLI's endpoint, so there is no browser-only path where
+an invariant could be skipped; a refused transition shows its code and message
+rather than snapping the card back in silence. Live refresh is the ViewStateDO
+push stream, so a `crux` command in a terminal lands on the open page.
 
-The browser pages are plain server-rendered HTML today, not yet the Astro app
-ADR-0004 describes. Astro arrives with the write surfaces that need islands —
-[ADR-0008](docs/adr/0008-astro-lands-with-the-write-surfaces.md) records why, and
-what it costs the workerd test loop.
+The site is Astro with React islands, wrapping the hand-written Worker entry
+rather than replacing it ([ADR-0009](docs/adr/0009-astro-wraps-the-worker-entry.md)).
+Transitions, reads, token auth and every browser surface are tested inside
+workerd against a real D1 and the built bundle
+([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)); the CLI is tested
+against a stub deployment. `bun run test` builds, then runs both runners.
 
 See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 

@@ -33,3 +33,9 @@ dist/
 
 # Local Worker secrets (BETTER_AUTH_SECRET) — never committed.
 .dev.vars
+
+# Derived at build time (ADR-0005) — the doc tree the Worker ships.
+apps/cloud/src/generated/
+
+# Astro's generated types.
+apps/cloud/.astro/

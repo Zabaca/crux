@@ -360,3 +360,214 @@ describe("read pages", () => {
     expect(body).toContain("&lt;script&gt;");
   });
 });
+
+describe("docs", () => {
+  test("/docs is README, rendered", async () => {
+    const { cookie } = await inviteAndJoin("docs@example.com", "Docs Reader");
+    const res = await get("/docs", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    // README's own opening line, and a sentence only it carries.
+    expect(body).toContain("Structured residue for product discovery");
+  });
+
+  test("an internal link navigates in-UI rather than off to the file", async () => {
+    const { cookie } = await inviteAndJoin("links@example.com", "Link Reader");
+    const body = await (await get("/docs", { headers: { cookie } })).text();
+    // README links CONTEXT.md; in the rendered tree that is a /docs URL.
+    expect(body).toContain('href="/docs/CONTEXT.md"');
+    // …and an external link is left alone.
+    expect(body).toContain("https://bun.sh/install");
+  });
+
+  test("a linked doc renders at its own URL", async () => {
+    const { cookie } = await inviteAndJoin("adr@example.com", "ADR Reader");
+    const res = await get("/docs/docs/adr/0002-readme-rooted-doc-tree.md", {
+      headers: { cookie },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("README-rooted doc tree");
+  });
+
+  test("an @import renders inline, so the page shows what an agent loads", async () => {
+    const { cookie } = await inviteAndJoin("import@example.com", "Import Reader");
+    const body = await (await get("/docs", { headers: { cookie } })).text();
+    // README @imports the karpathy guidelines; its text is on the page.
+    expect(body).toContain("Minimum code that solves the problem");
+  });
+
+  test("a doc outside the tree is a 404, not a file read", async () => {
+    const { cookie } = await inviteAndJoin("nodoc@example.com", "No Doc");
+    const res = await get("/docs/package.json", { headers: { cookie } });
+    expect(res.status).toBe(404);
+  });
+
+  test("docs need a session, like every other page", async () => {
+    const res = await get("/docs");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/signin?next=%2Fdocs");
+  });
+});
+
+describe("the roadmap board", () => {
+  /** POST an action the way the board island does: session cookie, same origin. */
+  function dispatchFromBrowser(action: unknown, cookie: string, origin = BASE): Promise<Response> {
+    return SELF.fetch(`${BASE}/v1/dispatch`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/json", cookie, origin },
+      body: JSON.stringify(action),
+    });
+  }
+
+  test("the board renders the Problems it can move", async () => {
+    const { cookie } = await inviteAndJoin("board@example.com", "Board Reader");
+    await seedNarrowedProblem();
+    const res = await get("/w/crux/board", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("Context evaporates");
+    // The island is on the page, hydrating rather than server-only markup.
+    expect(body).toContain("astro-island");
+  });
+
+  test("dragging a Problem to a Stage persists through the API", async () => {
+    const { cookie } = await inviteAndJoin("drag@example.com", "Dragger");
+    const problemId = await seedNarrowedProblem();
+
+    const res = await dispatchFromBrowser(
+      { kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } },
+      cookie,
+    );
+    expect(res.status).toBe(200);
+
+    // Observed through the page, not the database: the Problem is in `now`.
+    const board = await (await get("/w/crux", { headers: { cookie } })).text();
+    const nowLane = board.slice(
+      board.indexOf('class="lane now"'),
+      board.indexOf('class="lane next"'),
+    );
+    expect(nowLane).toContain("Context evaporates");
+  });
+
+  test("a server-rejected transition answers with its code and message", async () => {
+    const { cookie } = await inviteAndJoin("reject@example.com", "Rejected");
+    const problemId = await seedNarrowedProblem();
+    await dispatchFromBrowser(
+      { kind: "ABANDON_PROBLEM", payload: { id: problemId, rationale: "not worth it" } },
+      cookie,
+    );
+
+    const res = await dispatchFromBrowser(
+      { kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } },
+      cookie,
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("ILLEGAL_TRANSITION");
+    expect(body.error.message).toContain("terminal");
+  });
+
+  test("a cookie-authenticated write from another origin is refused", async () => {
+    const { cookie } = await inviteAndJoin("csrf@example.com", "Elsewhere");
+    const problemId = await seedNarrowedProblem();
+    const res = await dispatchFromBrowser(
+      { kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } },
+      cookie,
+      "https://evil.example",
+    );
+    expect(res.status).toBe(401);
+  });
+
+  test("the board needs a session, like every other page", async () => {
+    const res = await get("/w/crux/board");
+    expect(res.status).toBe(302);
+  });
+});
+
+describe("live refresh", () => {
+  test("a write in one session pushes to a stream open in another", async () => {
+    const { cookie } = await inviteAndJoin("live@example.com", "Live");
+    const problemId = await seedNarrowedProblem();
+
+    // Session A: the board, subscribed to this Member's view-state stream.
+    const stream = await SELF.fetch(`${BASE}/v1/view/stream`, { headers: { cookie } });
+    expect(stream.status).toBe(200);
+    expect(stream.headers.get("content-type")).toContain("text/event-stream");
+    const reader = stream.body!.pipeThrough(new TextDecoderStream()).getReader();
+    expect((await reader.read()).value).toContain(": connected");
+
+    // Session B: the same Member, moving a Problem.
+    const wrote = await SELF.fetch(`${BASE}/v1/dispatch`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie, origin: BASE },
+      body: JSON.stringify({ kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "next" } }),
+    });
+    expect(wrote.status).toBe(200);
+
+    // Session A hears about it without asking.
+    const pushed = (await reader.read()).value ?? "";
+    expect(pushed).toContain("event: view");
+    await reader.cancel();
+  });
+});
+
+describe("contextual page actions", () => {
+  function browserDispatch(action: unknown, cookie: string): Promise<Response> {
+    return SELF.fetch(`${BASE}/v1/dispatch`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie, origin: BASE },
+      body: JSON.stringify(action),
+    });
+  }
+
+  test("the Problem page offers the actions that belong to a Problem", async () => {
+    const { cookie } = await inviteAndJoin("acts@example.com", "Actor");
+    const problemId = await seedNarrowedProblem();
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("astro-island");
+    expect(body).toContain("ADD_SOLUTION");
+    expect(body).toContain("ADD_DECISION");
+    // …and not the ones that belong to a Workstream.
+    expect(body).not.toContain("ADD_WORKSTREAM");
+  });
+
+  test("filing an entity from the browser puts it on the page", async () => {
+    const { cookie } = await inviteAndJoin("file@example.com", "Filer");
+    const problemId = await seedNarrowedProblem();
+
+    const res = await browserDispatch(
+      {
+        kind: "ADD_SOLUTION",
+        payload: { problem: problemId, title: "Reload as structure, not prose" },
+      },
+      cookie,
+    );
+    expect(res.status).toBe(200);
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("Reload as structure, not prose");
+  });
+
+  test("an invariant refuses the transition and says which one", async () => {
+    const { cookie } = await inviteAndJoin("inv@example.com", "Invariant");
+    const problemId = await seedNarrowedProblem();
+
+    // The chosen Solution has not shipped, so the Problem cannot be done.
+    const res = await browserDispatch(
+      { kind: "MARK_PROBLEM_DONE", payload: { id: problemId } },
+      cookie,
+    );
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("INVARIANT_VIOLATION");
+    expect(body.error.message).toContain("no shipped Solution");
+  });
+
+  test("the Workstream board offers the actions that belong to a Workstream", async () => {
+    const { cookie } = await inviteAndJoin("wsacts@example.com", "WS Actor");
+    const body = await (await get("/w/crux/board", { headers: { cookie } })).text();
+    expect(body).toContain("ADD_PROBLEM");
+    expect(body).toContain("ADD_OBSERVATION");
+  });
+});

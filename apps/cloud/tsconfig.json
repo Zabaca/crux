@@ -4,5 +4,7 @@
     "noEmit": true,
     "types": ["bun", "@cloudflare/workers-types"]
   },
+  // The Astro site has its own project (`astro/tsconfig.json`): its islands are
+  // browser code and need the DOM lib, which this project deliberately lacks.
   "include": ["src/**/*.ts"]
 }
