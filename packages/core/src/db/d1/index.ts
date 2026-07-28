@@ -230,11 +230,22 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
  * so these run one at a time and a "duplicate column name" is the success case
  * on the second run. Every column here must also appear in the `CREATE TABLE`
  * above, which is what a fresh database gets.
+ *
+ * A trailing backfill is allowed here too — it must be idempotent, since this
+ * list runs on every apply. Note these statements are only ever exercised
+ * against a legacy-shaped database: on a fresh one the `CREATE TABLE` already
+ * carries the columns, so every ALTER short-circuits as a duplicate and the
+ * tests never reach the code path production depends on.
  */
-const D1_ADD_COLUMNS: readonly string[] = [
+export const D1_ADD_COLUMNS: readonly string[] = [
   `ALTER TABLE users ADD COLUMN email_verified integer DEFAULT 0 NOT NULL`,
   `ALTER TABLE users ADD COLUMN image text`,
-  `ALTER TABLE users ADD COLUMN updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL`,
+  // Constant default, unlike the `CREATE TABLE` above: SQLite rejects
+  // `ADD COLUMN` with a non-constant default ("Cannot add a column with
+  // non-constant default"), so `(unixepoch() * 1000)` is legal only on a fresh
+  // table. The backfill below gives the pre-existing rows a truthful value.
+  `ALTER TABLE users ADD COLUMN updated_at integer DEFAULT 0 NOT NULL`,
+  `UPDATE users SET updated_at = created_at WHERE updated_at = 0`,
 ];
 
 /**
