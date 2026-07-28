@@ -34,6 +34,11 @@ jobs:
 
       - run: bun install
 
+      # The doc tree is derived, not committed (ADR-0005), and the Astro pages
+      # import it — so a fresh checkout cannot typecheck until it is generated.
+      - name: Derive the doc tree
+        run: bun run scripts/build-docs.ts
+
       # Gate the deploy on the checks a human would run first. `docs:check` is
       # here as well as in the build because ADR-0005 makes structural doc rot a
       # deploy blocker, and a clear failure here beats a confusing one mid-build.
