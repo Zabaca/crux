@@ -5,10 +5,13 @@
 #
 #   sops updatekeys packages/infra/environments/production/secrets.yaml
 #
-# CI is not a recipient yet — crux deploys by hand from an operator's machine
-# (ADR-0004). Deploy-on-merge generates a CI keypair, stores the private half as
-# the GitHub Actions secret SOPS_AGE_KEY, and adds its public key here.
+# The third recipient is CI: its private half is the GitHub Actions secret
+# SOPS_AGE_KEY on Zabaca/crux, which the deploy workflow feeds to sops. It can
+# decrypt everything in this repo, so pushing a workflow to this repo is enough
+# to read every secret in it — the standard trade for deploy-on-merge, and the
+# same one foothill-metabolic makes.
 creation_rules:
   - age: >-
       age1cq0k9s88fmx7kkaqqvuf290lelyt8gkeglwvsd2r3ezuqyla7aps7x4q2j,
-      age125sdujhaks4ezxrk9p4uaxmhmqau0rwqwv0dtc6qal4vl8xuav4sgrfvdc
+      age125sdujhaks4ezxrk9p4uaxmhmqau0rwqwv0dtc6qal4vl8xuav4sgrfvdc,
+      age104ck7dcan0pd9z3h73skusp0g9anh59ummu2ddg0dyf4fl74x57q0yhwuj

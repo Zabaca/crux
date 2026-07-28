@@ -45,9 +45,14 @@ because no browser sends one it was not given.
   (derive the docs, then `astro build`) before either vitest runner. A stale
   `dist/` means testing the previous commit, so the build is not optional and is
   not cached.
-- **The deploy workdir is `apps/cloud/dist/server`,** where the generated
-  wrangler config lives. `apps/cloud/wrangler.jsonc` remains the source of truth
-  for the topology; the generated file is its resolved form.
+- **The deploy workdir is `apps/cloud`,** the package root.
+  `apps/cloud/wrangler.jsonc` remains the source of truth for the topology and
+  the generated `dist/server/wrangler.json` is its resolved form — but wrangler
+  must be pointed at the package root, not at the generated file. `astro build`
+  also writes `apps/cloud/.wrangler/deploy/config.json`, a redirect to the
+  generated config; run wrangler from `dist/server` and it finds both, sees two
+  different base paths, and refuses to guess which is authoritative. This bullet
+  originally said `dist/server`, which never deployed.
 - **Astro's own session store and image service are turned off** (`session:
   { driver: "memory" }`, `imageService: "passthrough"`). Left at their defaults
   the adapter declares `SESSION` KV and `IMAGES` bindings — infrastructure to

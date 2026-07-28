@@ -1,0 +1,56 @@
+name: Production
+
+# Merging to main deploys. `zbc apply production` converges both halves of the
+# deployment: the d1 instance applies the schema, then the cloudflare instance
+# deploys the Worker that reads it (see packages/infra/environments/production/).
+# That ordering is the point — shipping edge code ahead of its schema is how you
+# get a Worker 500ing on a column that does not exist yet.
+#
+# There is no preview environment (ADR-0004), and no path filter: crux is one
+# Worker over one database, so anything that changes the repo can change what is
+# deployed.
+
+on:
+  push:
+    branches: [main]
+
+# Never two applies at once, and never cancel one midway: a half-applied schema
+# is worse than a slow queue.
+concurrency:
+  group: production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      # Gate the deploy on the checks a human would run first. `docs:check` is
+      # here as well as in the build because ADR-0005 makes structural doc rot a
+      # deploy blocker, and a clear failure here beats a confusing one mid-build.
+      - name: Verify
+        run: |
+          bun run lint
+          bun run typecheck
+          bun run docs:check
+          bun run test
+
+      # zbc reads secrets.yaml through sops; SOPS_AGE_KEY is the CI recipient
+      # listed in .sops.yaml. Deliberately `bunx`, never `bunx --bun`: wrangler
+      # on the Bun runtime exits 0 after uploading a version while silently
+      # skipping the deploy. zbc's cloudflare module fails unless wrangler
+      # prints its "Deployed … triggers" confirmation, so a silent no-deploy
+      # fails this job rather than passing it.
+      - name: Apply production
+        env:
+          SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+        run: bunx @zabaca/zbc apply production

@@ -102,12 +102,22 @@ whose D1 binding is a local file, and point `CRUX_API_URL` at it.
 
 Cloud crux is one Cloudflare Worker with a D1 database, deployed through
 [zbc](https://github.com/Zabaca/zbc) ([ADR-0004](docs/adr/0004-cloudflare-stack.md)).
-Production only — there is no preview environment. One command, from an
-operator's machine:
+Production only — there is no preview environment.
+
+**Merging to `main` deploys.** [`production.yml`](.github/workflows/production.yml)
+runs lint, typecheck, `docs:check` and the suite, then `zbc apply production`.
+The same command works from an operator's machine:
 
 ```sh
 bun run deploy          # bunx @zabaca/zbc apply production
 ```
+
+`zbc apply` converges the database *and* the code: the
+[`d1`](packages/infra/environments/production/d1.ts) instance applies the schema
+first, and the [`cloud`](packages/infra/environments/production/cloud.ts)
+instance — which imports it — then deploys the Worker that reads it. Deploying
+code ahead of its schema is how a Worker ends up 500ing on a column that does
+not exist yet, so that ordering is enforced by the import, not by convention.
 
 **Never run zbc with `bunx --bun`.** zbc shells out to wrangler, and wrangler on
 the Bun runtime exits 0 after uploading a version while silently skipping the
@@ -118,17 +128,22 @@ the Node runtime, which `bun run deploy` does.
 - [`apps/cloud`](apps/cloud) is the Worker. Its topology lives in
   [`wrangler.jsonc`](apps/cloud/wrangler.jsonc), which is the source of truth for
   it — including the D1 binding. `zbc` builds first and then deploys from
-  `apps/cloud/dist/server`, where `astro build` writes the resolved copy of that
-  config alongside the bundled entry
-  ([ADR-0009](docs/adr/0009-astro-wraps-the-worker-entry.md)). D1 has no zbc module, so the database was
-  created once (`wrangler d1 create crux-production`) and is bound there by id.
+  `apps/cloud`; `astro build` writes the resolved copy of that config into
+  `dist/server` along with a redirect wrangler follows
+  ([ADR-0009](docs/adr/0009-astro-wraps-the-worker-entry.md)).
 - [`packages/infra/environments/production/cloud.ts`](packages/infra/environments/production/cloud.ts)
   is the zbc instance: which package to deploy, into which account.
-- `CLOUDFLARE_API_TOKEN` lives SOPS/age-encrypted in
+- [`packages/infra/environments/production/d1.ts`](packages/infra/environments/production/d1.ts)
+  is the database: it adopts `crux-production` by name and applies the same
+  `D1_SCHEMA_STATEMENTS` the Worker and the workerd tests use, so a table added
+  to the schema module reaches production without a second edit.
+- `CLOUDFLARE_API_TOKEN` and `BETTER_AUTH_SECRET` live SOPS/age-encrypted in
   [`secrets.yaml`](packages/infra/environments/production/secrets.yaml); the
-  recipients are listed in [`.sops.yaml`](.sops.yaml). To add a machine or CI,
-  add its age public key there and run
-  `sops updatekeys packages/infra/environments/production/secrets.yaml`.
+  recipients are listed in [`.sops.yaml`](.sops.yaml) — two operator machines
+  and CI, whose private half is the `SOPS_AGE_KEY` Actions secret. To add a
+  machine, add its age public key there and run
+  `sops updatekeys packages/infra/environments/production/secrets.yaml` from a
+  machine that is already a recipient.
 
 The Worker needs one secret, `BETTER_AUTH_SECRET`, to sign browser sessions —
 set it with `wrangler secret put BETTER_AUTH_SECRET`. Without it `/health`, the
