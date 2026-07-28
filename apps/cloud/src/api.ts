@@ -25,6 +25,10 @@ import { DurableObjectViewStore } from "./view-state-do.js";
 export interface Env {
   DB: D1Database;
   VIEW_STATE: DurableObjectNamespace;
+  /** Signing key for browser sessions; absent means the web surfaces are off. */
+  BETTER_AUTH_SECRET?: string;
+  /** Display name for the Workspace; defaults to the deployment's host. */
+  CRUX_WORKSPACE_NAME?: string;
 }
 
 function json(body: unknown, status = 200): Response {

@@ -1,9 +1,11 @@
 /**
  * Cloud crux — the single Cloudflare Worker (ADR-0004). It serves the liveness
- * probe, the versioned JSON API (`/v1/*`, see `api.ts`), and hosts the per-user
- * view-state Durable Object (`view-state-do.ts`). The Astro site lands later.
+ * probe, the versioned JSON API (`/v1/*`, see `api.ts`), the browser surfaces
+ * (`web/router.ts`), and hosts the per-user view-state Durable Object
+ * (`view-state-do.ts`).
  */
 import { handleApi, type Env } from "./api.js";
+import { handleWeb } from "./web/router.js";
 
 export type { Env };
 export { ViewStateDO } from "./view-state-do.js";
@@ -37,6 +39,9 @@ export default {
 
     const api = await handleApi(request, env);
     if (api) return api;
+
+    const web = await handleWeb(request, env);
+    if (web) return web;
 
     return json({ error: "not_found" }, 404);
   },

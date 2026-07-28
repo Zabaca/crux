@@ -123,6 +123,16 @@ the Node runtime, which `bun run deploy` does.
   add its age public key there and run
   `sops updatekeys packages/infra/environments/production/secrets.yaml`.
 
+The Worker needs one secret, `BETTER_AUTH_SECRET`, to sign browser sessions —
+set it with `wrangler secret put BETTER_AUTH_SECRET`. Without it `/health`, the
+`/v1` API and the CLI all keep working and only the browser surfaces refuse,
+saying so on the page. `CRUX_WORKSPACE_NAME` optionally names the Workspace in
+the header; it defaults to the deployment's host.
+
+The first Member is a chicken-and-egg case: invites are issued by an existing
+Member, so a fresh deployment needs one `users` row before anyone can sign in.
+`crux user init` against the deployment creates it.
+
 `GET /health` is the deployment's liveness check. It round-trips the D1 binding
 rather than answering from memory, so a Worker that cannot read its corpus
 reports `503 degraded` instead of a hollow `ok`.
@@ -135,7 +145,7 @@ reports `503 degraded` instead of a hollow `ok`.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, and the HTTP client every command goes through.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding and the doc-tree rot check.
-- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker: `/health`, the `/v1` JSON API, and the view-state Durable Object. The Astro site lands here.
+- [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker: `/health`, the `/v1` JSON API, the browser surfaces under [`src/web/`](apps/cloud/src/web), and the view-state Durable Object. The Astro site lands here.
 
 ## Docs
 
@@ -153,7 +163,8 @@ same walker at build time when it lands.
   [ADR-0003: cloud crux is client-server and cloud-only](docs/adr/0003-cloud-crux-client-server.md),
   [ADR-0004: the Cloudflare stack](docs/adr/0004-cloudflare-stack.md),
   [ADR-0005: docs derived at deploy](docs/adr/0005-docs-derived-at-deploy.md),
-  [ADR-0006: workerd tests and the D1 schema](docs/adr/0006-workerd-tests-and-d1-schema.md).
+  [ADR-0006: workerd tests and the D1 schema](docs/adr/0006-workerd-tests-and-d1-schema.md),
+  [ADR-0007: one identity table, two front doors](docs/adr/0007-one-identity-table-two-front-doors.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -170,10 +181,16 @@ same walker at build time when it lands.
 
 ## Status
 
-MVP. Single-tenant cloud deployment, CLI-only — no web UI yet. Transitions, reads
-and token auth are tested inside workerd against a real D1
+MVP. Single-tenant cloud deployment. The CLI is the write surface; the browser
+is read-only so far — sign-in, invited Members, CLI-token management, and pages
+for Workstream, Problem, Solution and Observation, all server-rendered on the
+same Worker. Transitions, reads, token auth and the browser surfaces are tested
+inside workerd against a real D1
 ([ADR-0006](docs/adr/0006-workerd-tests-and-d1-schema.md)); the CLI is tested
 against a stub deployment. `bun run test` runs both runners.
+
+The browser pages are plain server-rendered HTML today, not yet the Astro app
+ADR-0004 describes; Astro and its islands arrive with the write surfaces.
 
 See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 

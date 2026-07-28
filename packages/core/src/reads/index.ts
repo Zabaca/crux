@@ -498,11 +498,20 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       for (const e of ev) evCount.set(e.problemId, (evCount.get(e.problemId) ?? 0) + 1);
       const solCount = new Map<number, number>();
       for (const s of sol) solCount.set(s.problemId, (solCount.get(s.problemId) ?? 0) + 1);
+      // `decided` completes the Evidence → Solutions → Decision narrowing at a
+      // glance, so a summary row can say how far a Problem got without the
+      // caller fetching each Problem's detail to find out.
+      const dec = await db
+        .select({ problemId: decisions.problemId })
+        .from(decisions)
+        .where(inArray(decisions.problemId, ids));
+      const decided = new Set(dec.map((d) => d.problemId));
       return rows
         .map((r) => ({
           ...r,
           evidenceCount: evCount.get(r.id) ?? 0,
           solutionCount: solCount.get(r.id) ?? 0,
+          decided: decided.has(r.id),
         }))
         .sort((a, b) => {
           const d = rankStatus(a.status) - rankStatus(b.status);

@@ -19,14 +19,78 @@
 
 /** Parent-first: every `references` target is created before its dependents. */
 export const D1_SCHEMA_STATEMENTS: readonly string[] = [
+  // `users` is the one identity table: a CLI bearer token and a browser session
+  // both resolve to a row here (see `auth/better-auth.ts`). The trailing four
+  // columns are Better Auth's half of it — `db/auth-schema.ts` is the typed view
+  // that reads them as Dates.
   `CREATE TABLE IF NOT EXISTS users (
     id text PRIMARY KEY NOT NULL,
     slug text NOT NULL,
     name text NOT NULL,
     email text,
-    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL
+    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
+    email_verified integer DEFAULT 0 NOT NULL,
+    image text,
+    updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_slug_unique ON users (slug)`,
+  // Partial, because `users.email` is nullable and predates Better Auth: rows
+  // seeded by the CLI have no address, and several NULLs must stay legal.
+  `CREATE UNIQUE INDEX IF NOT EXISTS users_email_unique ON users (email) WHERE email IS NOT NULL`,
+
+  `CREATE TABLE IF NOT EXISTS auth_sessions (
+    id text PRIMARY KEY NOT NULL,
+    user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token text NOT NULL,
+    expires_at integer NOT NULL,
+    ip_address text,
+    user_agent text,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS auth_sessions_token_unique ON auth_sessions (token)`,
+  `CREATE INDEX IF NOT EXISTS auth_sessions_user_id ON auth_sessions (user_id)`,
+
+  `CREATE TABLE IF NOT EXISTS auth_accounts (
+    id text PRIMARY KEY NOT NULL,
+    user_id text NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    account_id text NOT NULL,
+    provider_id text NOT NULL,
+    access_token text,
+    refresh_token text,
+    id_token text,
+    access_token_expires_at integer,
+    refresh_token_expires_at integer,
+    scope text,
+    password text,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS auth_accounts_user_id ON auth_accounts (user_id)`,
+
+  `CREATE TABLE IF NOT EXISTS auth_verifications (
+    id text PRIMARY KEY NOT NULL,
+    identifier text NOT NULL,
+    value text NOT NULL,
+    expires_at integer NOT NULL,
+    created_at integer NOT NULL,
+    updated_at integer NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS auth_verifications_identifier ON auth_verifications (identifier)`,
+
+  // The whole of membership: no Workspace table, no roles. An invite is a
+  // one-time permission to create a `users` row (ADR-0003).
+  `CREATE TABLE IF NOT EXISTS invites (
+    id text PRIMARY KEY NOT NULL,
+    email text NOT NULL,
+    token_hash text NOT NULL,
+    invited_by_id text NOT NULL REFERENCES users(id),
+    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
+    expires_at integer NOT NULL,
+    accepted_at integer,
+    accepted_user_id text REFERENCES users(id)
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS invites_token_hash_unique ON invites (token_hash)`,
 
   `CREATE TABLE IF NOT EXISTS api_tokens (
     id text PRIMARY KEY NOT NULL,
@@ -158,10 +222,39 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
 ];
 
 /**
+ * Columns added to a table that already exists.
+ *
+ * `CREATE TABLE IF NOT EXISTS` states an end state only for a database that
+ * does not have the table yet; a deployment whose `users` predates Better Auth
+ * keeps its four-column shape forever. SQLite has no `ADD COLUMN IF NOT EXISTS`,
+ * so these run one at a time and a "duplicate column name" is the success case
+ * on the second run. Every column here must also appear in the `CREATE TABLE`
+ * above, which is what a fresh database gets.
+ */
+const D1_ADD_COLUMNS: readonly string[] = [
+  `ALTER TABLE users ADD COLUMN email_verified integer DEFAULT 0 NOT NULL`,
+  `ALTER TABLE users ADD COLUMN image text`,
+  `ALTER TABLE users ADD COLUMN updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL`,
+];
+
+/**
  * Apply the entity schema to a D1 database. Safe to call on a database that
- * already has it — every statement is `IF NOT EXISTS`, so a second run changes
- * nothing and touches no rows.
+ * already has it — every statement is `IF NOT EXISTS` or an additive column
+ * whose duplicate is ignored, so a second run changes nothing and touches no
+ * rows.
  */
 export async function applyD1Schema(d1: D1Database): Promise<void> {
   await d1.batch(D1_SCHEMA_STATEMENTS.map((sql) => d1.prepare(sql)));
+  for (const sql of D1_ADD_COLUMNS) {
+    try {
+      await d1.prepare(sql).run();
+    } catch (err) {
+      if (!isDuplicateColumn(err)) throw err;
+    }
+  }
+}
+
+function isDuplicateColumn(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return /duplicate column name/i.test(message);
 }

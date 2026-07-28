@@ -20,12 +20,16 @@
     "./view-state": "./src/view-state/index.ts",
     "./actions": "./src/actions/index.ts",
     "./actions/allowed": "./src/actions/allowed.ts",
-    "./actions/schemas": "./src/actions/schemas.ts"
+    "./actions/schemas": "./src/actions/schemas.ts",
+    "./db/auth-schema": "./src/db/auth-schema.ts",
+    "./auth/better-auth": "./src/auth/better-auth.ts",
+    "./auth/invites": "./src/auth/invites.ts"
   },
   "scripts": {
     "test:workers": "vitest run"
   },
   "dependencies": {
+    "better-auth": "^1.6.25",
     "xstate": "^5.30.0",
     "zod": "^4.3.6"
   },

@@ -10,6 +10,9 @@
   "name": "crux-cloud",
   "main": "src/index.ts",
   "compatibility_date": "2026-07-23",
+  // Better Auth hashes passwords with scrypt from `node:crypto` on the workerd
+  // export condition, so the browser sessions do not work without this.
+  "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
   // Per-user view-state lives in a Durable Object (CRUX-1Z93XN) — off the
   // filesystem, which is the reason this work is ordered ahead of the UI.

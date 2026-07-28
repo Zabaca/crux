@@ -30,3 +30,6 @@ dist/
 .view-state.json
 .env
 .fredrin/
+
+# Local Worker secrets (BETTER_AUTH_SECRET) — never committed.
+.dev.vars
