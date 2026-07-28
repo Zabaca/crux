@@ -2,7 +2,6 @@
  * runMutation — maps a MutationAction to the appropriate transition call.
  */
 import type { CruxDb } from "../db/client.js";
-import { requireUser } from "../config/user.js";
 import {
   workstreams,
   problems,
@@ -82,17 +81,18 @@ async function resolveSolution(id: string | number, db: CruxDb) {
 }
 
 /**
- * Who a mutation is attributed to. The cloud passes the token-resolved user; the
- * CLI omits it and falls back to the local `config.toml` identity.
+ * Who a mutation is attributed to — the token-resolved user. Required for the
+ * same reason the ViewStore is: the only fallback available would read the
+ * caller's local `config.toml`, which is `node:fs` in the Worker bundle.
  */
 export type Actor = { id: string };
 
 export async function runMutation(
   action: MutationAction,
   db: CruxDb,
-  actor?: Actor,
+  actor: Actor,
 ): Promise<unknown> {
-  const user = actor ?? requireUser().user;
+  const user = actor;
 
   switch (action.kind) {
     case "ADD_WORKSTREAM": {

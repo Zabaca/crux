@@ -1,12 +1,9 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
 import { createActor, type Snapshot } from "xstate";
 import type { CruxDb } from "../db/client.js";
 import { problems, workstreams } from "../db/schema.js";
 import { and, eq } from "drizzle-orm";
 import { viewMachine, ViewEventSchema, type ViewEvent } from "./machine.js";
-import { resolveCruxHome } from "../config/user.js";
-import { FileViewStore, type ViewBlob, type ViewStore } from "./store.js";
+import type { ViewBlob, ViewStore } from "./store.js";
 
 type ViewSnapshot = ReturnType<ReturnType<typeof createActor<typeof viewMachine>>["getSnapshot"]>;
 type PersistedViewSnapshot = ReturnType<
@@ -41,29 +38,6 @@ export type ViewMeta = {
   lastAction: LastAction | null;
   recentQueries: RecentQuery[];
 };
-
-/**
- * Resolve the path where the view-state JSON lives.
- *
- * Resolution order:
- *   1. `CRUX_VIEW_STATE_PATH` env var (explicit override).
- *   2. `$CRUX_HOME/view-state.json` where CRUX_HOME defaults to `~/.claude/.crux`.
- */
-export function resolveViewStatePath(): string {
-  if (process.env.CRUX_VIEW_STATE_PATH) {
-    return resolve(process.env.CRUX_VIEW_STATE_PATH);
-  }
-  return join(resolveCruxHome(), "view-state.json");
-}
-
-/**
- * Read the persisted snapshot from disk, or return the initial machine state
- * if the file doesn't exist yet. First-read does NOT write — the file is only
- * created on first event.
- */
-export function loadState(path: string = resolveViewStatePath()): ViewSnapshot {
-  return loadStateFromBlob(readRawOrEmpty(path));
-}
 
 /** Initial machine snapshot from a throwaway actor. */
 function initialSnapshot(): ViewSnapshot {
@@ -137,50 +111,12 @@ export function loadStateFromBlob(all: ViewBlob): ViewSnapshot {
 }
 
 /**
- * Read the current raw JSON at `path`, returning {} on missing/corrupt.
- * Used by both saveState and saveViewMeta to merge new fields against existing.
- */
-function readRawOrEmpty(path: string): Record<string, unknown> {
-  if (!existsSync(path)) return {};
-  try {
-    return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Atomic-ish write: tmp file + rename.
- */
-function atomicWrite(path: string, payload: Record<string, unknown>): void {
-  mkdirSync(dirname(path), { recursive: true });
-  const tmp = `${path}.tmp-${process.pid}-${Date.now()}`;
-  writeFileSync(tmp, JSON.stringify(payload, null, 2), "utf8");
-  // node:fs.renameSync handles cross-tmp on same fs; we mkdir parent first
-  const fs = require("node:fs") as typeof import("node:fs");
-  fs.renameSync(tmp, path);
-}
-
-/**
- * Write the XState snapshot to disk. Merges into the existing file so sidecar
- * fields (revision, lastAction, recentQueries) survive the write.
+ * Merge a snapshot over an existing blob and return the blob to persist.
  *
  * If `opts.lastActionKind` is provided, also stamps a fresh
  * `lastAction: { kind, ts }` and bumps `revision++` — used by sendViewEvent so
  * the SSE listener can branch ViewAction vs MutationAction. Without it,
  * existing sidecar fields are carried through unchanged.
- */
-export function saveState(
-  path: string,
-  snapshot: ViewSnapshot,
-  opts: { lastActionKind?: string } = {},
-): void {
-  atomicWrite(path, computeSaveStateBlob(readRawOrEmpty(path), snapshot, opts));
-}
-
-/**
- * Pure counterpart of `saveState`: merge a snapshot over an existing blob and
- * return the blob to persist. No fs.
  */
 export function computeSaveStateBlob(
   existing: ViewBlob,
@@ -216,20 +152,13 @@ const DEFAULT_CONTEXT: ViewMeta["context"] = { workstreamId: null, problemId: nu
 const DEFAULT_VALUE = { viewing: "workstream_list" };
 
 /**
- * Load the full ViewMeta from disk (migrate-tolerant: defaults revision:0, lastAction:null, recentQueries:[]).
+ * Derive the full ViewMeta from an already-read blob (migrate-tolerant: defaults
+ * revision:0, lastAction:null, recentQueries:[]).
  *
  * Extracts `value` and `context` directly from the raw JSON rather than via XState actor
- * restoration to avoid XState errors on corrupt or sidecar-only files.
+ * restoration to avoid XState errors on corrupt or sidecar-only blobs.
  *
  * Migrates legacy workstreamSlug/problemSlug to workstreamId/problemId on read.
- */
-export function loadViewMeta(path?: string): ViewMeta {
-  return loadViewMetaFromBlob(readRawOrEmpty(path ?? resolveViewStatePath()));
-}
-
-/**
- * Pure counterpart of `loadViewMeta`: derive ViewMeta from an already-read blob.
- * An empty blob yields defaults. Migrates legacy slug-based context on read. No fs.
  */
 export function loadViewMetaFromBlob(parsed: ViewBlob): ViewMeta {
   if (!parsed || Object.keys(parsed).length === 0) {
@@ -269,21 +198,12 @@ export function loadViewMetaFromBlob(parsed: ViewBlob): ViewMeta {
 }
 
 /**
- * Save ViewMeta to disk. Merges sidecar fields (revision, lastAction, recentQueries)
- * over the existing JSON so XState fields (value, context, status, historyValue,
- * children) survive the write.
+ * Merge sidecar fields (revision, lastAction, recentQueries) over an existing
+ * blob so XState fields (value, context, status, historyValue, children) survive
+ * the write, and return the blob to persist.
  *
  * Caller's `meta.value` / `meta.context` are NOT written here — those belong to the
- * XState write path (saveState via sendViewEvent). This function only owns sidecar.
- */
-export function saveViewMeta(meta: ViewMeta, path?: string): void {
-  const resolvedPath = path ?? resolveViewStatePath();
-  atomicWrite(resolvedPath, computeSaveViewMetaBlob(readRawOrEmpty(resolvedPath), meta));
-}
-
-/**
- * Pure counterpart of `saveViewMeta`: merge sidecar fields over an existing blob
- * (XState fields survive) and return the blob to persist. No fs.
+ * XState write path (computeSaveStateBlob via sendViewEventWithStore).
  */
 export function computeSaveViewMetaBlob(existing: ViewBlob, meta: ViewMeta): ViewBlob {
   return {
@@ -309,20 +229,6 @@ export class ViewEventRefusedError extends Error {
  * then run the sync transition with pre-computed boolean guards and persist.
  *
  * Throws `ViewEventRefusedError` if the event is illegal or a guard refuses.
- */
-export async function sendViewEvent(
-  event: ViewEvent,
-  options: { db: CruxDb; path?: string },
-): Promise<ViewSnapshot> {
-  return sendViewEventWithStore(event, {
-    db: options.db,
-    store: new FileViewStore(options.path ?? resolveViewStatePath()),
-  });
-}
-
-/**
- * Store-based counterpart of `sendViewEvent` — the fs-free dispatch path. Reads
- * and writes view-state through the injected `ViewStore` instead of the disk.
  */
 export async function sendViewEventWithStore(
   event: ViewEvent,
@@ -392,20 +298,7 @@ export async function sendViewEventWithStore(
   return next;
 }
 
-/** Reset file-state to initial. */
-export function resetState(path: string = resolveViewStatePath()): ViewSnapshot {
-  const actor = createActor(viewMachine);
-  actor.start();
-  const snap = actor.getSnapshot();
-  actor.stop();
-  saveState(path, snap, { lastActionKind: "RESET" });
-  return snap;
-}
-
-/**
- * Store-based counterpart of `resetState` — the fs-free reset path, used by the
- * Worker where the blob lives in a Durable Object rather than on disk.
- */
+/** Reset view-state to initial, through the caller's store. */
 export async function resetStateWithStore(store: ViewStore): Promise<ViewSnapshot> {
   const actor = createActor(viewMachine);
   actor.start();
