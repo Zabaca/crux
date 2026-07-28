@@ -10,4 +10,5 @@
 # the GitHub Actions secret SOPS_AGE_KEY, and adds its public key here.
 creation_rules:
   - age: >-
-      age1cq0k9s88fmx7kkaqqvuf290lelyt8gkeglwvsd2r3ezuqyla7aps7x4q2j
+      age1cq0k9s88fmx7kkaqqvuf290lelyt8gkeglwvsd2r3ezuqyla7aps7x4q2j,
+      age125sdujhaks4ezxrk9p4uaxmhmqau0rwqwv0dtc6qal4vl8xuav4sgrfvdc
