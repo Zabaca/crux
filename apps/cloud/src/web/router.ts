@@ -35,6 +35,7 @@ import {
   workstreamPage,
 } from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage } from "./account-pages.js";
+import { claimUserByEmail } from "@crux/core/auth/claim";
 
 export type { WebEnv };
 
@@ -284,29 +285,51 @@ async function acceptInviteRequest(
   if (!name) return fail("Please give a name to attribute your entries to.", 400);
   if (password.length < 10) return fail("Passwords must be at least 10 characters.", 400);
 
-  const signUp = await auth.api.signUpEmail({
-    body: {
-      email: invite.email,
-      password,
-      name,
-      slug: await uniqueSlug(db, slugFromEmail(invite.email)),
-    },
-    asResponse: true,
-  });
-  if (!signUp.ok) {
-    return fail("Could not create that account — the address may already be a Member.", 400);
+  // Claim before create. A corpus migrated from the single-machine database
+  // authors its rows against `users` rows with no credential; signing up would
+  // collide on the unique email index, or mint a second identity and strand
+  // that authorship on the first. `claimUserByEmail` declines a row that
+  // already has a credential, so this is not a password-reset path.
+  const claim = await claimUserByEmail(auth, { email: invite.email, password });
+  if (claim.claimed === false && claim.reason === "already-has-credentials") {
+    return fail("That address is already a Member — sign in instead.", 400);
   }
 
-  const created = (await signUp.clone().json()) as { user?: { id?: string } };
-  const userId = created.user?.id;
+  let authResponse: Response;
+  let userId: string | undefined;
+
+  if (claim.claimed) {
+    userId = claim.userId;
+    authResponse = await auth.api.signInEmail({
+      body: { email: invite.email, password },
+      asResponse: true,
+    });
+    if (!authResponse.ok) return fail("Could not sign in to that account.", 400);
+  } else {
+    authResponse = await auth.api.signUpEmail({
+      body: {
+        email: invite.email,
+        password,
+        name,
+        slug: await uniqueSlug(db, slugFromEmail(invite.email)),
+      },
+      asResponse: true,
+    });
+    if (!authResponse.ok) {
+      return fail("Could not create that account — the address may already be a Member.", 400);
+    }
+    const created = (await authResponse.clone().json()) as { user?: { id?: string } };
+    userId = created.user?.id;
+  }
+
   if (!userId || !(await acceptInvite(db, { inviteId: invite.id, userId }))) {
     return fail("This invite link was just used by someone else.", 409);
   }
 
   // Carry Better Auth's session cookies onto the redirect, so redeeming an
-  // invite signs the new Member in rather than dropping them at a login form.
+  // invite signs the Member in rather than dropping them at a login form.
   const headers = new Headers();
-  for (const cookie of signUp.headers.getSetCookie()) headers.append("set-cookie", cookie);
+  for (const cookie of authResponse.headers.getSetCookie()) headers.append("set-cookie", cookie);
   headers.set("location", "/");
   return new Response(null, { status: 302, headers });
 }

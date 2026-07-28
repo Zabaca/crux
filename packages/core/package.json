@@ -23,7 +23,8 @@
     "./actions/schemas": "./src/actions/schemas.ts",
     "./db/auth-schema": "./src/db/auth-schema.ts",
     "./auth/better-auth": "./src/auth/better-auth.ts",
-    "./auth/invites": "./src/auth/invites.ts"
+    "./auth/invites": "./src/auth/invites.ts",
+    "./auth/claim": "./src/auth/claim.ts"
   },
   "scripts": {
     "test:workers": "vitest run"
