@@ -16,15 +16,18 @@ import { cloudflareModule } from "../../modules/cloudflare";
 // configuration file"). The hand-written wrangler.jsonc stays the source of
 // truth for the topology.
 //
-// No workerSecrets: BETTER_AUTH_SECRET is pushed by hand
-// (`wrangler secret put`) rather than held in secrets.yaml.
-// CLOUDFLARE_API_TOKEN in secrets.yaml is the deploy credential, not a Worker
-// binding.
+// BETTER_AUTH_SECRET rides in secrets.yaml like every other Zabaca secret:
+// zbc resolves it from this environment and pipes it to `wrangler secret put`
+// over stdin, so it never lands in argv or a log. Pushing it by hand would
+// leave the deployment unreproducible and give CI (CRUX-YALOJ9) nothing to
+// push. CLOUDFLARE_API_TOKEN is also in secrets.yaml but is the deploy
+// credential, not a Worker binding — hence not listed here.
 export default cloudflareModule.instance({
   name: "cloud",
   config: {
     workdir: "apps/cloud",
     build: { command: "bun run build", cwd: "." },
     accountId: "99a19e584439be0568f33aad0477372b",
+    workerSecrets: ["BETTER_AUTH_SECRET"],
   },
 });
