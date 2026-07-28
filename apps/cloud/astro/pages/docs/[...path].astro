@@ -1,0 +1,30 @@
+---
+/**
+ * `/docs/<repo-relative path>` — any doc the walker reached. A path outside the
+ * tree is a 404 rather than a file read: the Worker has no working tree, only
+ * the artifact the build emitted.
+ */
+import { docPage, DocNotFound } from "../../../src/web/docs-pages.js";
+import { page } from "../../../src/web/layout.js";
+import { env } from "cloudflare:workers";
+
+import { pageContext } from "../../../src/web/session.js";
+
+const ctx = await pageContext(env, Astro.request);
+if (!ctx.ok) return ctx.response;
+
+let rendered;
+try {
+  rendered = docPage(Astro.params.path);
+} catch (err) {
+  if (!(err instanceof DocNotFound)) throw err;
+  return new Response(null, { status: 404 });
+}
+const document = page({
+  title: rendered.title,
+  viewer: ctx.viewer,
+  workspace: ctx.workspace,
+  body: rendered.body,
+}).value;
+---
+<Fragment set:html={`<!doctype html>\n${document}`} />

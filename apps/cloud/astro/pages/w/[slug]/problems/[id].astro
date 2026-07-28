@@ -1,0 +1,53 @@
+---
+/**
+ * `/w/<slug>/problems/<id>` — the Problem, unchanged, plus the actions that
+ * narrow it.
+ *
+ * The view itself is still `problemPage()` from `src/web/read-pages.ts`: moving
+ * this URL onto Astro is a routing change, not a rewrite. What Astro adds is the
+ * one thing the hand-written entry cannot do — hydrate an island next to the
+ * server-rendered page.
+ */
+import { env } from "cloudflare:workers";
+import { query } from "@crux/core/reads";
+import type { ProblemDetail } from "@crux/core/reads";
+
+import ActionBar from "../../../../components/ActionBar.tsx";
+import { problemActions } from "../../../../lib/page-actions.js";
+import { html } from "../../../../../src/web/html.js";
+import { page } from "../../../../../src/web/layout.js";
+import { PageNotFound, problemPage } from "../../../../../src/web/read-pages.js";
+import { pageContext } from "../../../../../src/web/session.js";
+
+const ctx = await pageContext(env, Astro.request);
+if (!ctx.ok) return ctx.response;
+
+const slug = Astro.params.slug!;
+const id = Astro.params.id!;
+
+let rendered;
+let detail: ProblemDetail;
+try {
+  rendered = await problemPage(ctx.db, slug, id);
+  detail = (await query({ kind: "PROBLEM_DETAIL", id: Number(id) }, { db: ctx.db })) as ProblemDetail;
+} catch (err) {
+  if (!(err instanceof PageNotFound)) throw err;
+  return new Response(null, { status: 404 });
+}
+
+const actions = problemActions(
+  detail.problem.id,
+  detail.solutions.map((s) => ({ id: s.id, title: s.title })),
+);
+
+const shell = page({
+  title: rendered.title,
+  viewer: ctx.viewer,
+  workspace: ctx.workspace,
+  body: html`${rendered.body}<!--ACTIONS-->`,
+}).value;
+const [head, tail] = shell.split("<!--ACTIONS-->");
+---
+<Fragment set:html={`<!doctype html>\n${head}`} />
+<ActionBar client:load actions={actions} />
+<Fragment set:html={tail} />

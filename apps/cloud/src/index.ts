@@ -4,6 +4,8 @@
  * (`web/router.ts`), and hosts the per-user view-state Durable Object
  * (`view-state-do.ts`).
  */
+import astro from "@astrojs/cloudflare/entrypoints/server.js";
+
 import { handleApi, type Env } from "./api.js";
 import { handleWeb } from "./web/router.js";
 
@@ -31,14 +33,49 @@ async function health(env: Env): Promise<Response> {
   return json({ status: "ok", db: "ok" });
 }
 
+/**
+ * The paths Astro answers for: the docs section, the roadmap board, and its own
+ * hydration payloads under `/_astro/`.
+ *
+ * The delegation is an explicit list rather than "hand Astro everything and
+ * fall through on a 404". Astro answers an unrouted POST with 403 (its CSRF
+ * origin check) rather than 404, which would swallow the hand-written form
+ * posts — sign-in, invite, tokens — before they ever reached `handleWeb`. A
+ * table of what Astro owns is also the honest description of a Worker that has
+ * two renderers in it.
+ */
+const ASTRO_PATHS = [
+  /^\/_astro\//,
+  /^\/docs(\/|$)/,
+  /^\/w\/[^/]+\/board$/,
+  /^\/w\/[^/]+\/problems\/[^/]+$/,
+];
+
+/**
+ * The order is the contract.
+ *
+ * `/health` and `/v1` come first and unconditionally: the CLI's contract must
+ * not be reachable through, or shadowed by, anything the site does. Astro takes
+ * the routes it owns next, and the hand-written pages take everything else —
+ * they are last because they are the ones that end in a rendered 404 page.
+ *
+ * This is what "one Worker" (ADR-0004) looks like from the inside: Astro wraps
+ * this module rather than replacing it, so the JSON API and the site share a
+ * request path, an `Env`, and a Durable Object namespace.
+ */
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const { pathname } = new URL(request.url);
 
     if (pathname === "/health") return health(env);
 
     const api = await handleApi(request, env);
     if (api) return api;
+
+    if (ASTRO_PATHS.some((p) => p.test(pathname))) {
+      const rendered = await astro.fetch(request, env, ctx);
+      if (rendered.status !== 404) return rendered;
+    }
 
     const web = await handleWeb(request, env);
     if (web) return web;

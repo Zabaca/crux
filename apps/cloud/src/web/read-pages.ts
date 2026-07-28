@@ -114,6 +114,9 @@ export async function workstreamPage(
     </p>
 
     <h2>Problems by Stage</h2>
+    <p style="margin:-6px 0 12px">
+      <a class="btn plain" href="/w/${ws.slug}/board">Open the board</a>
+    </p>
     <div class="board">
       ${LANES.map((lane) => {
         const items = problems.filter((p) => stageOf(p.status) === lane);

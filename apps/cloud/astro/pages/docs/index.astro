@@ -1,0 +1,19 @@
+---
+/**
+ * `/docs` — README, the landing page, because the doc tree is defined as what
+ * README reaches (ADR-0002). The rendering lives in `src/web/docs-pages.ts`;
+ * this route exists to gate it on a session and drop it into the shell.
+ */
+import { docPage } from "../../../src/web/docs-pages.js";
+import { page } from "../../../src/web/layout.js";
+import { env } from "cloudflare:workers";
+
+import { pageContext } from "../../../src/web/session.js";
+
+const ctx = await pageContext(env, Astro.request);
+if (!ctx.ok) return ctx.response;
+
+const { title, body } = docPage();
+const document = page({ title, viewer: ctx.viewer, workspace: ctx.workspace, body }).value;
+---
+<Fragment set:html={`<!doctype html>\n${document}`} />

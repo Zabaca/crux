@@ -1,0 +1,14 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "allowImportingTsExtensions": true,
+    // Islands run in a browser, not in workerd: the DOM lib is the point of a
+    // separate project. `cloudflare:workers` is imported only by `.astro`
+    // frontmatter, which tsc does not read.
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["react", "react-dom"]
+  },
+  "include": ["**/*.ts", "**/*.tsx"]
+}

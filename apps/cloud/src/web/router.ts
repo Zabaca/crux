@@ -24,21 +24,19 @@ import {
   slugFromEmail,
 } from "@crux/core/auth/invites";
 
-import type { Env } from "../api.js";
 import { html, htmlResponse, type Html } from "./html.js";
+import { workspaceName, type WebEnv } from "./session.js";
 import { page, type Viewer } from "./layout.js";
 import {
   PageNotFound,
   observationPage,
-  problemPage,
   solutionPage,
   workstreamListPage,
   workstreamPage,
 } from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage } from "./account-pages.js";
 
-/** The bindings the browser surfaces read — a subset of the Worker's `Env`. */
-export type WebEnv = Pick<Env, "DB" | "BETTER_AUTH_SECRET" | "CRUX_WORKSPACE_NAME">;
+export type { WebEnv };
 
 const SESSION_REQUIRED = "/signin";
 
@@ -51,24 +49,25 @@ const READ_ROUTES: ReadonlyArray<
   readonly [RegExp, (db: CruxDb, ...params: string[]) => Promise<{ title: string; body: Html }>]
 > = [
   [/^\/w\/([^/]+)$/, (db, slug) => workstreamPage(db, slug!)],
-  [/^\/w\/([^/]+)\/problems\/([^/]+)$/, (db, slug, id) => problemPage(db, slug!, id!)],
+  // `/w/<slug>/problems/<id>` is not here: it moved to an Astro route so it can
+  // carry the action island (`astro/pages/w/[slug]/problems/[id].astro`), which
+  // renders this file's `problemPage()`. An id that names nothing still lands
+  // back here, as the 404 page below.
   [/^\/w\/([^/]+)\/solutions\/([^/]+)$/, (db, slug, id) => solutionPage(db, slug!, id!)],
   [/^\/w\/([^/]+)\/observations\/([^/]+)$/, (db, slug, id) => observationPage(db, slug!, id!)],
 ];
-
-/** The Workspace's display name — the deployment's host unless one is set. */
-function workspaceName(env: WebEnv, url: URL): string {
-  return env.CRUX_WORKSPACE_NAME || url.host;
-}
 
 function redirect(location: string, status = 302): Response {
   return new Response(null, { status, headers: { location } });
 }
 
 /**
- * Resolve the browser session to a Member, or null. This is the session half of
- * the identity story whose other half is `authenticateToken` — both land on a
- * row in `users`.
+ * Resolve the browser session to a Member, or null.
+ *
+ * `session.ts` has the same resolution for callers that only need a viewer.
+ * This one takes the `auth` instance because this file already built one — it
+ * needs it for sign-in, sign-out and invite redemption, and building a second
+ * would be two Better Auth instances answering for one deployment.
  */
 async function viewerFor(auth: CruxAuth, request: Request): Promise<Viewer | null> {
   const session = await auth.api.getSession({ headers: request.headers });

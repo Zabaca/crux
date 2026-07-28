@@ -21,6 +21,7 @@ import { query } from "@crux/core/reads";
 import { CruxError } from "@crux/core/transitions";
 import { ZodError } from "zod";
 import { DurableObjectViewStore } from "./view-state-do.js";
+import { viewerFor } from "./web/session.js";
 
 export interface Env {
   DB: D1Database;
@@ -90,6 +91,35 @@ function bearer(request: Request): string | null {
   return match ? match[1]!.trim() : null;
 }
 
+/**
+ * Resolve the caller to a users row, by either front door (ADR-0007).
+ *
+ * The CLI presents a bearer token. The browser presents its Better Auth session
+ * cookie — which is what lets the board and the action dialogs write through
+ * `/v1` instead of growing a second, cookie-only write path beside it. There is
+ * one dispatch endpoint, so there is one place the invariants run.
+ *
+ * A cookie is ambient credential, so a cookie-authenticated request must also
+ * be same-origin: without that check any page on the internet could POST a
+ * transition into this deployment on a signed-in Member's behalf. The CLI is
+ * unaffected — a bearer token is never sent by a browser it did not come from.
+ */
+async function authenticate(
+  request: Request,
+  env: Env,
+  db: CruxDb,
+  url: URL,
+): Promise<{ userId: string } | null> {
+  const token = bearer(request);
+  if (token) return authenticateToken(db, token);
+
+  if (!env.BETTER_AUTH_SECRET) return null;
+  const origin = request.headers.get("origin");
+  if (request.method !== "GET" && origin !== url.origin) return null;
+  const viewer = await viewerFor(db, env.BETTER_AUTH_SECRET, url.origin, request);
+  return viewer ? { userId: viewer.id } : null;
+}
+
 /** Resolve the per-user ViewStateDO stub. */
 function stubFor(env: Env, userId: string): DurableObjectStub {
   return env.VIEW_STATE.get(env.VIEW_STATE.idFromName(userId));
@@ -114,8 +144,7 @@ export async function handleApi(
   if (pathname !== "/v1" && !pathname.startsWith("/v1/")) return null;
 
   const db = deps.db ?? createD1Db(env.DB);
-  const token = bearer(request);
-  const authed = await authenticateToken(db, token);
+  const authed = await authenticate(request, env, db, url);
   if (!authed) {
     return errorBody("UNAUTHENTICATED", "missing or invalid bearer token");
   }

@@ -4,17 +4,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "dev": "astro dev",
+    "deploy": "astro build && wrangler deploy -c dist/server/wrangler.json",
+    "build": "astro build"
   },
   "dependencies": {
+    "@astrojs/cloudflare": "^14.1.5",
+    "@astrojs/react": "^6.0.1",
     "@crux/core": "workspace:*",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/utilities": "^3.2.2",
+    "astro": "^7.1.4",
     "better-auth": "^1.6.25",
+    "marked": "^18.0.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.18.8",
     "@cloudflare/workers-types": "^4.20250109.0",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
     "typescript": "^5.6.0",
+    "vitest": "^4.1.10",
     "wrangler": "^4.0.0"
   }
 }
