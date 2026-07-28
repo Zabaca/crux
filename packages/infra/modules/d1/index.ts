@@ -39,10 +39,11 @@ async function cfFetch<T>(
   path: string,
   init?: { method?: string; body?: unknown },
 ): Promise<T> {
+  const method = init?.method ?? "GET";
   const res = await fetch(`${API}${path}`, {
-    method: init?.method ?? "GET",
+    method,
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: init?.body === undefined ? undefined : JSON.stringify(init.body),
+    ...(init?.body === undefined ? {} : { body: JSON.stringify(init.body) }),
   });
   let envelope: CfEnvelope<T>;
   try {
