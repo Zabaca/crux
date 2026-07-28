@@ -18,11 +18,10 @@ import { isActionAllowed, getAllowedActions } from "./allowed.js";
 import {
   computeSaveViewMetaBlob,
   loadViewMetaFromBlob,
-  resolveViewStatePath,
   sendViewEventWithStore,
   type ViewMeta,
 } from "../view-state/persistence.js";
-import { FileViewStore, type ViewStore } from "../view-state/store.js";
+import type { ViewStore } from "../view-state/store.js";
 import type { ViewEvent } from "../view-state/machine.js";
 import { runMutation, type Actor } from "./mutations.js";
 
@@ -64,18 +63,19 @@ export async function dispatch(
   rawAction: unknown,
   options: {
     db: CruxDb;
-    path?: string;
-    viewStore?: ViewStore;
-    actor?: Actor;
+    /** Where view-state lives. Required: a default here would be a storage
+     * medium chosen by omission, and the filesystem one is what put `node:fs`
+     * in the Worker bundle. */
+    viewStore: ViewStore;
+    /** Who the write is attributed to. Required for the same reason. */
+    actor: Actor;
     enforceAllow?: boolean;
   },
 ): Promise<DispatchResult> {
   // Parse + validate action shape
   const action = ActionSchema.parse(rawAction) as Action;
 
-  // View-state lives behind a store seam — the filesystem locally, a Durable
-  // Object in the cloud. No fs call remains on this path when a store is given.
-  const store = options.viewStore ?? new FileViewStore(options.path ?? resolveViewStatePath());
+  const store = options.viewStore;
 
   // Load current meta (revision, lastAction, recentQueries) + view state value
   const meta = loadViewMetaFromBlob(await store.read());

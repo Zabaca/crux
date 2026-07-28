@@ -26,7 +26,6 @@
     "test:workers": "vitest run"
   },
   "dependencies": {
-    "chokidar": "^5.0.0",
     "xstate": "^5.30.0",
     "zod": "^4.3.6"
   },
