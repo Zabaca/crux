@@ -14,6 +14,17 @@
   // export condition, so the browser sessions do not work without this.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // The deployment's address. `custom_domain` makes wrangler own the DNS record
+  // and the certificate, so the hostname is created by the same deploy that
+  // ships the code rather than clicked in by hand; zabaca.com is a zone on the
+  // account in cloud.ts, which is what makes that possible.
+  //
+  // Declaring any route retires the `*.workers.dev` subdomain unless
+  // `workers_dev: true` is also set, so crux-cloud.james-99a.workers.dev now
+  // 404s at the edge and this is the only way in. That is deliberate — one
+  // address means a browser session, whose cookie is bound to the origin that
+  // issued it, cannot be stranded on a hostname nobody uses.
+  "routes": [{ "pattern": "crux.zabaca.com", "custom_domain": true }],
   // Per-user view-state lives in a Durable Object — off the filesystem. It
   // survives Astro's bundle because astro.config.mjs names it in
   // `workerEntryPoint.namedExports`.
