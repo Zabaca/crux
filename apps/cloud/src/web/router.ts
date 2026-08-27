@@ -13,7 +13,6 @@
  * conversation.
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
-import { authUsers } from "@crux/core/db/auth-schema";
 import { createAuth, type CruxAuth } from "@crux/core/auth/better-auth";
 import { mintToken, revokeToken } from "@crux/core/auth";
 import {
@@ -21,7 +20,6 @@ import {
   findPendingInvite,
   acceptInvite,
   normalizeEmail,
-  slugFromEmail,
 } from "@crux/core/auth/invites";
 
 import { html, htmlResponse, type Html } from "./html.js";
@@ -34,12 +32,50 @@ import {
   workstreamListPage,
   workstreamPage,
 } from "./read-pages.js";
-import { membersPage, tokensPage, signInPage, invitePage } from "./account-pages.js";
-import { claimUserByEmail } from "@crux/core/auth/claim";
+import { membersPage, tokensPage, signInPage, invitePage, linkSentPage } from "./account-pages.js";
+import { ensureMember, findMemberByEmail } from "@crux/core/auth/membership";
+import { emailSenderFor } from "./session.js";
 
 export type { WebEnv };
 
 const SESSION_REQUIRED = "/signin";
+
+const NO_EMAIL_SENDER =
+  "This deployment cannot send email, so it cannot issue sign-in links. An operator needs to set RESEND_API_KEY and EMAIL_FROM.";
+
+type SignInLinkOutcome = "sent" | "not-a-member" | "send-failed";
+
+/**
+ * Mail a sign-in link to `email`, if that address is a Member.
+ *
+ * Membership is checked here rather than left to the plugin because the
+ * plugin's own gate runs at verify time (see `findMemberByEmail`). The caller
+ * renders the same page for `sent` and `not-a-member` on purpose — this
+ * function distinguishes them so the *failure* case can be reported honestly,
+ * not so the answer can vary by address.
+ */
+async function sendSignInLink(
+  db: CruxDb,
+  auth: CruxAuth,
+  opts: { email: string; callbackURL: string; headers: Headers },
+): Promise<SignInLinkOutcome> {
+  const member = await findMemberByEmail(db, opts.email);
+  if (!member) return "not-a-member";
+  try {
+    await auth.api.signInMagicLink({
+      body: { email: opts.email, callbackURL: opts.callbackURL },
+      // The endpoint requires them; Better Auth reads the origin and the rate
+      // limiter's client address out of here.
+      headers: opts.headers,
+    });
+    return "sent";
+  } catch {
+    // Delivery failed, the signing key is wrong, Resend refused the from
+    // address — all of it is "we could not send it", and none of it is
+    // something the person at the form can act on beyond trying again.
+    return "send-failed";
+  }
+}
 
 /**
  * The linkable read surfaces, as pattern → loader. Each capture group becomes a
@@ -124,38 +160,55 @@ export async function handleWeb(
       503,
     );
   }
-  const auth = createAuth(db, { secret, baseURL: url.origin });
+  const workspace = workspaceName(env, url);
+  const sendEmail = emailSenderFor(env);
+  const auth = createAuth(db, {
+    secret,
+    baseURL: url.origin,
+    workspace,
+    ...(sendEmail ? { sendEmail } : {}),
+  });
 
-  // Better Auth owns everything under its basePath.
+  // Better Auth owns everything under its basePath — including the
+  // `magic-link/verify` route the link in the mail points at, which is why
+  // signing in needs no route of its own below.
   if (path.startsWith("/api/auth")) return auth.handler(request);
 
   const viewer = await viewerFor(auth, request);
-  const workspace = workspaceName(env, url);
   const render = (r: { title: string; body: Html }, status = 200): Response =>
     htmlResponse(page({ title: r.title, viewer, workspace, body: r.body }), status);
 
   // ---- routes that exist because there is no session yet --------------------
 
   if (path === "/signin" && request.method === "POST") {
-    // Better Auth answers `sign-in/email` with 200 and a JSON body even when
-    // asked to redirect, which a plain HTML form would render as JSON. So the
-    // form posts here and this turns the result into a real navigation.
     const form = await request.formData();
     const next = safeNext(String(form.get("next") ?? "")) ?? "/";
-    const signIn = await auth.api.signInEmail({
-      body: {
-        email: normalizeEmail(String(form.get("email") ?? "")),
-        password: String(form.get("password") ?? ""),
-      },
-      asResponse: true,
-    });
-    if (!signIn.ok) {
-      return render(signInPage({ next, error: "That email and password did not match." }), 401);
+    const email = normalizeEmail(String(form.get("email") ?? ""));
+    if (!email.includes("@")) {
+      return render(signInPage({ next, error: "That is not an email address." }), 400);
     }
-    const headers = new Headers();
-    for (const cookie of signIn.headers.getSetCookie()) headers.append("set-cookie", cookie);
-    headers.set("location", next);
-    return new Response(null, { status: 302, headers });
+    if (!sendEmail) {
+      return render(signInPage({ next, error: NO_EMAIL_SENDER }), 503);
+    }
+
+    const sent = await sendSignInLink(db, auth, {
+      email,
+      callbackURL: next,
+      headers: request.headers,
+    });
+    if (sent === "send-failed") {
+      return render(
+        signInPage({
+          next,
+          error: "The sign-in link could not be sent. Try again, or tell an operator.",
+        }),
+        502,
+      );
+    }
+    // Deliberately the same page whether or not that address is a Member. The
+    // form is open to the internet and the Member list is not public, so an
+    // answer that differed would turn sign-in into a membership oracle.
+    return render(linkSentPage({ email }));
   }
 
   if (path === "/signin") {
@@ -188,7 +241,13 @@ export async function handleWeb(
   }
 
   if (path === "/invite/accept" && request.method === "POST") {
-    return acceptInviteRequest(request, db, auth, { env, url, viewer, workspace });
+    return acceptInviteRequest(request, db, auth, {
+      env,
+      url,
+      viewer,
+      workspace,
+      canSendEmail: Boolean(sendEmail),
+    });
   }
 
   // ---- everything below is Members-only ------------------------------------
@@ -250,23 +309,34 @@ export async function handleWeb(
 }
 
 /**
- * Redeem an invite: create the Member's account, then mark the invite used.
+ * Redeem an invite: make the address a Member, then mail it a sign-in link.
  *
- * The order matters. `acceptInvite` is conditional on the invite still being
+ * There is no password to choose any more, so all this collects is the name to
+ * attribute entries to. `acceptInvite` is conditional on the invite still being
  * pending, so if two people open the same link at once only one of them gets
- * past it; the loser's freshly created account is refused a session and told
- * the link is spent rather than silently becoming a Member.
+ * past it.
+ *
+ * It ends at "check your email" rather than signing the visitor straight in.
+ * That costs a click, and buys the property that a browser session is only ever
+ * minted by a magic link — one path, tested once. The invite token proves the
+ * link was received; the sign-in link proves the inbox is still theirs, which
+ * is the thing a session should rest on.
  */
 async function acceptInviteRequest(
   request: Request,
   db: CruxDb,
   auth: CruxAuth,
-  ctx: { env: WebEnv; url: URL; viewer: Viewer | null; workspace: string },
+  ctx: {
+    env: WebEnv;
+    url: URL;
+    viewer: Viewer | null;
+    workspace: string;
+    canSendEmail: boolean;
+  },
 ): Promise<Response> {
   const form = await request.formData();
   const token = String(form.get("token") ?? "");
   const name = String(form.get("name") ?? "").trim();
-  const password = String(form.get("password") ?? "");
 
   const invite = await findPendingInvite(db, token);
   const fail = (message: string, status: number): Response =>
@@ -283,70 +353,39 @@ async function acceptInviteRequest(
   if (!invite)
     return fail("This invite link is not valid — it may be used already, or expired.", 410);
   if (!name) return fail("Please give a name to attribute your entries to.", 400);
-  if (password.length < 10) return fail("Passwords must be at least 10 characters.", 400);
+  if (!ctx.canSendEmail) return fail(NO_EMAIL_SENDER, 503);
 
-  // Claim before create. A corpus migrated from the single-machine database
-  // authors its rows against `users` rows with no credential; signing up would
-  // collide on the unique email index, or mint a second identity and strand
-  // that authorship on the first. `claimUserByEmail` declines a row that
-  // already has a credential, so this is not a password-reset path.
-  const claim = await claimUserByEmail(auth, { email: invite.email, password });
-  if (claim.claimed === false && claim.reason === "already-has-credentials") {
-    return fail("That address is already a Member — sign in instead.", 400);
-  }
+  // The row may already exist: a corpus migrated from the single-machine
+  // database authors its rows against `users` rows nobody has signed in as, and
+  // re-using one keeps that authorship attached to the person who earned it.
+  const member = await ensureMember(db, { email: invite.email, name });
 
-  let authResponse: Response;
-  let userId: string | undefined;
-
-  if (claim.claimed) {
-    userId = claim.userId;
-    authResponse = await auth.api.signInEmail({
-      body: { email: invite.email, password },
-      asResponse: true,
-    });
-    if (!authResponse.ok) return fail("Could not sign in to that account.", 400);
-  } else {
-    authResponse = await auth.api.signUpEmail({
-      body: {
-        email: invite.email,
-        password,
-        name,
-        slug: await uniqueSlug(db, slugFromEmail(invite.email)),
-      },
-      asResponse: true,
-    });
-    if (!authResponse.ok) {
-      return fail("Could not create that account — the address may already be a Member.", 400);
-    }
-    const created = (await authResponse.clone().json()) as { user?: { id?: string } };
-    userId = created.user?.id;
-  }
-
-  if (!userId || !(await acceptInvite(db, { inviteId: invite.id, userId }))) {
+  if (!(await acceptInvite(db, { inviteId: invite.id, userId: member.userId }))) {
     return fail("This invite link was just used by someone else.", 409);
   }
 
-  // Carry Better Auth's session cookies onto the redirect, so redeeming an
-  // invite signs the Member in rather than dropping them at a login form.
-  const headers = new Headers();
-  for (const cookie of authResponse.headers.getSetCookie()) headers.append("set-cookie", cookie);
-  headers.set("location", "/");
-  return new Response(null, { status: 302, headers });
-}
-
-/** `users.slug` is unique; add a suffix until it is. */
-async function uniqueSlug(db: CruxDb, base: string): Promise<string> {
-  const existing = await listSlugs(db);
-  if (!existing.has(base)) return base;
-  for (let i = 2; ; i++) {
-    const candidate = `${base}-${i}`;
-    if (!existing.has(candidate)) return candidate;
+  const sent = await sendSignInLink(db, auth, {
+    email: invite.email,
+    callbackURL: "/",
+    headers: request.headers,
+  });
+  if (sent === "send-failed") {
+    // The Member exists and the invite is spent, so this is recoverable from
+    // the sign-in form — say so rather than implying the invite was wasted.
+    return fail(
+      "You are a Member now, but the sign-in link could not be sent. Try again from the sign-in page.",
+      502,
+    );
   }
-}
 
-async function listSlugs(db: CruxDb): Promise<Set<string>> {
-  const rows = await db.select({ slug: authUsers.slug }).from(authUsers);
-  return new Set(rows.map((r) => r.slug));
+  return htmlResponse(
+    page({
+      title: "Check your email",
+      viewer: null,
+      workspace: ctx.workspace,
+      body: linkSentPage({ email: invite.email, joined: true }).body,
+    }),
+  );
 }
 
 /** Only same-origin paths survive, so `?next=` cannot bounce off this site. */

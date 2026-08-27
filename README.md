@@ -137,7 +137,7 @@ the Node runtime, which `bun run deploy` does.
   is the database: it adopts `crux-production` by name and applies the same
   `D1_SCHEMA_STATEMENTS` the Worker and the workerd tests use, so a table added
   to the schema module reaches production without a second edit.
-- `CLOUDFLARE_API_TOKEN` and `BETTER_AUTH_SECRET` live SOPS/age-encrypted in
+- `CLOUDFLARE_API_TOKEN`, `BETTER_AUTH_SECRET` and `RESEND_API_KEY` live SOPS/age-encrypted in
   [`secrets.yaml`](packages/infra/environments/production/secrets.yaml); the
   recipients are listed in [`.sops.yaml`](.sops.yaml) — two operator machines
   and CI, whose private half is the `SOPS_AGE_KEY` Actions secret. To add a
@@ -145,15 +145,22 @@ the Node runtime, which `bun run deploy` does.
   `sops updatekeys packages/infra/environments/production/secrets.yaml` from a
   machine that is already a recipient.
 
-The Worker needs one secret, `BETTER_AUTH_SECRET`, to sign browser sessions —
-set it with `wrangler secret put BETTER_AUTH_SECRET`. Without it `/health`, the
-`/v1` API and the CLI all keep working and only the browser surfaces refuse,
-saying so on the page. `CRUX_WORKSPACE_NAME` optionally names the Workspace in
-the header; it defaults to the deployment's host.
+The Worker needs two secrets, both carried by `zbc apply` out of `secrets.yaml`:
+`BETTER_AUTH_SECRET` signs browser sessions, and `RESEND_API_KEY` sends the
+sign-in links that are the only way to get one ([ADR-0010](docs/adr/0010-sign-in-is-a-magic-link.md)).
+`EMAIL_FROM` goes with the latter and is a plain var in `wrangler.jsonc`, since
+the address a mail comes from is public the moment one is sent; it must be on a
+domain the Resend account has verified. Missing any of them leaves `/health`,
+the `/v1` API and the CLI working and turns off only the browser surfaces, which
+say which one is missing. `CRUX_WORKSPACE_NAME` optionally names the Workspace
+in the header; it defaults to the deployment's host.
 
-The first Member is a chicken-and-egg case: invites are issued by an existing
-Member, so a fresh deployment needs one `users` row before anyone can sign in.
-`crux user init` against the deployment creates it.
+The first Member is a chicken-and-egg case, and is still open. Signing in mails
+a link to any address that already has a `users` row, and an invite is what
+creates a row — but invites are issued by a Member, so a deployment with no
+rows at all has no way in that does not involve writing one into D1 by hand.
+`crux user init` does **not** close this: it writes local config and makes no
+request to the deployment.
 
 `GET /health` is the deployment's liveness check. It round-trips the D1 binding
 rather than answering from memory, so a Worker that cannot read its corpus
@@ -189,7 +196,8 @@ naming the broken links and orphans.
   [ADR-0006: workerd tests and the D1 schema](docs/adr/0006-workerd-tests-and-d1-schema.md),
   [ADR-0007: one identity table, two front doors](docs/adr/0007-one-identity-table-two-front-doors.md),
   [ADR-0008: Astro lands with the write surfaces](docs/adr/0008-astro-lands-with-the-write-surfaces.md),
-  [ADR-0009: Astro wraps the Worker entry](docs/adr/0009-astro-wraps-the-worker-entry.md).
+  [ADR-0009: Astro wraps the Worker entry](docs/adr/0009-astro-wraps-the-worker-entry.md),
+  [ADR-0010: sign-in is a magic link](docs/adr/0010-sign-in-is-a-magic-link.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),

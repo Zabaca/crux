@@ -14,6 +14,10 @@
   // export condition, so the browser sessions do not work without this.
   "compatibility_flags": ["nodejs_compat"],
   "observability": { "enabled": true },
+  // Not a secret: the address sign-in links come *from*, which is public the
+  // moment the first one is sent. It must be on a domain the Resend account
+  // behind RESEND_API_KEY has verified, or Resend refuses the send.
+  "vars": { "EMAIL_FROM": "Crux <crux@send.zabaca.com>" },
   // The deployment's address. `custom_domain` makes wrangler own the DNS record
   // and the certificate, so the hostname is created by the same deploy that
   // ships the code rather than clicked in by hand; zabaca.com is a zone on the

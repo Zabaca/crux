@@ -10,12 +10,31 @@
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { createAuth } from "@crux/core/auth/better-auth";
+import { resendSender, type EmailSender } from "@crux/core/auth/email";
 
 import type { Env } from "../api.js";
 import type { Viewer } from "./layout.js";
 
 /** The bindings the browser surfaces read — a subset of the Worker's `Env`. */
-export type WebEnv = Pick<Env, "DB" | "BETTER_AUTH_SECRET" | "CRUX_WORKSPACE_NAME">;
+export type WebEnv = Pick<
+  Env,
+  "DB" | "BETTER_AUTH_SECRET" | "CRUX_WORKSPACE_NAME" | "RESEND_API_KEY" | "EMAIL_FROM"
+>;
+
+/**
+ * The deployment's email sender, or null if it has not been given one.
+ *
+ * Both halves are required and neither has a sane default: a key without a
+ * from-address cannot send, and a from-address on a domain the key's Resend
+ * account has not verified is refused at send time. Returning null lets the
+ * sign-in page say so plainly, which is the same shape as a missing
+ * `BETTER_AUTH_SECRET` — the deployment stays up and only the surface that
+ * needs the missing thing declines.
+ */
+export function emailSenderFor(env: WebEnv): EmailSender | null {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) return null;
+  return resendSender({ apiKey: env.RESEND_API_KEY, from: env.EMAIL_FROM });
+}
 
 /** The Workspace's display name — the deployment's host unless one is set. */
 export function workspaceName(env: WebEnv, url: URL): string {
@@ -39,6 +58,8 @@ export async function viewerFor(
   origin: string,
   request: Request,
 ): Promise<Viewer | null> {
+  // No sender: this instance only reads a session cookie. Nothing it can reach
+  // sends mail, so leaving it out is a statement, not an omission.
   const auth = createAuth(db, { secret, baseURL: origin });
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;

@@ -29,27 +29,46 @@ export function signInPage(opts: { next?: string; error?: string } = {}): {
 } {
   const body = html`
     <h1>Sign in</h1>
-    <p class="sub">Members of this Workspace only. Invites are issued by an existing Member.</p>
+    <p class="sub">
+      Members of this Workspace only. Enter your address and we will email you a link — there is no
+      password to remember or lose.
+    </p>
     ${opts.error ? html`<div class="notice bad">${opts.error}</div>` : ""}
     <form class="form" method="post" action="/signin">
       <input type="hidden" name="next" value="${opts.next ?? "/"}" />
       <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="username" required />
-      <label for="password">Password</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        autocomplete="current-password"
-        required
-      />
-      <p><button class="btn" type="submit">Sign in</button></p>
-      <p style="color:var(--faint);font-size:12px">
-        Have an invite link? Open it to set your password.
-      </p>
+      <input id="email" name="email" type="email" autocomplete="email" required autofocus />
+      <p><button class="btn" type="submit">Email me a link</button></p>
+      <p style="color:var(--faint);font-size:12px">Have an invite link? Open it to join first.</p>
     </form>
   `;
   return { title: "Sign in", body };
+}
+
+/**
+ * The page every sign-in attempt lands on.
+ *
+ * It says the same thing whether or not the address is a Member, because the
+ * form is public and the Member list is not: a page that said "no such Member"
+ * would answer, for anyone who asked, who is in this Workspace.
+ */
+export function linkSentPage(opts: { email: string; joined?: boolean }): {
+  title: string;
+  body: Html;
+} {
+  const body = html`
+    <h1>Check your email</h1>
+    ${opts.joined ? html`<div class="notice">You are a Member of this Workspace now.</div>` : ""}
+    <p class="sub">
+      If <b>${opts.email}</b> belongs to a Member of this Workspace, a sign-in link is on its way.
+      The link lasts 15 minutes and works once.
+    </p>
+    <p style="color:var(--faint);font-size:12px">
+      Nothing arrived? Check spam, then <a href="/signin">try again</a> — a typo in the address
+      looks exactly like this page.
+    </p>
+  `;
+  return { title: "Check your email", body };
 }
 
 /** `/invite?token=…` — the one place an account is created. */
@@ -74,18 +93,12 @@ export function invitePage(
     <form class="form" method="post" action="/invite/accept">
       <input type="hidden" name="token" value="${opts.token ?? ""}" />
       <label for="name">Your name</label>
-      <input id="name" name="name" type="text" autocomplete="name" required />
-      <label for="password">Choose a password</label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        autocomplete="new-password"
-        minlength="10"
-        required
-      />
+      <input id="name" name="name" type="text" autocomplete="name" required autofocus />
       <p><button class="btn" type="submit">Join</button></p>
-      <p style="color:var(--faint);font-size:12px">At least 10 characters.</p>
+      <p style="color:var(--faint);font-size:12px">
+        This is the name your Observations, Problems and Decisions are attributed to. We will email
+        you a sign-in link — there is no password to choose.
+      </p>
     </form>
   `;
   return { title: "Join", body };

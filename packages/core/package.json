@@ -24,7 +24,8 @@
     "./db/auth-schema": "./src/db/auth-schema.ts",
     "./auth/better-auth": "./src/auth/better-auth.ts",
     "./auth/invites": "./src/auth/invites.ts",
-    "./auth/claim": "./src/auth/claim.ts"
+    "./auth/membership": "./src/auth/membership.ts",
+    "./auth/email": "./src/auth/email.ts"
   },
   "scripts": {
     "test:workers": "vitest run"

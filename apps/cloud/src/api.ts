@@ -30,6 +30,10 @@ export interface Env {
   BETTER_AUTH_SECRET?: string;
   /** Display name for the Workspace; defaults to the deployment's host. */
   CRUX_WORKSPACE_NAME?: string;
+  /** Resend key for sign-in links; absent means nobody can sign in to the browser. */
+  RESEND_API_KEY?: string;
+  /** The address sign-in links are sent from, on a domain Resend has verified. */
+  EMAIL_FROM?: string;
 }
 
 function json(body: unknown, status = 200): Response {

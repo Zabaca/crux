@@ -22,9 +22,24 @@ export default defineConfig({
         d1Databases: ["DB"],
         kvNamespaces: ["SESSION"],
         compatibilityFlags: ["nodejs_compat"],
-        // In production this is a Worker secret. The browser surfaces refuse to
-        // issue sessions without it, so the suite has to supply one.
-        bindings: { BETTER_AUTH_SECRET: "test-secret-not-used-in-production" },
+        // In production these are Worker secrets/vars. The browser surfaces
+        // refuse to issue sessions without the first and refuse to send sign-in
+        // links without the other two, so the suite has to supply all three.
+        bindings: {
+          BETTER_AUTH_SECRET: "test-secret-not-used-in-production",
+          RESEND_API_KEY: "re_test_not_a_real_key",
+          EMAIL_FROM: "crux@test.invalid",
+        },
+        // Every outbound fetch from the Worker under test lands here instead of
+        // the network, so the suite never mails anyone and never depends on
+        // Resend being reachable. Anything that is not the send endpoint fails
+        // loudly: a new outbound call appearing in a browser surface is
+        // something a test should have to acknowledge, not something that
+        // silently works.
+        outboundService: (request: Request) =>
+          new URL(request.url).hostname === "api.resend.com"
+            ? Response.json({ id: "test-message" })
+            : new Response("unexpected outbound request", { status: 502 }),
       },
     }),
   ],

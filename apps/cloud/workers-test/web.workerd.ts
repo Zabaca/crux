@@ -50,21 +50,52 @@ function post(path: string, fields: Record<string, string>, cookie?: string): Pr
   });
 }
 
-/** Sign James in by handing him an invite and redeeming it — the only route in. */
+/**
+ * Make `email` a Member the way the product does — an invite, redeemed over
+ * HTTP — and then hand back a session for them.
+ *
+ * The session is minted through the magic-link endpoints directly rather than
+ * by reading the mail the Worker sent, because the sent mail leaves the isolate
+ * and the token is stored hashed, so there is nothing to read it back out of.
+ * That the link in a real mail mints a session for the right row is covered
+ * where the sender is injectable: `packages/core/workers-test/membership.workerd.ts`.
+ */
 async function inviteAndJoin(
   email: string,
   name: string,
-  password = "correct-horse-battery",
-): Promise<{ cookie: string; userId: string }> {
+): Promise<{
+  cookie: string;
+  userId: string;
+}> {
   const { createInvite } = await import("@crux/core/auth/invites");
   const invite = await createInvite(db, { email, invitedById: "USR-james" });
-  const res = await post("/invite/accept", { token: invite.token, name, password });
-  expect(res.status).toBe(302);
-  const cookie = cookieJar(res);
+  const res = await post("/invite/accept", { token: invite.token, name });
+  expect(res.status, "redeeming an invite ends at 'check your email'").toBe(200);
   const rows = await db.select().from(users);
   const created = rows.find((u) => u.email === email);
   expect(created, "redeeming an invite creates a row in users").toBeTruthy();
-  return { cookie, userId: created!.id };
+  return { cookie: await sessionCookieFor(email), userId: created!.id };
+}
+
+/** A session cookie for a Member, as clicking their sign-in link would produce. */
+async function sessionCookieFor(email: string): Promise<string> {
+  const { createAuth } = await import("@crux/core/auth/better-auth");
+  let link: string | undefined;
+  const auth = createAuth(db, {
+    secret: "test-secret-not-used-in-production",
+    baseURL: BASE,
+    sendEmail: async (message) => {
+      link = message.text.match(/https?:\/\/\S+/)?.[0];
+    },
+  });
+  await auth.api.signInMagicLink({ body: { email, callbackURL: "/" }, headers: new Headers() });
+  expect(link, "signing in mails a link").toBeDefined();
+  const verified = await auth.api.magicLinkVerify({
+    query: { token: new URL(link!).searchParams.get("token")! },
+    headers: new Headers(),
+    asResponse: true,
+  });
+  return cookieJar(verified);
 }
 
 /**
@@ -147,18 +178,10 @@ describe("invite", () => {
       email: "twice@example.com",
       invitedById: "USR-james",
     });
-    const first = await post("/invite/accept", {
-      token: invite.token,
-      name: "First",
-      password: "correct-horse-battery",
-    });
-    expect(first.status).toBe(302);
+    const first = await post("/invite/accept", { token: invite.token, name: "First" });
+    expect(first.status).toBe(200);
 
-    const second = await post("/invite/accept", {
-      token: invite.token,
-      name: "Second",
-      password: "correct-horse-battery",
-    });
+    const second = await post("/invite/accept", { token: invite.token, name: "Second" });
     expect(second.status).toBe(410);
   });
 
@@ -169,27 +192,29 @@ describe("invite", () => {
 });
 
 describe("sign in", () => {
-  test("the form navigates on success rather than rendering JSON", async () => {
+  test("asking for a link never issues a session by itself", async () => {
     await inviteAndJoin("returning@example.com", "Returning Member");
 
-    const res = await post("/signin", {
-      email: "returning@example.com",
-      password: "correct-horse-battery",
-      next: "/w/crux",
-    });
-    expect(res.status).toBe(302);
-    expect(res.headers.get("location")).toBe("/w/crux");
-
-    // And the session it hands back actually opens the page it promised.
-    const body = await (await get("/w/crux", { headers: { cookie: cookieJar(res) } })).text();
-    expect(body).toContain("Problems by Stage");
+    const res = await post("/signin", { email: "returning@example.com", next: "/w/crux" });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Check your email");
+    // The form is a request for a mail, not a credential check. Anything else
+    // here would mean the page in front of the inbox could open the corpus.
+    expect(cookieJar(res)).not.toContain("session_token");
   });
 
-  test("a wrong password does not issue a session", async () => {
-    await inviteAndJoin("wrong@example.com", "Wrong Password");
-    const res = await post("/signin", { email: "wrong@example.com", password: "not-the-password" });
-    expect(res.status).toBe(401);
-    expect(cookieJar(res)).not.toContain("session_token");
+  test("a non-Member gets the same page as a Member, and no row is created", async () => {
+    const member = await post("/signin", { email: "returning@example.com" });
+    const stranger = await post("/signin", { email: "stranger@example.com" });
+
+    // Byte-for-byte the same answer: the sign-in form is public, so a reply
+    // that varied would tell anyone who asked who is in this Workspace.
+    expect(stranger.status).toBe(member.status);
+    expect(await stranger.text()).toContain("Check your email");
+    expect(cookieJar(stranger)).not.toContain("session_token");
+
+    const rows = await db.select().from(users);
+    expect(rows.some((u) => u.email === "stranger@example.com")).toBe(false);
   });
 
   test("signing out ends the session, and only a POST does it", async () => {

@@ -36,7 +36,9 @@ construction rather than by review.
   (ADR-0006) cannot express "add a column to a table that already exists".
 - **`users.email` is unique but nullable.** Rows the CLI seeded have no address,
   so the index is partial (`WHERE email IS NOT NULL`). A Member created by
-  redeeming an invite always has one.
+  redeeming an invite always has one — and since sign-in became a magic link
+  ([ADR-0010](0010-sign-in-is-a-magic-link.md)), an address is what makes a row
+  signable-in-as at all. A row without one is authorship and nothing more.
 - **The Worker needs `BETTER_AUTH_SECRET`.** Without it the browser surfaces
   answer 503 and say so; `/health`, `/v1` and the CLI are unaffected. Password
   hashing uses scrypt from `node:crypto`, so the Worker also needs
@@ -51,6 +53,12 @@ construction rather than by review.
 - **Revocation is asymmetric, and that is intended.** Revoking a CLI token stops
   that token; it does not end browser sessions, which are ended by signing out
   or by expiry.
+- **The password half of this is gone.** When it was written, the browser front
+  door was an email and a password and the interesting case was attaching a
+  credential to a migrated row. [ADR-0010](0010-sign-in-is-a-magic-link.md)
+  replaced that with a mailed link, which deletes the credential entirely. What
+  survives unchanged is the part this decision was actually about: both front
+  doors still land on one row in `users`.
 - **A token can only be revoked by its owner.** `revokeToken` takes the owner as
   a required argument rather than an optional filter, because the id it revokes
   arrives from a form field — an owner the caller could forget to pass is an
