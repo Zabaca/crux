@@ -197,7 +197,8 @@ naming the broken links and orphans.
   [ADR-0007: one identity table, two front doors](docs/adr/0007-one-identity-table-two-front-doors.md),
   [ADR-0008: Astro lands with the write surfaces](docs/adr/0008-astro-lands-with-the-write-surfaces.md),
   [ADR-0009: Astro wraps the Worker entry](docs/adr/0009-astro-wraps-the-worker-entry.md),
-  [ADR-0010: sign-in is a magic link](docs/adr/0010-sign-in-is-a-magic-link.md).
+  [ADR-0010: sign-in is a magic link](docs/adr/0010-sign-in-is-a-magic-link.md),
+  [ADR-0011: removal revokes access, not identity](docs/adr/0011-removal-revokes-access-not-identity.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -214,8 +215,8 @@ naming the broken links and orphans.
 
 ## Status
 
-MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting Members,
-minting and revoking CLI tokens, pages for Problem, Solution and Observation,
+MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting and
+removing Members, minting and revoking CLI tokens, pages for Problem, Solution and Observation,
 the Observation intake list at `/w/<slug>/observations` — grouped into linked,
 archived and waiting, all three read off related rows rather than a status
 column — the doc tree at `/docs`, and the write surfaces — a Workstream at `/w/<slug>`

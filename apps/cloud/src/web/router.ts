@@ -33,7 +33,13 @@ import {
   workstreamListPage,
 } from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage, linkSentPage } from "./account-pages.js";
-import { ensureMember, findMemberByEmail } from "@crux/core/auth/membership";
+import {
+  ensureMember,
+  findMemberByEmail,
+  isActiveMember,
+  listMembers,
+  removeMember,
+} from "@crux/core/auth/membership";
 import { emailSenderFor } from "./session.js";
 
 export type { WebEnv };
@@ -105,11 +111,18 @@ function redirect(location: string, status = 302): Response {
  * This one takes the `auth` instance because this file already built one — it
  * needs it for sign-in, sign-out and invite redemption, and building a second
  * would be two Better Auth instances answering for one deployment.
+ *
+ * A valid session is not yet a viewer: the row it names may have been removed
+ * since, and Better Auth has no opinion about that. `isActiveMember` is the
+ * second half of the question, and asking it here is what makes a removal take
+ * effect on the removed Member's *next request* rather than at their next
+ * sign-in.
  */
-async function viewerFor(auth: CruxAuth, request: Request): Promise<Viewer | null> {
+async function viewerFor(db: CruxDb, auth: CruxAuth, request: Request): Promise<Viewer | null> {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;
   const u = session.user as { id: string; name: string; email: string | null };
+  if (!(await isActiveMember(db, u.id))) return null;
   return { id: u.id, name: u.name, email: u.email };
 }
 
@@ -181,7 +194,7 @@ export async function handleWeb(
   // signing in needs no route of its own below.
   if (path.startsWith("/api/auth")) return auth.handler(request);
 
-  const viewer = await viewerFor(auth, request);
+  const viewer = await viewerFor(db, auth, request);
   const render = (r: { title: string; body: Html }, status = 200): Response =>
     htmlResponse(page({ title: r.title, viewer, workspace, body: r.body }), status);
 
@@ -266,7 +279,33 @@ export async function handleWeb(
   try {
     if (path === "/") return render(await workstreamListPage(db));
 
-    if (path === "/members") return render(await membersPage(db, viewer));
+    if (path === "/members") {
+      const confirming = url.searchParams.get("confirm");
+      return render(await membersPage(db, viewer, confirming ? { confirming } : {}));
+    }
+    if (path === "/members/remove" && request.method === "POST") {
+      const form = await request.formData();
+      const id = String(form.get("id") ?? "");
+      // The id arrives from a form field, so the one rule that is not "any
+      // Member may do this" has to be enforced here rather than by the absence
+      // of a button: your own row is never removable.
+      if (id === viewer.id) {
+        return render(
+          await membersPage(db, viewer, {
+            error: "You cannot remove yourself. Sign out to leave this Workspace.",
+          }),
+          400,
+        );
+      }
+      const target = (await listMembers(db)).find((m) => m.id === id);
+      if (!target || !(await removeMember(db, { userId: id }))) {
+        return render(
+          await membersPage(db, viewer, { error: `No Member of this Workspace has id ${id}.` }),
+          404,
+        );
+      }
+      return render(await membersPage(db, viewer, { removed: target.name }));
+    }
     if (path === "/members/invite" && request.method === "POST") {
       const form = await request.formData();
       const email = normalizeEmail(String(form.get("email") ?? ""));

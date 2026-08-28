@@ -11,6 +11,7 @@
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { createAuth } from "@crux/core/auth/better-auth";
 import { resendSender, type EmailSender } from "@crux/core/auth/email";
+import { isActiveMember } from "@crux/core/auth/membership";
 
 import type { Env } from "../api.js";
 import type { Viewer } from "./layout.js";
@@ -50,7 +51,8 @@ export function signInRedirect(url: URL): Response {
 /**
  * Resolve the browser session to a Member, or null. This is the session half of
  * the identity story whose other half is `authenticateToken` — both land on a
- * row in `users` (ADR-0007).
+ * row in `users` (ADR-0007), and both refuse a row that has been removed from
+ * the Workspace.
  */
 export async function viewerFor(
   db: CruxDb,
@@ -64,6 +66,9 @@ export async function viewerFor(
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;
   const u = session.user as { id: string; name: string; email: string | null };
+  // The session outlives the membership it was minted for. Better Auth checks
+  // the cookie; this checks whether the person is still in the Workspace.
+  if (!(await isActiveMember(db, u.id))) return null;
   return { id: u.id, name: u.name, email: u.email };
 }
 

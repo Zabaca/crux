@@ -13,7 +13,7 @@ import { createD1Db, type CruxDb } from "../src/db/client.js";
 import { applyD1Schema } from "../src/db/d1/index.js";
 import { users, problems, workstreams } from "../src/db/schema.js";
 import { createAuth, type CruxAuth } from "../src/auth/better-auth.js";
-import { ensureMember, findMemberByEmail } from "../src/auth/membership.js";
+import { ensureMember, findMemberByEmail, removeMember } from "../src/auth/membership.js";
 import type { EmailMessage } from "../src/auth/email.js";
 
 let db: CruxDb;
@@ -108,6 +108,49 @@ describe("signing in with a magic link", () => {
     const stored = await env.DB.prepare("SELECT value, identifier FROM auth_verifications").all();
     const serialized = JSON.stringify(stored.results);
     expect(serialized).not.toContain(token);
+  });
+});
+
+describe("removal", () => {
+  test("a removed Member is never mailed a link again", async () => {
+    expect(await requestLink("james@zabaca.com")).toBe("sent");
+    expect(sent).toHaveLength(1);
+
+    expect(await removeMember(db, { userId: "USR-james" })).toBe(true);
+
+    // Not "the link is refused after the click" — nothing is sent at all, which
+    // is the same gate a never-invited address meets.
+    expect(await requestLink("james@zabaca.com")).toBe("not-a-member");
+    expect(sent).toHaveLength(1);
+  });
+
+  test("re-inviting a removed address reinstates that row, not a second identity", async () => {
+    await db.insert(workstreams).values({ id: "WS-x", slug: "x", title: "X" });
+    await db.insert(problems).values({
+      workstreamId: "WS-x",
+      title: "filed before they left",
+      description: "d",
+      createdById: "USR-james",
+    });
+
+    await removeMember(db, { userId: "USR-james" });
+    expect(await requestLink("james@zabaca.com")).toBe("not-a-member");
+
+    // The way back in is the same door as the way in: an invite, redeemed.
+    const outcome = await ensureMember(db, { email: "james@zabaca.com", name: "James" });
+    expect(outcome).toEqual({ userId: "USR-james", created: false });
+
+    expect(await requestLink("james@zabaca.com")).toBe("sent");
+    // One row, and the Problem still points at it. A second identity here would
+    // strand everything the first one authored.
+    expect(await db.select().from(users)).toHaveLength(1);
+    expect((await db.select().from(problems))[0]?.createdById).toBe("USR-james");
+  });
+
+  test("removing twice is a no-op, not a second removal", async () => {
+    expect(await removeMember(db, { userId: "USR-james" })).toBe(true);
+    expect(await removeMember(db, { userId: "USR-james" })).toBe(false);
+    expect(await removeMember(db, { userId: "USR-nobody" })).toBe(false);
   });
 });
 

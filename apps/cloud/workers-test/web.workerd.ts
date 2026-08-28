@@ -311,6 +311,111 @@ describe("CLI tokens", () => {
   });
 });
 
+describe("removing a Member", () => {
+  test("a removed Member leaves the list, and what they filed still names them", async () => {
+    const remover = await inviteAndJoin("stays@example.com", "Staying Member");
+    const leaver = await inviteAndJoin("goes@example.com", "Departing Member");
+
+    const filed = await dispatchAs(leaver.userId, {
+      kind: "ADD_PROBLEM",
+      payload: { workstream: "WS-crux", title: "Filed before leaving", description: "d" },
+    });
+    const problemId = (filed as { result: { id: number } }).result.id;
+
+    const before = await (await get("/members", { headers: { cookie: remover.cookie } })).text();
+    expect(before).toContain("Departing Member");
+
+    const removed = await post("/members/remove", { id: leaver.userId }, remover.cookie);
+    expect(removed.status).toBe(200);
+
+    const after = await (await get("/members", { headers: { cookie: remover.cookie } })).text();
+    expect(after).not.toContain("Departing Member");
+
+    // Attribution is the product: the row survives the removal precisely so the
+    // Problem it authored still points at a person, not at a hole.
+    const read = await SELF.fetch(`${BASE}/v1/query`, {
+      method: "POST",
+      headers: { cookie: remover.cookie, origin: BASE, "content-type": "application/json" },
+      body: JSON.stringify({ kind: "PROBLEM_GET", id: problemId }),
+    });
+    expect(read.status).toBe(200);
+    const { result } = await read.json<{ result: { createdById: string } }>();
+    expect(result.createdById).toBe(leaver.userId);
+  });
+
+  test("a removed Member's live session and CLI token both stop working", async () => {
+    const remover = await inviteAndJoin("admin@example.com", "Admin Member");
+    const leaver = await inviteAndJoin("out@example.com", "On The Way Out");
+
+    const minted = await (await post("/tokens/mint", { name: "cli" }, leaver.cookie)).text();
+    const token = /crux_[0-9a-f]{64}/.exec(minted)![0];
+    const useToken = () =>
+      SELF.fetch(`${BASE}/v1/query`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ kind: "WORKSTREAM_LIST" }),
+      });
+
+    // Both doors open before the removal, and both renderers with them: `/` is
+    // the hand-written entry's own page, `/w/<slug>` is Astro's. They resolve
+    // the session through different functions, so a gate added to one and not
+    // the other would leave half the site readable.
+    expect((await get("/", { headers: { cookie: leaver.cookie } })).status).toBe(200);
+    expect((await get("/w/crux", { headers: { cookie: leaver.cookie } })).status).toBe(200);
+    expect((await useToken()).status).toBe(200);
+
+    expect((await post("/members/remove", { id: leaver.userId }, remover.cookie)).status).toBe(200);
+
+    // The session cookie is still in their browser and the token is still in
+    // their config; neither is a way in any more.
+    const handWritten = await get("/", { headers: { cookie: leaver.cookie } });
+    expect(handWritten.status).toBe(302);
+    expect(handWritten.headers.get("location")).toContain("/signin");
+
+    const astroPage = await get("/w/crux", { headers: { cookie: leaver.cookie } });
+    expect(astroPage.status).toBe(302);
+    expect(astroPage.headers.get("location")).toContain("/signin");
+
+    expect((await useToken()).status).toBe(401);
+  });
+
+  test("removal takes two steps: the plain page only arms, the armed row posts", async () => {
+    const remover = await inviteAndJoin("two@example.com", "Two Step");
+    const other = await inviteAndJoin("other@example.com", "Other Member");
+
+    const plain = await (await get("/members", { headers: { cookie: remover.cookie } })).text();
+    expect(plain).toContain(`/members?confirm=${other.userId}`);
+    // Nothing on the resting page can be POSTed to the removal route: the first
+    // click arms a row, it does not remove anybody.
+    expect(plain).not.toContain('action="/members/remove"');
+
+    const armed = await (
+      await get(`/members?confirm=${other.userId}`, { headers: { cookie: remover.cookie } })
+    ).text();
+    expect(armed).toContain("Confirm");
+    // Exactly one row is armed — the one named — and it is the only one that
+    // carries the form.
+    expect(armed.split('action="/members/remove"').length - 1).toBe(1);
+    expect(armed).toContain(`value="${other.userId}"`);
+  });
+
+  test("a Member cannot remove themselves — the last way in is not a button", async () => {
+    const solo = await inviteAndJoin("solo@example.com", "Solo Member");
+
+    const page = await (await get("/members", { headers: { cookie: solo.cookie } })).text();
+    expect(page).toContain("sign out to leave");
+    expect(page).not.toContain(`confirm=${solo.userId}`);
+
+    // And not merely un-offered: the id travels in a form field, so the rule is
+    // enforced where the request lands, not by the absence of a control.
+    const res = await post("/members/remove", { id: solo.userId }, solo.cookie);
+    expect(res.status).toBe(400);
+    expect(await res.text()).toContain("cannot remove yourself");
+
+    expect((await get("/w/crux", { headers: { cookie: solo.cookie } })).status).toBe(200);
+  });
+});
+
 describe("read pages", () => {
   test("every Member sees every Workstream in the deployment", async () => {
     await db.insert(workstreams).values({ id: "WS-other", slug: "other", title: "Someone Else" });
