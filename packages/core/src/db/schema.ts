@@ -19,6 +19,9 @@ export const users = sqliteTable("users", {
   createdAt: integer("created_at")
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
+  /** When this Member was removed from the Workspace; null means active. The
+   * row is never deleted, because every entity below cites it as its author. */
+  removedAt: integer("removed_at"),
 });
 
 /**

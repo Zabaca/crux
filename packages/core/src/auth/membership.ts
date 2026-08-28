@@ -19,17 +19,72 @@
  * invite that turns out to be redundant is not an error; it is a Member being
  * told, correctly, how to sign in.
  */
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import type { CruxDb } from "../db/client.js";
 import { authUsers } from "../db/auth-schema.js";
 import { normalizeEmail, slugFromEmail } from "./invites.js";
+
+export type Member = { id: string; name: string; email: string | null };
 
 export type MemberOutcome = {
   userId: string;
   /** False when the address already had a row — a re-invite, not a new Member. */
   created: boolean;
 };
+
+/** Everyone currently in the Workspace. A removed row is not a Member. */
+export async function listMembers(db: CruxDb): Promise<Member[]> {
+  return db
+    .select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
+    .from(authUsers)
+    .where(isNull(authUsers.removedAt));
+}
+
+/**
+ * Remove `userId` from the Workspace.
+ *
+ * The row is stamped, never deleted: `users.id` is the target of a foreign key
+ * from every authored table, and attribution is the product (ADR-0007), so a
+ * delete would either be refused or would strand the history the row carries.
+ * Nothing else is written — no token is revoked and no session row is dropped
+ * — because every gate reads this one column: `findMemberByEmail` stops the
+ * mail, `authenticateToken` stops the CLI, and the browser's viewer lookup
+ * stops the session. One write to undo, which is what makes a re-invite a
+ * reinstatement rather than a rebuild.
+ *
+ * Returns false when `userId` names nobody, or names someone already removed —
+ * a second removal is not an error to the caller, it is a no-op that already
+ * happened.
+ */
+export async function removeMember(
+  db: CruxDb,
+  opts: { userId: string; now?: number },
+): Promise<boolean> {
+  const result = await db
+    .update(authUsers)
+    .set({ removedAt: opts.now ?? Date.now() })
+    .where(and(eq(authUsers.id, opts.userId), isNull(authUsers.removedAt)));
+  const meta = (result as { meta?: { changes?: number } } | undefined)?.meta;
+  return (meta?.changes ?? 0) > 0;
+}
+
+/**
+ * Is `userId` still a Member? The gate every session-bearing request passes.
+ *
+ * A browser session outlives the removal that ended the membership, and so does
+ * a sign-in link already sitting in an inbox — Better Auth will happily verify
+ * one, since the row it names still exists. Checking the row here is what makes
+ * both worthless the moment the stamp lands.
+ */
+export async function isActiveMember(db: CruxDb, userId: string): Promise<boolean> {
+  const rows = await db
+    .select({ id: authUsers.id })
+    .from(authUsers)
+    .where(and(eq(authUsers.id, userId), isNull(authUsers.removedAt)))
+    .limit(1);
+  return rows.length > 0;
+}
 
 /**
  * The `users` row for `email`, or null.
@@ -45,7 +100,7 @@ export async function findMemberByEmail(db: CruxDb, email: string): Promise<{ id
   const rows = await db
     .select({ id: authUsers.id })
     .from(authUsers)
-    .where(eq(authUsers.email, normalizeEmail(email)))
+    .where(and(eq(authUsers.email, normalizeEmail(email)), isNull(authUsers.removedAt)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -56,6 +111,14 @@ export async function findMemberByEmail(db: CruxDb, email: string): Promise<{ id
  * `slug` is derived from the address and made unique here rather than by the
  * caller, because it is NOT NULL and a collision is a runtime failure at the
  * least convenient moment — the one time a new Member ever touches this path.
+ *
+ * This looks past a removal, unlike `findMemberByEmail`. The gates want to know
+ * whether someone is a Member *now*; joining wants to know whether this address
+ * has ever had a row, because re-using one is the whole point — a removed
+ * Member's entries still cite their id, and minting a second identity for the
+ * same address would strand every one of them. So an invite to a removed
+ * address is a reinstatement: the stamp is cleared and everything they had
+ * comes back, tokens included.
  */
 export async function ensureMember(
   db: CruxDb,
@@ -63,8 +126,18 @@ export async function ensureMember(
 ): Promise<MemberOutcome> {
   const email = normalizeEmail(opts.email);
 
-  const found = await findMemberByEmail(db, email);
-  if (found) return { userId: found.id, created: false };
+  const existing = await db
+    .select({ id: authUsers.id, removedAt: authUsers.removedAt })
+    .from(authUsers)
+    .where(eq(authUsers.email, email))
+    .limit(1);
+  const found = existing[0];
+  if (found) {
+    if (found.removedAt !== null) {
+      await db.update(authUsers).set({ removedAt: null }).where(eq(authUsers.id, found.id));
+    }
+    return { userId: found.id, created: false };
+  }
 
   const now = opts.now ?? Date.now();
   const userId = `USR-${randomSuffix()}`;

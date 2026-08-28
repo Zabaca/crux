@@ -31,7 +31,8 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
     created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
     email_verified integer DEFAULT 0 NOT NULL,
     image text,
-    updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL
+    updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
+    removed_at integer
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_slug_unique ON users (slug)`,
   // Partial, because `users.email` is nullable and predates Better Auth: rows
@@ -246,6 +247,7 @@ export const D1_ADD_COLUMNS: readonly string[] = [
   // table. The backfill below gives the pre-existing rows a truthful value.
   `ALTER TABLE users ADD COLUMN updated_at integer DEFAULT 0 NOT NULL`,
   `UPDATE users SET updated_at = created_at WHERE updated_at = 0`,
+  `ALTER TABLE users ADD COLUMN removed_at integer`,
 ];
 
 /**

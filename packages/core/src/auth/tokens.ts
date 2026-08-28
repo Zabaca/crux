@@ -11,7 +11,7 @@
  */
 import { and, eq, isNull } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
-import { apiTokens } from "../db/schema.js";
+import { apiTokens, users } from "../db/schema.js";
 
 const TOKEN_PREFIX = "crux_";
 
@@ -96,7 +96,15 @@ export type AuthedToken = { userId: string; tokenId: string };
 
 /**
  * Resolve a presented bearer token to its (active) owner, or null if the token
- * is unknown or revoked. The stored hash is confirmed in constant time.
+ * is unknown, revoked, or owned by someone no longer in the Workspace. The
+ * stored hash is confirmed in constant time.
+ *
+ * The owner's membership is joined in rather than checked by the caller,
+ * because there is only one thing a resolved token is for — acting as that
+ * person — and a removed person may not act. Removing a Member therefore kills
+ * every token they ever minted without revoking any of them one by one, and a
+ * re-invite hands them all back, which is the same asymmetry the session gate
+ * has.
  */
 export async function authenticateToken(
   db: CruxDb,
@@ -107,7 +115,8 @@ export async function authenticateToken(
   const rows = await db
     .select({ id: apiTokens.id, userId: apiTokens.userId, tokenHash: apiTokens.tokenHash })
     .from(apiTokens)
-    .where(and(eq(apiTokens.tokenHash, hash), isNull(apiTokens.revokedAt)))
+    .innerJoin(users, eq(users.id, apiTokens.userId))
+    .where(and(eq(apiTokens.tokenHash, hash), isNull(apiTokens.revokedAt), isNull(users.removedAt)))
     .limit(1);
   const row = rows[0];
   if (!row) return null;

@@ -12,8 +12,8 @@ import { eq } from "drizzle-orm";
 
 import type { CruxDb } from "@crux/core/db";
 import { apiTokens } from "@crux/core/db/schema";
-import { authUsers } from "@crux/core/db/auth-schema";
 import { listInvites } from "@crux/core/auth/invites";
+import { listMembers } from "@crux/core/auth/membership";
 
 import { html, isoDate as date, type Html } from "./html.js";
 import type { Viewer } from "./layout.js";
@@ -104,15 +104,28 @@ export function invitePage(
   return { title: "Join", body };
 }
 
-/** `/members` — who is in the Workspace, and who has been invited. */
+/**
+ * `/members` — who is in the Workspace, and who has been invited.
+ *
+ * Removal is the two-step the Tokens page uses for revoking, rendered without
+ * the client JavaScript a dialog would need: `?confirm=<id>` re-renders one row
+ * armed, and the armed row is the only one carrying a POST. So the destructive
+ * request cannot be reached in one click, and the page stays a document.
+ */
 export async function membersPage(
   db: CruxDb,
   viewer: Viewer,
-  opts: { inviteLink?: string; invitedEmail?: string; error?: string } = {},
+  opts: {
+    inviteLink?: string;
+    invitedEmail?: string;
+    error?: string;
+    /** The Member whose row is armed for removal, from `?confirm=`. */
+    confirming?: string;
+    /** Name of the Member just removed, for the confirmation notice. */
+    removed?: string;
+  } = {},
 ): Promise<{ title: string; body: Html }> {
-  const members = await db
-    .select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
-    .from(authUsers);
+  const members = await listMembers(db);
   const invites = (await listInvites(db)).filter((i) => !i.acceptedAt);
   const now = Date.now();
 
@@ -123,6 +136,14 @@ export async function membersPage(
     </p>
 
     ${opts.error ? html`<div class="notice bad">${opts.error}</div>` : ""}
+    ${
+      opts.removed
+        ? html`<div class="notice">
+            <b>${opts.removed}</b> is no longer a Member. Their sign-in, sessions and CLI tokens are
+            revoked; everything they filed still carries their name.
+          </div>`
+        : ""
+    }
     ${
       opts.inviteLink
         ? html`<div class="notice">
@@ -136,14 +157,19 @@ export async function membersPage(
     <div class="panel">
       <div class="hd">In this Workspace <span class="r">${members.length}</span></div>
       ${members.map(
-        (m) => html`<div class="sol" style="grid-template-columns:1fr auto">
+        (m) => html`<div class="sol" style="grid-template-columns:1fr auto 190px">
           <div class="t">
             ${m.name} ${m.id === viewer.id ? html`<span class="badge chosen">you</span>` : ""}
           </div>
           <div style="color:var(--faint);font-size:12px">${m.email ?? "no address"}</div>
+          <div style="text-align:right">${removalControl(m, viewer, opts.confirming)}</div>
         </div>`,
       )}
     </div>
+    <p style="color:var(--faint);font-size:12px;margin:10px 2px 0">
+      Removing a Member revokes their sign-in, their sessions and their CLI tokens. What they filed
+      stays theirs — every Observation, Problem and Decision keeps their name on it.
+    </p>
 
     <h2>Invite a Member</h2>
     <form class="form" method="post" action="/members/invite" style="max-width:520px">
@@ -170,6 +196,36 @@ export async function membersPage(
     }
   `;
   return { title: "Members", body };
+}
+
+/**
+ * The right-hand cell of a Member row: nothing for yourself, `Remove` for
+ * anyone else, and `Confirm`/`Cancel` for the one row `?confirm=` names.
+ *
+ * There is no control on your own row. Not because self-removal is dangerous in
+ * itself, but because it is the one removal that can empty the Workspace: with
+ * no roles to distinguish Members (ADR-0003), the last one out would leave a
+ * deployment nobody can sign in to and no invite can be issued from. Signing
+ * out is what leaving looks like.
+ */
+function removalControl(
+  member: { id: string; name: string },
+  viewer: Viewer,
+  confirming?: string,
+): Html {
+  if (member.id === viewer.id) {
+    return html`<span style="color:var(--faint);font-size:12px">sign out to leave</span>`;
+  }
+  if (confirming === member.id) {
+    return html`<form method="post" action="/members/remove" style="display:inline">
+        <input type="hidden" name="id" value="${member.id}" />
+        <button class="btn danger" type="submit">Confirm</button>
+      </form>
+      <a href="/members" style="color:var(--faint);font-size:12px;margin-left:10px">Cancel</a>`;
+  }
+  return html`<a class="btn danger" href="/members?confirm=${encodeURIComponent(member.id)}"
+    >Remove</a
+  >`;
 }
 
 /** `/tokens` — mint and revoke the bearer tokens the CLI presents. */

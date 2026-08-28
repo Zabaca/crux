@@ -30,6 +30,9 @@ export const authUsers = sqliteTable("users", {
   image: text("image"),
   createdAt: integer("created_at", { mode: "timestamp_ms" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp_ms" }).notNull(),
+  /** Kept as epoch ms rather than a Date: Better Auth never reads this column,
+   * and every gate that does is corpus code. See `auth/membership.ts`. */
+  removedAt: integer("removed_at"),
 });
 
 export const authSessions = sqliteTable("auth_sessions", {
