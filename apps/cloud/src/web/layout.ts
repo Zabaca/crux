@@ -3,11 +3,15 @@
  * CRUX-6D86GE: Stage columns on the Workstream page and a narrowing rail on the
  * Problem page, so the corpus's central mechanic is what a reader sees first.
  *
- * The stylesheet is inlined rather than served as an asset: these pages carry no
- * client JavaScript and no images, so a single document is the whole payload and
- * there is no second request to get wrong.
+ * The stylesheet is inlined rather than served as an asset, and so is the mark
+ * in the header: these pages carry no client JavaScript and fetch no images, so
+ * a single document is the whole payload and there is no second request to get
+ * wrong. The favicon is the one exception, and it is not really one — the
+ * browser asks for that on its own, from a route that answers without touching
+ * the database (see `brand.ts` and the icon routes in `../index.ts`).
  */
 import { html, raw, type Html } from "./html.js";
+import { FAVICON_LINKS, MARK_INLINE } from "./brand.js";
 
 const STYLES = `
 :root {
@@ -25,7 +29,7 @@ a:hover{text-decoration:underline}
 .wrap{max-width:1280px;margin:0 auto;padding:0 22px 90px}
 header.top{border-bottom:1px solid var(--line);background:var(--col)}
 .top-in{max-width:1280px;margin:0 auto;padding:13px 22px;display:flex;align-items:center;gap:16px}
-.logo{width:24px;height:24px;border-radius:6px;background:linear-gradient(140deg,var(--now),var(--later))}
+.logo{width:24px;height:24px;display:block;flex:none}
 .brand{font-weight:700;letter-spacing:-.01em}
 .ws{color:var(--faint);font-size:13px}
 .top nav{margin-left:auto;display:flex;gap:18px;align-items:center;color:var(--muted);font-size:13px}
@@ -179,6 +183,7 @@ export function page(opts: {
       <meta charset="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>${opts.title} · Crux</title>
+      ${FAVICON_LINKS}
       <style>
         ${raw(STYLES)}
       </style>
@@ -186,7 +191,7 @@ export function page(opts: {
     <body>
       <header class="top">
         <div class="top-in">
-          <span class="logo"></span><a href="/" class="brand">Crux</a>
+          ${MARK_INLINE}<a href="/" class="brand">Crux</a>
           <span class="ws">Workspace · ${opts.workspace}</span>
           ${nav}
         </div>

@@ -22,7 +22,9 @@ export default defineConfig({
   // cookies (ADR-0007). Left to its default the adapter would declare a
   // `SESSION` KV namespace in the generated config, which is then a namespace
   // to create, bind and keep alive for a feature nothing calls. Same for
-  // `IMAGES`: this site serves no images.
+  // `IMAGES`: the only image this site serves is the favicon, which the Worker
+  // returns as bytes from `src/web/brand.ts` — nothing here needs resizing or
+  // reformatting at the edge, which is all the image service would do.
   session: { driver: "memory" },
   adapter: cloudflare({
     imageService: "passthrough",

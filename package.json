@@ -13,6 +13,7 @@
     "format": "bunx oxfmt .",
     "crux": "bun run packages/cli/src/index.ts",
     "docs:check": "bun run scripts/docs-check.ts",
+    "favicon": "bun run scripts/build-favicon.ts",
     "test": "bun test packages && bun run test:workers",
     "deploy": "bunx @zabaca/zbc apply production",
     "prepare": "husky",
