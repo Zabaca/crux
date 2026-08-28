@@ -8,6 +8,8 @@ import astro from "@astrojs/cloudflare/entrypoints/server.js";
 
 import { handleApi, type Env } from "./api.js";
 import { handleWeb } from "./web/router.js";
+import { MARK_SVG } from "./web/brand.js";
+import { FAVICON_ICO_BASE64 } from "./web/favicon-ico.js";
 
 export type { Env };
 export { ViewStateDO } from "./view-state-do.js";
@@ -17,6 +19,35 @@ function json(body: unknown, status = 200): Response {
     status,
     headers: { "content-type": "application/json; charset=utf-8" },
   });
+}
+
+/** Decoded once per isolate rather than per request — it is 5KB and never changes. */
+const FAVICON_ICO = Uint8Array.from(atob(FAVICON_ICO_BASE64), (c) => c.charCodeAt(0));
+
+const ICON_CACHE = "public, max-age=86400";
+
+/**
+ * The two favicon routes.
+ *
+ * They sit here beside `/health` rather than in `web/router.ts` because
+ * `handleWeb` builds a D1 client and a Better Auth instance *before* it routes,
+ * and answers 503 outright when `BETTER_AUTH_SECRET` is missing. A tab icon
+ * should not cost a session lookup, and it should not disappear on a deployment
+ * whose browser surfaces are switched off — that deployment still has a CLI, an
+ * API and a `/health` page someone is looking at in a tab.
+ */
+function favicon(pathname: string): Response | null {
+  if (pathname === "/favicon.svg") {
+    return new Response(MARK_SVG, {
+      headers: { "content-type": "image/svg+xml; charset=utf-8", "cache-control": ICON_CACHE },
+    });
+  }
+  if (pathname === "/favicon.ico") {
+    return new Response(FAVICON_ICO, {
+      headers: { "content-type": "image/x-icon", "cache-control": ICON_CACHE },
+    });
+  }
+  return null;
 }
 
 /**
@@ -55,9 +86,11 @@ const ASTRO_PATHS = [
  * The order is the contract.
  *
  * `/health` and `/v1` come first and unconditionally: the CLI's contract must
- * not be reachable through, or shadowed by, anything the site does. Astro takes
- * the routes it owns next, and the hand-written pages take everything else —
- * they are last because they are the ones that end in a rendered 404 page.
+ * not be reachable through, or shadowed by, anything the site does. The favicon
+ * joins them at the front for the same reason in miniature — it is bytes, not a
+ * page, and it depends on neither a database nor a session. Astro takes the
+ * routes it owns next, and the hand-written pages take everything else — they
+ * are last because they are the ones that end in a rendered 404 page.
  *
  * This is what "one Worker" (ADR-0004) looks like from the inside: Astro wraps
  * this module rather than replacing it, so the JSON API and the site share a
@@ -68,6 +101,9 @@ export default {
     const { pathname } = new URL(request.url);
 
     if (pathname === "/health") return health(env);
+
+    const icon = favicon(pathname);
+    if (icon) return icon;
 
     const api = await handleApi(request, env);
     if (api) return api;

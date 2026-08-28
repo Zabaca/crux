@@ -173,7 +173,10 @@ reports `503 degraded` instead of a hollow `ok`.
 - [`packages/core`](packages/core) — schema, transitions, `dispatch()` and `query()`, validation, config loader.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, and the HTTP client every command goes through.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
-- [`scripts/`](scripts/) — seeding and the doc-tree rot check.
+- [`scripts/`](scripts/) — seeding, the doc-tree rot check, and the favicon
+  renderer (`bun run favicon`, after editing the mark in
+  [`brand.ts`](apps/cloud/src/web/brand.ts) — it needs `rsvg-convert` and
+  `magick`, which is why it is not part of `bun run build`).
 - [`apps/cloud`](apps/cloud) — the deployed Cloudflare Worker: `/health`, the `/v1` JSON API, the page templates under [`src/web/`](apps/cloud/src/web), the view-state Durable Object, and the Astro site (`astro/`) whose React islands are the board and the action dialogs.
 
 ## Docs
