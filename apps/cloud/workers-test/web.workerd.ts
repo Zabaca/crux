@@ -363,6 +363,45 @@ describe("read pages", () => {
     expect(body).toContain("the cost being paid"); // the why-note
   });
 
+  test("the Observation list groups the pile by what has been done with it", async () => {
+    const { cookie } = await inviteAndJoin("obslist@example.com", "Obs Lister");
+    await seedNarrowedProblem(); // files one Observation and links it as Evidence
+
+    await dispatchAs("USR-james", {
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-crux", content: "nobody has looked at this one yet" },
+    });
+    const dupe = await dispatchAs("USR-james", {
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-crux", content: "a signal we decided not to use" },
+    });
+    await dispatchAs("USR-james", {
+      kind: "ARCHIVE_OBSERVATION",
+      payload: { id: (dupe as { result: { id: string } }).result.id, rationale: "duplicate" },
+    });
+
+    const body = await (await get("/w/crux/observations", { headers: { cookie } })).text();
+    expect(body).toContain("3 filed");
+    expect(body).toContain("1 linked to a Problem");
+    expect(body).toContain("1 archived");
+    expect(body).toContain("1 waiting");
+    // Each one is present and says what became of it.
+    expect(body).toContain("nobody has looked at this one yet");
+    expect(body).toContain("Evidence for 1 Problem");
+    expect(body).toContain("duplicate");
+  });
+
+  test("the Workstream page says how much intake is waiting", async () => {
+    const { cookie } = await inviteAndJoin("waiting@example.com", "Waiting");
+    await dispatchAs("USR-james", {
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-crux", content: "untriaged" },
+    });
+    const body = await (await get("/w/crux", { headers: { cookie } })).text();
+    expect(body).toContain("/w/crux/observations");
+    expect(body).toContain("1 waiting");
+  });
+
   test("a URL naming nothing is a 404 page, not a crash", async () => {
     const { cookie } = await inviteAndJoin("missing@example.com", "Missing");
     const res = await get("/w/crux/problems/9999", { headers: { cookie } });

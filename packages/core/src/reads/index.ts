@@ -55,6 +55,7 @@ export const QuerySchema = z.discriminatedUnion("kind", [
     workstreamId: z.string(),
     showArchived: z.boolean().optional(),
   }),
+  z.object({ kind: z.literal("OBSERVATION_SUMMARIES"), workstreamId: z.string() }),
 
   z.object({
     kind: z.literal("PROBLEM_LIST"),
@@ -126,6 +127,17 @@ export type SolutionWithOutcome = Awaited<ReturnType<typeof solutionsWithOutcome
 export type EvidenceWithObservation = Awaited<ReturnType<typeof evidenceWithObservations>>[number];
 
 export type WorkstreamSummary = WorkstreamRow & { openProblemCount: number };
+
+/**
+ * An Observation with the state it does not store.
+ *
+ * Observation has no `status` column, by design — its state is derivable from
+ * related rows (see the Principles in the README). `problemCount` is how many
+ * Problems it is Evidence for, which is the whole of "has this been used"; the
+ * archive block is the other half, the human judgment that it will not be. An
+ * Observation with neither is intake that nobody has triaged yet.
+ */
+export type ObservationSummary = ObservationWithArchive & { problemCount: number };
 
 export type ProblemSummary = ProblemRow & {
   evidenceCount: number;
@@ -516,6 +528,33 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     case "OBSERVATION_UNLINKED": {
       const rows = await unlinkedObservations(db, q.workstreamId, Boolean(q.showArchived));
       return [...rows].sort((a, b) => b.createdAt - a.createdAt);
+    }
+
+    case "OBSERVATION_SUMMARIES": {
+      const rows = await db
+        .select()
+        .from(observations)
+        .where(eq(observations.workstreamId, q.workstreamId));
+      // Every Evidence row, unfiltered — the same shape `unlinkedObservations`
+      // uses above, and for the same reason: the alternative is an `inArray`
+      // over every Observation id in the Workstream, which is the parameter
+      // limit this deployment would hit first.
+      const ev = await db.select({ observationId: evidence.observationId }).from(evidence);
+      // Counting rows *is* counting Problems: `evidence_obs_problem_unique`
+      // permits one Evidence row per (Observation, Problem) pair, so a second
+      // why-note about the same Problem is a conflict, not a second row.
+      const count = new Map<string, number>();
+      for (const e of ev) count.set(e.observationId, (count.get(e.observationId) ?? 0) + 1);
+      return rows
+        .map(
+          (o) =>
+            ({
+              ...o,
+              archive: toArchive(o),
+              problemCount: count.get(o.id) ?? 0,
+            }) satisfies ObservationSummary,
+        )
+        .sort((a, b) => b.createdAt - a.createdAt);
     }
 
     case "PROBLEM_LIST": {

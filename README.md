@@ -216,7 +216,9 @@ naming the broken links and orphans.
 
 MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting Members,
 minting and revoking CLI tokens, pages for Problem, Solution and Observation,
-the doc tree at `/docs`, and the write surfaces — a Workstream at `/w/<slug>`
+the Observation intake list at `/w/<slug>/observations` — grouped into linked,
+archived and waiting, all three read off related rows rather than a status
+column — the doc tree at `/docs`, and the write surfaces — a Workstream at `/w/<slug>`
 that *is* a drag-and-drop roadmap board, and contextual action dialogs that file
 entities and record transitions. The board shows all six Stages; the two
 terminal ones, `done` and `abandoned`, are read-only there because they are

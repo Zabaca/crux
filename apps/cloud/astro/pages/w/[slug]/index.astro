@@ -13,7 +13,7 @@
  */
 import { env } from "cloudflare:workers";
 import { query } from "@crux/core/reads";
-import type { ProblemSummary, WorkstreamRow } from "@crux/core/reads";
+import type { ObservationSummary, ProblemSummary, WorkstreamRow } from "@crux/core/reads";
 
 import ActionBar from "../../../components/ActionBar.tsx";
 import RoadmapBoard from "../../../components/RoadmapBoard.tsx";
@@ -47,6 +47,16 @@ const problems: BoardProblem[] = summaries.map((p) => ({
 }));
 const open = summaries.filter((p) => p.status !== "done" && p.status !== "abandoned").length;
 
+// The Observations are not on this page — they are a different pile with a
+// different rhythm, and there can be an order of magnitude more of them. What
+// belongs here is the one number that says whether the pile needs a pass:
+// filed, and neither linked to a Problem nor archived.
+const observations = (await query(
+  { kind: "OBSERVATION_SUMMARIES", workstreamId: ws.id },
+  { db: ctx.db },
+)) as ObservationSummary[];
+const waiting = observations.filter((o) => !o.archive && o.problemCount === 0).length;
+
 const shell = page({
   title: ws.title,
   viewer: ctx.viewer,
@@ -59,7 +69,8 @@ const [head, tail] = shell.split("<!--BOARD-->");
 <div class="crumb"><a href="/">Workstreams</a> / {ws.slug}</div>
 <h1>{ws.title}</h1>
 <p class="sub">
-  {open} open {open === 1 ? "Problem" : "Problems"} · {summaries.length} total.
+  {open} open {open === 1 ? "Problem" : "Problems"} · {summaries.length} total ·
+  <a href={`/w/${slug}/observations`}>{observations.length} Observations</a>{waiting > 0 ? `, ${waiting} waiting` : ""}.
   {ws.description ?? ""}
 </p>
 <ActionBar client:load actions={workstreamActions(slug)} />

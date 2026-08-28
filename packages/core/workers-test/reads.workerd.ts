@@ -121,6 +121,59 @@ describe("query()", () => {
     ]);
   });
 
+  test("OBSERVATION_SUMMARIES derives the three states an Observation can be in", async () => {
+    await seed(); // OBS-1 is Evidence for the seeded Problem.
+    await db.insert(observations).values([
+      { id: "OBS-2", workstreamId: "WS-t", reporterId: "USR-t", content: "nobody has read me" },
+      {
+        id: "OBS-3",
+        workstreamId: "WS-t",
+        reporterId: "USR-t",
+        content: "ruled out",
+        archivedAt: 1,
+        archivedById: "USR-t",
+        archiveRationale: "duplicate of OBS-1",
+      },
+    ]);
+
+    const rows = (await query(
+      { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t" },
+      { db },
+    )) as Array<{ id: string; problemCount: number; archive: unknown }>;
+    const byId = new Map(rows.map((r) => [r.id, r]));
+
+    // Used: Evidence for one Problem, and no `status` column said so.
+    expect(byId.get("OBS-1")?.problemCount).toBe(1);
+    expect(byId.get("OBS-1")?.archive).toBeNull();
+    // Waiting: neither linked nor ruled out — the intake queue.
+    expect(byId.get("OBS-2")?.problemCount).toBe(0);
+    expect(byId.get("OBS-2")?.archive).toBeNull();
+    // Ruled out: archived carries the recorded judgment, and stays at zero.
+    expect(byId.get("OBS-3")?.problemCount).toBe(0);
+    expect(byId.get("OBS-3")?.archive).toMatchObject({ rationale: "duplicate of OBS-1" });
+  });
+
+  test("OBSERVATION_SUMMARIES counts every Problem an Observation feeds", async () => {
+    await seed(); // OBS-1 is Evidence for the seeded Problem.
+    const [p2] = await db
+      .insert(problems)
+      .values({ workstreamId: "WS-t", title: "P2", description: "D", createdById: "USR-t" })
+      .returning({ id: problems.id });
+    await db.insert(evidence).values({
+      id: "EVD-2",
+      observationId: "OBS-1",
+      problemId: p2!.id,
+      note: "also",
+      createdById: "USR-t",
+    });
+
+    const rows = (await query(
+      { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t" },
+      { db },
+    )) as Array<{ id: string; problemCount: number }>;
+    expect(rows.find((r) => r.id === "OBS-1")?.problemCount).toBe(2);
+  });
+
   test("an unrecorded read leaves none", async () => {
     const store = new MemoryViewStore();
     await query({ kind: "WORKSTREAM_LIST" }, { db, viewStore: store });

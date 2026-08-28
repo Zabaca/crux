@@ -13,6 +13,7 @@
 import { query } from "@crux/core/reads";
 import type {
   ObservationDetail,
+  ObservationSummary,
   ProblemDetail,
   SolutionDetail,
   WorkstreamRow,
@@ -369,6 +370,96 @@ export async function solutionPage(
     </div>
   `;
   return { title: solution.title, body };
+}
+
+/**
+ * `/w/<slug>/observations` — the intake pile, and how much of it has been used.
+ *
+ * Observations are the one entity filed faster than they are read: cheap to
+ * create, never deleted, and until now reachable in the browser only by
+ * permalink. What a reader wants from the list is not the content of each one
+ * — it is the triage state of the pile, which is why the three groups are the
+ * page and the rows are just rows.
+ *
+ * The groups are derived, not stored. Observation has no `status` column by
+ * design; being Evidence for a Problem is what "used" means, and an archive
+ * with a rationale is the recorded judgment that it never will be. What is
+ * left over is the queue.
+ */
+export async function observationListPage(
+  db: CruxDb,
+  slug: string,
+): Promise<{ title: string; body: Html }> {
+  const ws = await ask<WorkstreamRow | null>(db, { kind: "WORKSTREAM_BY_SLUG", slug });
+  if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
+  const rows = await ask<ObservationSummary[]>(db, {
+    kind: "OBSERVATION_SUMMARIES",
+    workstreamId: ws.id,
+  });
+
+  const archived = rows.filter((o) => o.archive);
+  const linked = rows.filter((o) => !o.archive && o.problemCount > 0);
+  const waiting = rows.filter((o) => !o.archive && o.problemCount === 0);
+
+  const row = (o: ObservationSummary, note: Html | string): Html =>
+    html`<div class="ev">
+      <div class="q">
+        <a href="/w/${ws.slug}/observations/${o.id}">${o.content}</a>
+      </div>
+      <div class="m mono">
+        ${o.id} · ${date(o.createdAt)}${o.source ? html` · ${o.source}` : ""} · ${note}
+      </div>
+    </div>`;
+
+  const group = (title: string, count: number, blurb: string, body: Html): Html =>
+    html`<div class="panel">
+      <div class="hd">${title} <span class="r">${count}</span></div>
+      ${count === 0 ? html`<div class="pad" style="color:var(--faint)">${blurb}</div>` : body}
+    </div>`;
+
+  const body = html`
+    ${crumb([
+      { href: "/", label: "Workstreams" },
+      { href: `/w/${ws.slug}`, label: ws.slug },
+      { label: "Observations" },
+    ])}
+    <h1>Observations</h1>
+    <p class="sub">
+      ${rows.length} filed · ${linked.length} linked to a Problem · ${archived.length} archived ·
+      ${waiting.length} waiting.
+    </p>
+
+    ${group(
+      "Waiting",
+      waiting.length,
+      "Nothing waiting — every Observation here is either Evidence or archived.",
+      html`${waiting.map((o) => row(o, "not yet linked"))}`,
+    )}
+    ${group(
+      "Linked",
+      linked.length,
+      "No Observation has been linked to a Problem yet.",
+      html`${linked.map((o) =>
+        row(o, `Evidence for ${o.problemCount} ${o.problemCount === 1 ? "Problem" : "Problems"}`),
+      )}`,
+    )}
+    ${group(
+      "Archived",
+      archived.length,
+      "Nothing archived.",
+      html`${archived.map((o) =>
+        row(o, `archived — ${o.archive?.rationale ?? "(no rationale recorded)"}`),
+      )}`,
+    )}
+
+    <p class="legend">
+      An Observation has no status of its own — these groups are read off its Evidence rows and its
+      archive. <b>Waiting</b> is the intake queue: filed, and not yet either used or ruled out.
+      Linking one is what makes it Evidence, and archiving one records the judgment that it will not
+      be.
+    </p>
+  `;
+  return { title: `Observations · ${ws.title}`, body };
 }
 
 /** `/w/<slug>/observations/<id>` — one signal and every Problem it supports. */

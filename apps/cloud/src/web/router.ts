@@ -25,7 +25,13 @@ import {
 import { html, htmlResponse, type Html } from "./html.js";
 import { workspaceName, type WebEnv } from "./session.js";
 import { page, type Viewer } from "./layout.js";
-import { PageNotFound, observationPage, solutionPage, workstreamListPage } from "./read-pages.js";
+import {
+  PageNotFound,
+  observationListPage,
+  observationPage,
+  solutionPage,
+  workstreamListPage,
+} from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage, linkSentPage } from "./account-pages.js";
 import { ensureMember, findMemberByEmail } from "@crux/core/auth/membership";
 import { emailSenderFor } from "./session.js";
@@ -84,6 +90,7 @@ const READ_ROUTES: ReadonlyArray<
   // action bar. `problemPage()` below is still what the latter renders. A slug
   // or id that names nothing still lands back here, as the 404 page.
   [/^\/w\/([^/]+)\/solutions\/([^/]+)$/, (db, slug, id) => solutionPage(db, slug!, id!)],
+  [/^\/w\/([^/]+)\/observations$/, (db, slug) => observationListPage(db, slug!)],
   [/^\/w\/([^/]+)\/observations\/([^/]+)$/, (db, slug, id) => observationPage(db, slug!, id!)],
 ];
 
