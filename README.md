@@ -215,13 +215,15 @@ naming the broken links and orphans.
 ## Status
 
 MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting Members,
-minting and revoking CLI tokens, pages for Workstream, Problem, Solution and
-Observation, the doc tree at `/docs`, and the write surfaces — a drag-and-drop
-roadmap board at `/w/<slug>/board` and contextual action dialogs that file
-entities and record transitions. Every one of those writes goes through
-`POST /v1/dispatch`, the CLI's endpoint, so there is no browser-only path where
-an invariant could be skipped; a refused transition shows its code and message
-rather than snapping the card back in silence. Live refresh is the ViewStateDO
+minting and revoking CLI tokens, pages for Problem, Solution and Observation,
+the doc tree at `/docs`, and the write surfaces — a Workstream at `/w/<slug>`
+that *is* a drag-and-drop roadmap board, and contextual action dialogs that file
+entities and record transitions. The board shows all six Stages; the two
+terminal ones, `done` and `abandoned`, are read-only there because they are
+reached by a Decision or an Abandonment rather than by dragging. Every one of
+those writes goes through `POST /v1/dispatch`, the CLI's endpoint, so there is
+no browser-only path where an invariant could be skipped; a refused transition
+shows its code and message rather than snapping the card back in silence. Live refresh is the ViewStateDO
 push stream, so a `crux` command in a terminal lands on the open page.
 
 The site is Astro with React islands, wrapping the hand-written Worker entry

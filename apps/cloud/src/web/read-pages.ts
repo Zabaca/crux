@@ -1,6 +1,8 @@
 /**
- * The read surfaces: Workstream list, Workstream, Problem, Solution and
- * Observation.
+ * The read surfaces: Workstream list, Problem, Solution and Observation.
+ *
+ * `/w/<slug>` is not among them — it is the roadmap board, an Astro route with
+ * a hydrated island, and so lives in `astro/pages/w/[slug]/index.astro`.
  *
  * Every page is server-rendered from `query()` — the same named reads the CLI
  * asks for — so a `--json` shape and the page that displays it can never drift
@@ -12,7 +14,6 @@ import { query } from "@crux/core/reads";
 import type {
   ObservationDetail,
   ProblemDetail,
-  ProblemSummary,
   SolutionDetail,
   WorkstreamRow,
   WorkstreamSummary,
@@ -40,8 +41,6 @@ const ask = <T>(db: CruxDb, q: unknown): Promise<T> => query(q, { db }) as Promi
 /** A Problem's Stage. `null` is *unscheduled* — filed, not yet on the roadmap. */
 const stageOf = (status: string | null): string => status ?? "unscheduled";
 
-const LANES = ["now", "next", "later", "unscheduled", "done", "abandoned"] as const;
-
 const badge = (value: string): Html => html`<span class="badge ${value}">${value}</span>`;
 
 const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
@@ -51,15 +50,6 @@ const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
         html`${i > 0 ? html` / ` : ""}${p.href ? html`<a href="${p.href}">${p.label}</a>` : p.label}`,
     )}
   </div>`;
-
-/** The three-segment narrowing bar: Evidence → Solutions → Decision. */
-function narrowingBar(evidence: number, solutions: number, decided: boolean): Html {
-  return html`<div class="bar">
-    <span class="seg ${evidence > 0 ? "on" : ""}"></span>
-    <span class="seg ${solutions > 0 ? "on" : ""}"></span>
-    <span class="seg ${decided ? "on g" : ""}"></span>
-  </div>`;
-}
 
 // ---------------------------------------------------------------------------
 // Pages
@@ -89,67 +79,6 @@ export async function workstreamListPage(db: CruxDb): Promise<{ title: string; b
     }
   `;
   return { title: "Workstreams", body };
-}
-
-/** `/w/<slug>` — Problems laid out by Stage. */
-export async function workstreamPage(
-  db: CruxDb,
-  slug: string,
-): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, { kind: "WORKSTREAM_BY_SLUG", slug });
-  if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-
-  const problems = await ask<ProblemSummary[]>(db, {
-    kind: "PROBLEM_SUMMARIES",
-    workstreamId: ws.id,
-  });
-  const open = problems.filter((p) => p.status !== "done" && p.status !== "abandoned").length;
-
-  const body = html`
-    ${crumb([{ href: "/", label: "Workstreams" }, { label: ws.slug }])}
-    <h1>${ws.title}</h1>
-    <p class="sub">
-      ${open} open ${open === 1 ? "Problem" : "Problems"} · ${problems.length} total.
-      ${ws.description ?? ""}
-    </p>
-
-    <h2>Problems by Stage</h2>
-    <p style="margin:-6px 0 12px">
-      <a class="btn plain" href="/w/${ws.slug}/board">Open the board</a>
-    </p>
-    <div class="board">
-      ${LANES.map((lane) => {
-        const items = problems.filter((p) => stageOf(p.status) === lane);
-        return html`<div class="lane ${lane}">
-          <div class="lane-hd">
-            <span class="dot"></span><span class="nm">${lane}</span>
-            <span class="ct">${items.length}</span>
-          </div>
-          ${
-            items.length === 0
-              ? html`<div class="lane-empty">Nothing here.</div>`
-              : items.map(
-                  (p) => html`<a class="pcard" href="/w/${ws.slug}/problems/${p.id}">
-                    <div class="id mono">PRB-${p.id}</div>
-                    <div class="t">${p.title}</div>
-                    ${narrowingBar(p.evidenceCount, p.solutionCount, p.decided)}
-                    <div class="mm">
-                      <span>${p.evidenceCount} ev</span><span>${p.solutionCount} sol</span>
-                      <span>${p.decided ? "decided" : "open"}</span>
-                    </div>
-                  </a>`,
-                )
-          }
-        </div>`;
-      })}
-    </div>
-    <p class="legend">
-      Stage is a Problem’s place on the roadmap. A Problem starts <b>unscheduled</b>; scheduling
-      places it in <b>now</b>, <b>next</b> or <b>later</b>; it ends <b>done</b> or <b>abandoned</b>.
-      The bar on each card is its narrowing: Evidence → Solutions → Decision.
-    </p>
-  `;
-  return { title: ws.title, body };
 }
 
 /** `/w/<slug>/problems/<id>` — one Problem and everything hanging off it. */

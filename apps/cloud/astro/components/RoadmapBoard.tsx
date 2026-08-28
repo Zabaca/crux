@@ -5,6 +5,12 @@
  * than a Next.js server action), how it refreshes (a full reload on the DO's
  * push stream rather than `router.refresh()`), and its class names, which are
  * the Worker's stylesheet rather than Tailwind.
+ *
+ * This is the whole of `/w/<slug>`: it shows every Stage, including the two a
+ * Problem can only leave by a transition of its own, so the page that reads
+ * best is also the page you act on. A terminal lane is rendered and inert
+ * rather than omitted — "there are fifteen done" is the fact a roadmap is read
+ * for, and dropping into it is refused here rather than by the server.
  */
 import { useEffect, useState } from "react";
 import {
@@ -20,7 +26,8 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { dispatchAction, onViewStateChange } from "../lib/dispatch.js";
 
-export type Stage = "now" | "next" | "later" | "unscheduled";
+/** Every Stage a Problem can be in — the four schedulable ones and the two terminal. */
+export type Stage = "now" | "next" | "later" | "unscheduled" | "done" | "abandoned";
 
 export type BoardProblem = {
   id: number;
@@ -31,19 +38,37 @@ export type BoardProblem = {
   decided: boolean;
 };
 
-/** The four Stages a Problem can be dragged between. `done` and `abandoned` are
- * transitions with their own rules, not columns you can drop into. */
-const STAGES: ReadonlyArray<{ id: Stage; label: string }> = [
-  { id: "now", label: "Now" },
-  { id: "next", label: "Next" },
-  { id: "later", label: "Later" },
-  { id: "unscheduled", label: "Unscheduled" },
+/**
+ * The lanes, in roadmap order. `movable` is the drag rule: `done` and
+ * `abandoned` are reached by transitions with their own invariants — a
+ * Decision, an Abandonment — so they are shown but neither picked up from nor
+ * dropped into. Everything else here would be a drag that the server refuses.
+ */
+const STAGES: ReadonlyArray<{ id: Stage; label: string; movable: boolean }> = [
+  { id: "now", label: "Now", movable: true },
+  { id: "next", label: "Next", movable: true },
+  { id: "later", label: "Later", movable: true },
+  { id: "unscheduled", label: "Unscheduled", movable: true },
+  { id: "done", label: "Done", movable: false },
+  { id: "abandoned", label: "Abandoned", movable: false },
 ];
 
-function Card({ slug, problem }: { slug: string; problem: BoardProblem }) {
+/** The Stages a drag may start or end in — `movable` above, as a lookup. */
+const MOVABLE: ReadonlySet<Stage> = new Set(STAGES.filter((s) => s.movable).map((s) => s.id));
+
+function Card({
+  slug,
+  problem,
+  movable,
+}: {
+  slug: string;
+  problem: BoardProblem;
+  movable: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: String(problem.id),
     data: { stage: problem.stage },
+    disabled: !movable,
   });
   return (
     <div
@@ -52,7 +77,7 @@ function Card({ slug, problem }: { slug: string; problem: BoardProblem }) {
       style={{
         transform: CSS.Translate.toString(transform),
         opacity: isDragging ? 0.5 : 1,
-        cursor: "grab",
+        cursor: movable ? "grab" : "default",
       }}
       {...attributes}
       {...listeners}
@@ -66,6 +91,11 @@ function Card({ slug, problem }: { slug: string; problem: BoardProblem }) {
         <span className={`seg ${problem.solutionCount > 0 ? "on" : ""}`} />
         <span className={`seg ${problem.decided ? "on g" : ""}`} />
       </div>
+      <div className="mm">
+        <span>{problem.evidenceCount} ev</span>
+        <span>{problem.solutionCount} sol</span>
+        <span>{problem.decided ? "decided" : "open"}</span>
+      </div>
     </div>
   );
 }
@@ -75,13 +105,15 @@ function Lane({
   label,
   slug,
   problems,
+  movable,
 }: {
   stage: Stage;
   label: string;
   slug: string;
   problems: BoardProblem[];
+  movable: boolean;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: stage });
+  const { setNodeRef, isOver } = useDroppable({ id: stage, disabled: !movable });
   return (
     <div
       ref={setNodeRef}
@@ -96,7 +128,7 @@ function Lane({
       {problems.length === 0 ? (
         <div className="lane-empty">Nothing here.</div>
       ) : (
-        problems.map((p) => <Card key={p.id} slug={slug} problem={p} />)
+        problems.map((p) => <Card key={p.id} slug={slug} problem={p} movable={movable} />)
       )}
     </div>
   );
@@ -124,6 +156,10 @@ export default function RoadmapBoard({
     const from = active.data.current?.stage as Stage | undefined;
     const to = over.id as Stage;
     if (!from || from === to) return;
+    // dnd-kit already refuses to pick up or drop on a terminal lane. Saying it
+    // again here is what keeps `dispatchAction`'s untyped payload honest: this
+    // is the line that decides a Stage is legal, not the drop target's config.
+    if (!MOVABLE.has(from) || !MOVABLE.has(to)) return;
 
     const id = Number(active.id);
     const before = problems;
@@ -151,13 +187,14 @@ export default function RoadmapBoard({
         </p>
       ) : null}
       <DndContext sensors={sensors} onDragEnd={onDragEnd}>
-        <div className="board" style={{ gridTemplateColumns: "repeat(4,minmax(0,1fr))" }}>
+        <div className="board">
           {STAGES.map((s) => (
             <Lane
               key={s.id}
               stage={s.id}
               label={s.label}
               slug={slug}
+              movable={s.movable}
               problems={problems.filter((p) => p.stage === s.id)}
             />
           ))}

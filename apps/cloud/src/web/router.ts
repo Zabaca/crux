@@ -25,13 +25,7 @@ import {
 import { html, htmlResponse, type Html } from "./html.js";
 import { workspaceName, type WebEnv } from "./session.js";
 import { page, type Viewer } from "./layout.js";
-import {
-  PageNotFound,
-  observationPage,
-  solutionPage,
-  workstreamListPage,
-  workstreamPage,
-} from "./read-pages.js";
+import { PageNotFound, observationPage, solutionPage, workstreamListPage } from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage, linkSentPage } from "./account-pages.js";
 import { ensureMember, findMemberByEmail } from "@crux/core/auth/membership";
 import { emailSenderFor } from "./session.js";
@@ -85,11 +79,10 @@ async function sendSignInLink(
 const READ_ROUTES: ReadonlyArray<
   readonly [RegExp, (db: CruxDb, ...params: string[]) => Promise<{ title: string; body: Html }>]
 > = [
-  [/^\/w\/([^/]+)$/, (db, slug) => workstreamPage(db, slug!)],
-  // `/w/<slug>/problems/<id>` is not here: it moved to an Astro route so it can
-  // carry the action island (`astro/pages/w/[slug]/problems/[id].astro`), which
-  // renders this file's `problemPage()`. An id that names nothing still lands
-  // back here, as the 404 page below.
+  // `/w/<slug>` and `/w/<slug>/problems/<id>` are not here: both moved to Astro
+  // routes so they can carry hydrated islands — the roadmap board and the
+  // action bar. `problemPage()` below is still what the latter renders. A slug
+  // or id that names nothing still lands back here, as the 404 page.
   [/^\/w\/([^/]+)\/solutions\/([^/]+)$/, (db, slug, id) => solutionPage(db, slug!, id!)],
   [/^\/w\/([^/]+)\/observations\/([^/]+)$/, (db, slug, id) => observationPage(db, slug!, id!)],
 ];
@@ -142,6 +135,13 @@ export async function handleWeb(
   const path = url.pathname;
 
   if (path === "/health" || path === "/v1" || path.startsWith("/v1/")) return null;
+
+  // `/w/<slug>/board` was a second, smaller copy of `/w/<slug>`; the two are one
+  // page now. Permanent, and before the session gate, because the URL is gone
+  // rather than protected — a bookmark should land on the page, not a sign-in
+  // for a path that no longer exists.
+  const board = /^\/w\/([^/]+)\/board$/.exec(path);
+  if (board) return redirect(`/w/${board[1]}`, 301);
 
   const db = deps.db ?? createD1Db(env.DB);
   const secret = env.BETTER_AUTH_SECRET;

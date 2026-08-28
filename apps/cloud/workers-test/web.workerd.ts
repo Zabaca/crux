@@ -169,7 +169,7 @@ describe("invite", () => {
 
     const res = await get("/w/crux", { headers: { cookie } });
     expect(res.status).toBe(200);
-    expect(await res.text()).toContain("Problems by Stage");
+    expect(await res.text()).toContain("Stage is a Problem\u2019s place on the roadmap");
   });
 
   test("an invite is single-use", async () => {
@@ -448,7 +448,7 @@ describe("the roadmap board", () => {
   test("the board renders the Problems it can move", async () => {
     const { cookie } = await inviteAndJoin("board@example.com", "Board Reader");
     await seedNarrowedProblem();
-    const res = await get("/w/crux/board", { headers: { cookie } });
+    const res = await get("/w/crux", { headers: { cookie } });
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("Context evaporates");
@@ -505,8 +505,34 @@ describe("the roadmap board", () => {
   });
 
   test("the board needs a session, like every other page", async () => {
-    const res = await get("/w/crux/board");
+    const res = await get("/w/crux");
     expect(res.status).toBe(302);
+  });
+
+  test("a Problem in a terminal Stage is shown, and is not draggable", async () => {
+    const { cookie } = await inviteAndJoin("terminal@example.com", "Terminal");
+    const problemId = await seedNarrowedProblem();
+    await dispatchAs("USR-james", {
+      kind: "ABANDON_PROBLEM",
+      payload: { id: problemId, rationale: "the cost turned out to be someone else's" },
+    });
+
+    const body = await (await get("/w/crux", { headers: { cookie } })).text();
+    // The lane renders — "how much was abandoned" is a fact a roadmap is read
+    // for, and it is the half the old board dropped.
+    expect(body).toContain('<div class="lane abandoned">');
+    expect(body).toContain("Context evaporates");
+    // …and the card in it is inert: `abandoned` is left by a transition of its
+    // own, never by a drag, so dnd-kit is told so rather than the server having
+    // to refuse the move.
+    const card = body.slice(body.indexOf('<div class="lane abandoned">'));
+    expect(card).toContain('aria-disabled="true"');
+  });
+
+  test("the old board URL redirects to the page that absorbed it", async () => {
+    const res = await get("/w/crux/board");
+    expect(res.status).toBe(301);
+    expect(res.headers.get("location")).toBe("/w/crux");
   });
 });
 
@@ -591,7 +617,7 @@ describe("contextual page actions", () => {
 
   test("the Workstream board offers the actions that belong to a Workstream", async () => {
     const { cookie } = await inviteAndJoin("wsacts@example.com", "WS Actor");
-    const body = await (await get("/w/crux/board", { headers: { cookie } })).text();
+    const body = await (await get("/w/crux", { headers: { cookie } })).text();
     expect(body).toContain("ADD_PROBLEM");
     expect(body).toContain("ADD_OBSERVATION");
   });

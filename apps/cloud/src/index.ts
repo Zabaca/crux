@@ -34,8 +34,8 @@ async function health(env: Env): Promise<Response> {
 }
 
 /**
- * The paths Astro answers for: the docs section, the roadmap board, and its own
- * hydration payloads under `/_astro/`.
+ * The paths Astro answers for: the docs section, the two Workstream pages that
+ * carry islands, and its own hydration payloads under `/_astro/`.
  *
  * The delegation is an explicit list rather than "hand Astro everything and
  * fall through on a 404". Astro answers an unrouted POST with 403 (its CSRF
@@ -47,7 +47,7 @@ async function health(env: Env): Promise<Response> {
 const ASTRO_PATHS = [
   /^\/_astro\//,
   /^\/docs(\/|$)/,
-  /^\/w\/[^/]+\/board$/,
+  /^\/w\/[^/]+$/,
   /^\/w\/[^/]+\/problems\/[^/]+$/,
 ];
 
