@@ -113,6 +113,30 @@ For intake mode, anchor on:
 
 If no workstream is in context and you can't infer one from cwd, ask before inventing.
 
+## Attempts (work happening elsewhere)
+
+Crux does not own the build. When work about a Problem starts in another tracker
+— an issue, a PR, a board card — record it as an Attempt: a pointer, not a copy.
+
+```sh
+crux attempt add --problem 42 --ref https://tracker/ENG-412 --label "Batch the writes"
+crux attempt list 42
+crux attempt close ATT-001 --status shipped --note "Landed, but backpressure is still unsolved"
+crux attempt drift            # active Problems with no open Attempt
+```
+
+- **Never describe the work here.** There is no description field and the server
+  refuses a payload carrying one — what the work *is* lives in the system `--ref`
+  points at, and a second copy would rot.
+- `--note` on close is the one thing the tracker never keeps: *why* the approach
+  ended the way it did. A closed ticket says "won't do"; it never says the
+  approach could not handle the load.
+- Closing an Attempt as `shipped` does **not** complete the Problem. Something
+  shipping is a fact about the world; the Problem being gone is a judgment
+  somebody makes.
+- The status is a coarse local marker and goes stale — nothing polls the tracker.
+  The `ref` is authoritative.
+
 ## Archive (intake hygiene)
 
 Observations are never deleted — origin trail is permanent — but misfiles happen. Use archive when:

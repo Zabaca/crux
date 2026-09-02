@@ -20,6 +20,7 @@ const EXPECTED_TABLES = [
   "observations",
   "problems",
   "evidence",
+  "attempts",
   "solutions",
   "eliminations",
   "elimination_solutions",

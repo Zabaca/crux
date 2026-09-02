@@ -17,6 +17,7 @@ import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
 import {
   abandonments,
+  attempts,
   decisionRejectedSolutions,
   decisions,
   eliminations,
@@ -69,6 +70,13 @@ export const QuerySchema = z.discriminatedUnion("kind", [
 
   z.object({ kind: z.literal("EVIDENCE_LIST"), problem: id.optional() }),
 
+  z.object({ kind: z.literal("ATTEMPT_LIST"), problem: id.optional() }),
+  z.object({
+    kind: z.literal("PROBLEM_DRIFT"),
+    workstream: z.string(),
+    stages: z.array(z.string()).optional(),
+  }),
+
   z.object({ kind: z.literal("SOLUTION_LIST"), problem: id.optional() }),
   z.object({ kind: z.literal("SOLUTION_SHOW"), id }),
   z.object({ kind: z.literal("SOLUTION_GET"), id }),
@@ -119,6 +127,15 @@ export type ProblemRow = typeof problems.$inferSelect;
 export type SolutionRow = typeof solutions.$inferSelect;
 export type ObservationRow = typeof observations.$inferSelect;
 export type AbandonmentRow = typeof abandonments.$inferSelect;
+export type AttemptRow = typeof attempts.$inferSelect;
+
+/**
+ * A Problem that has drifted: staged as active, with no *open* Attempt against
+ * it. `attemptCount` is every Attempt ever filed on it, open or closed, which
+ * is the distinction a reader wants — one that was worked on and stopped is not
+ * the same as one nobody ever touched.
+ */
+export type DriftingProblem = ProblemRow & { attemptCount: number };
 
 export type ObservationWithArchive = ObservationRow & { archive: ArchiveBlock };
 export type DecisionWithRejected = Awaited<ReturnType<typeof latestDecisionFor>>;
@@ -147,6 +164,7 @@ export type ProblemSummary = ProblemRow & {
 
 export type ProblemDetail = {
   problem: ProblemRow;
+  attempts: AttemptRow[];
   evidence: EvidenceWithObservation[];
   solutions: SolutionWithOutcome[];
   latestDecision: DecisionWithRejected;
@@ -237,6 +255,12 @@ async function requireProblem(db: CruxDb, raw: string | number) {
   const row = rows[0];
   if (!row) throw new NotFoundError(`problem not found: ${raw}`, { id: raw });
   return row;
+}
+
+/** Attempts against a Problem, oldest first. */
+async function attemptsFor(db: CruxDb, problemId: number): Promise<AttemptRow[]> {
+  const rows = await db.select().from(attempts).where(eq(attempts.problemId, problemId));
+  return [...rows].sort((a, b) => a.createdAt - b.createdAt);
 }
 
 /** Rejected-solution ids for one decision, in insertion order. */
@@ -376,6 +400,7 @@ async function contextDigest(
         .limit(1);
       return {
         ...p,
+        attempts: await attemptsFor(db, p.id),
         evidence: await evidenceWithObservations(db, p.id),
         solutions: solutionsInlined,
         latest_decision: await latestDecisionFor(db, p.id),
@@ -643,6 +668,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       )[0];
       return {
         problem: p,
+        attempts: await attemptsFor(db, problemId),
         evidence: await evidenceWithObservations(db, problemId, true),
         solutions: solutionsInlined,
         latestDecision: await latestDecisionFor(db, problemId),
@@ -657,6 +683,52 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         return db.select().from(evidence).where(eq(evidence.problemId, p.id));
       }
       return db.select().from(evidence);
+    }
+
+    case "ATTEMPT_LIST": {
+      const rows =
+        q.problem !== undefined
+          ? await db
+              .select()
+              .from(attempts)
+              .where(eq(attempts.problemId, (await requireProblem(db, q.problem)).id))
+          : await db.select().from(attempts);
+      return [...rows].sort((a, b) => a.createdAt - b.createdAt) satisfies AttemptRow[];
+    }
+
+    case "PROBLEM_DRIFT": {
+      // Drift: a Problem staged as active with zero *open* Attempts. A closed
+      // Attempt is history, not work in flight, so a Problem whose only Attempt
+      // shipped or was dropped has drifted again (ADR-0012).
+      const ws = await requireWorkstream(db, q.workstream);
+      const stages = q.stages?.length ? q.stages : ["now"];
+      const rows = await db
+        .select()
+        .from(problems)
+        .where(and(eq(problems.workstreamId, ws.id), inArray(problems.status, stages)));
+      if (rows.length === 0) return [];
+      const attemptRows = await db
+        .select({ problemId: attempts.problemId, status: attempts.status })
+        .from(attempts)
+        .where(
+          inArray(
+            attempts.problemId,
+            rows.map((r) => r.id),
+          ),
+        );
+      const total = new Map<number, number>();
+      const hasOpen = new Set<number>();
+      for (const a of attemptRows) {
+        total.set(a.problemId, (total.get(a.problemId) ?? 0) + 1);
+        if (a.status === "open") hasOpen.add(a.problemId);
+      }
+      return rows
+        .filter((r) => !hasOpen.has(r.id))
+        .map((r) => ({ ...r, attemptCount: total.get(r.id) ?? 0 }) satisfies DriftingProblem)
+        .sort((a, b) => {
+          const d = rankStatus(a.status) - rankStatus(b.status);
+          return d !== 0 ? d : a.createdAt - b.createdAt;
+        });
     }
 
     case "SOLUTION_LIST": {

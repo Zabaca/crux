@@ -37,11 +37,57 @@ export function workstreamActions(slug: string): ActionSpec[] {
 export function problemActions(
   problemId: number,
   solutions: Array<{ id: number; title: string }>,
+  openAttempts: Array<{ id: string; label: string }> = [],
 ): ActionSpec[] {
   const options = solutions.map((s) => ({ value: String(s.id), label: `${s.id} · ${s.title}` }));
   const problem = { name: "problem", fixed: String(problemId), required: true, asNumber: true };
+  const attemptOptions = openAttempts.map((a) => ({ value: a.id, label: `${a.id} · ${a.label}` }));
 
   return [
+    {
+      kind: "ADD_ATTEMPT",
+      label: "Record an Attempt",
+      // No description field, and there will not be one: what the work *is*
+      // lives in the system `ref` points at (ADR-0012).
+      fields: [
+        problem,
+        { name: "ref", label: "Where the work lives", required: true },
+        { name: "label", label: "Short label", required: true },
+      ],
+    },
+    ...(attemptOptions.length
+      ? [
+          {
+            kind: "CLOSE_ATTEMPT",
+            label: "Close an Attempt",
+            fields: [
+              {
+                name: "id",
+                label: "Attempt",
+                type: "select" as const,
+                options: attemptOptions,
+                required: true,
+              },
+              {
+                name: "status",
+                label: "Ended as",
+                type: "select" as const,
+                options: [
+                  { value: "shipped", label: "shipped" },
+                  { value: "dropped", label: "dropped" },
+                ],
+                required: true,
+              },
+              {
+                name: "closingNote",
+                label: "Why it ended that way",
+                type: "textarea" as const,
+                required: true,
+              },
+            ],
+          },
+        ]
+      : []),
     {
       kind: "ADD_SOLUTION",
       label: "Add a Solution",

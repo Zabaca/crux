@@ -9,6 +9,7 @@ import {
   observations,
   eliminations,
   outcomes,
+  attempts,
 } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import {
@@ -18,6 +19,8 @@ import {
   abandonProblem,
   shipSolution,
   editSolution,
+  createAttempt,
+  closeAttempt,
   createElimination,
   createDecision,
   recordOutcome,
@@ -29,7 +32,7 @@ import {
 import type { MutationAction } from "./schemas.js";
 
 async function countRows(
-  tableName: "observations" | "eliminations" | "outcomes",
+  tableName: "observations" | "eliminations" | "outcomes" | "attempts",
   db: CruxDb,
 ): Promise<number> {
   if (tableName === "observations") {
@@ -40,6 +43,11 @@ async function countRows(
   if (tableName === "eliminations") {
     const rows = await db.select({ id: eliminations.id }).from(eliminations);
     const nums = rows.map((r) => Number(r.id.replace(/^ELIM-/, ""))).filter(Number.isFinite);
+    return nums.length ? Math.max(...nums) : 0;
+  }
+  if (tableName === "attempts") {
+    const rows = await db.select({ id: attempts.id }).from(attempts);
+    const nums = rows.map((r) => Number(r.id.replace(/^ATT-/, ""))).filter(Number.isFinite);
     return nums.length ? Math.max(...nums) : 0;
   }
   if (tableName === "outcomes") {
@@ -182,6 +190,22 @@ export async function runMutation(
       const numId = toIntId(solutionId);
       await editSolution(numId, { description, title }, db);
       return { ok: true, id: numId };
+    }
+    case "ADD_ATTEMPT": {
+      const p = action.payload;
+      const prob = await resolveProblem(p.problem, db);
+      const n = await countRows("attempts", db);
+      const id = `ATT-${String(n + 1).padStart(3, "0")}`;
+      await createAttempt(
+        { id, problemId: prob.id, ref: p.ref, label: p.label, createdById: user.id },
+        db,
+      );
+      return { ok: true, id };
+    }
+    case "CLOSE_ATTEMPT": {
+      const p = action.payload;
+      await closeAttempt({ id: p.id, status: p.status, closingNote: p.closingNote }, db);
+      return { ok: true, id: p.id, status: p.status };
     }
     case "ADD_DECISION": {
       const p = action.payload;

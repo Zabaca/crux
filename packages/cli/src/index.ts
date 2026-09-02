@@ -7,6 +7,7 @@ import { observationCommand } from "./commands/observation.js";
 import { problemCommand } from "./commands/problem.js";
 import { evidenceCommand } from "./commands/evidence.js";
 import { solutionCommand } from "./commands/solution.js";
+import { attemptCommand } from "./commands/attempt.js";
 import { decisionCommand } from "./commands/decision.js";
 import { contextCommand } from "./commands/context.js";
 import { eliminationCommand } from "./commands/elimination.js";
@@ -30,6 +31,7 @@ const main = defineCommand({
     problem: problemCommand,
     evidence: evidenceCommand,
     solution: solutionCommand,
+    attempt: attemptCommand,
     decision: decisionCommand,
     elimination: eliminationCommand,
     abandonment: abandonmentCommand,

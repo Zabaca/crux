@@ -2,6 +2,7 @@ export * from "./errors.js";
 export * from "./predicates.js";
 export * from "./problem.js";
 export * from "./decision.js";
+export * from "./attempt.js";
 export * from "./solution.js";
 export * from "./elimination.js";
 export * from "./outcome.js";

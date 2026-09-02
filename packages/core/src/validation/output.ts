@@ -50,6 +50,7 @@ const DigestProblemEntry = z
     id: z.union([z.string(), z.number()]),
     title: z.string(),
     status: z.string().nullable(),
+    attempts: z.array(z.unknown()),
     solutions: z.array(z.unknown()),
     latest_decision: z.unknown(),
   })

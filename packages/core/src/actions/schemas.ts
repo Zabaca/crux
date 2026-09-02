@@ -87,6 +87,32 @@ export const EditSolutionAction = z.object({
     title: z.string().optional(),
   }),
 });
+/**
+ * Filing an Attempt. `.strict()` is the load-bearing part: an Attempt has
+ * nowhere to record a description of the work (ADR-0012), and a stripped-away
+ * key would let a caller believe one was stored. An unrecognised key is a
+ * refusal, not a silent drop.
+ */
+export const AddAttemptAction = z.object({
+  kind: z.literal("ADD_ATTEMPT"),
+  payload: z
+    .object({
+      problem: z.union([z.string(), z.number()]),
+      ref: z.string(),
+      label: z.string(),
+    })
+    .strict(),
+});
+export const CloseAttemptAction = z.object({
+  kind: z.literal("CLOSE_ATTEMPT"),
+  payload: z
+    .object({
+      id: z.string(),
+      status: z.enum(["shipped", "dropped"]),
+      closingNote: z.string(),
+    })
+    .strict(),
+});
 export const AddDecisionAction = z.object({
   kind: z.literal("ADD_DECISION"),
   payload: z.object({
@@ -164,6 +190,8 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddSolutionAction,
   ShipSolutionAction,
   EditSolutionAction,
+  AddAttemptAction,
+  CloseAttemptAction,
   AddDecisionAction,
   AddOutcomeAction,
   AddObservationAction,
@@ -204,6 +232,8 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ADD_SOLUTION",
   "SHIP_SOLUTION",
   "EDIT_SOLUTION",
+  "ADD_ATTEMPT",
+  "CLOSE_ATTEMPT",
   "ADD_DECISION",
   "ADD_OUTCOME",
   "ADD_OBSERVATION",
@@ -233,6 +263,8 @@ export type AbandonProblemPayload = z.infer<typeof AbandonProblemAction>["payloa
 export type AddSolutionPayload = z.infer<typeof AddSolutionAction>["payload"];
 export type ShipSolutionPayload = z.infer<typeof ShipSolutionAction>["payload"];
 export type EditSolutionPayload = z.infer<typeof EditSolutionAction>["payload"];
+export type AddAttemptPayload = z.infer<typeof AddAttemptAction>["payload"];
+export type CloseAttemptPayload = z.infer<typeof CloseAttemptAction>["payload"];
 export type AddDecisionPayload = z.infer<typeof AddDecisionAction>["payload"];
 export type AddOutcomePayload = z.infer<typeof AddOutcomeAction>["payload"];
 export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];

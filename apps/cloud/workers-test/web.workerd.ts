@@ -766,3 +766,81 @@ describe("contextual page actions", () => {
     expect(body).toContain("ADD_OBSERVATION");
   });
 });
+
+describe("Attempts on the Problem page", () => {
+  function browserDispatch(action: unknown, cookie: string): Promise<Response> {
+    return SELF.fetch(`${BASE}/v1/dispatch`, {
+      method: "POST",
+      headers: { "content-type": "application/json", cookie, origin: BASE },
+      body: JSON.stringify(action),
+    });
+  }
+
+  test("an open Attempt shows its label, its ref and its status", async () => {
+    const { cookie } = await inviteAndJoin("att@example.com", "Attempter");
+    const problemId = await seedNarrowedProblem();
+    await dispatchAs("USR-james", {
+      kind: "ADD_ATTEMPT",
+      payload: {
+        problem: problemId,
+        ref: "https://tracker.example/ENG-412",
+        label: "Reload the digest as structure",
+      },
+    });
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("Reload the digest as structure");
+    expect(body).toContain("https://tracker.example/ENG-412");
+    expect(body).toContain("ATT-001");
+  });
+
+  test("a closed Attempt shows the closing note, which is the point of keeping it", async () => {
+    const { cookie } = await inviteAndJoin("closed@example.com", "Closer");
+    const problemId = await seedNarrowedProblem();
+    await dispatchAs("USR-james", {
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "https://tracker.example/ENG-9", label: "First pass" },
+    });
+    await dispatchAs("USR-james", {
+      kind: "CLOSE_ATTEMPT",
+      payload: {
+        id: "ATT-001",
+        status: "dropped",
+        closingNote: "The approach could not handle backpressure",
+      },
+    });
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("The approach could not handle backpressure");
+  });
+
+  test("the Problem page offers filing and closing an Attempt", async () => {
+    const { cookie } = await inviteAndJoin("actatt@example.com", "Attempt Actor");
+    const problemId = await seedNarrowedProblem();
+    await dispatchAs("USR-james", {
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "https://tracker.example/ENG-1", label: "In flight" },
+    });
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("ADD_ATTEMPT");
+    expect(body).toContain("CLOSE_ATTEMPT");
+  });
+
+  test("filing an Attempt from the browser puts it on the page", async () => {
+    const { cookie } = await inviteAndJoin("bfile@example.com", "Browser Filer");
+    const problemId = await seedNarrowedProblem();
+
+    const res = await browserDispatch(
+      {
+        kind: "ADD_ATTEMPT",
+        payload: { problem: problemId, ref: "https://tracker.example/ENG-77", label: "Spike it" },
+      },
+      cookie,
+    );
+    expect(res.status).toBe(200);
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("Spike it");
+  });
+});
