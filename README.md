@@ -160,7 +160,19 @@ a link to any address that already has a `users` row, and an invite is what
 creates a row — but invites are issued by a Member, so a deployment with no
 rows at all has no way in that does not involve writing one into D1 by hand.
 `crux user init` does **not** close this: it writes local config and makes no
-request to the deployment.
+request to the deployment. `bun run db:restore-identity` is that hand-written
+row, made repeatable — see the runbook below.
+
+**Schema application only ever adds.** The DDL is an end state of
+`CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a table from
+the schema module does not drop it in production, and repointing a column at a
+different parent is a table rebuild that cannot be expressed at all. The escape
+hatch is to start the database over:
+[the rebuild runbook](docs/runbooks/rebuild-production-database.md) covers the
+wipe (`bun run db:wipe`, which is a dry run until it is handed the database's
+own name), the deploy that reapplies the schema, and restoring the one identity
+that makes the browser reachable again. It is destructive and human-gated;
+nothing in CI runs it.
 
 `GET /health` is the deployment's liveness check. It round-trips the D1 binding
 rather than answering from memory, so a Worker that cannot read its corpus
@@ -173,7 +185,8 @@ reports `503 degraded` instead of a hollow `ok`.
 - [`packages/core`](packages/core) — schema, transitions, `dispatch()` and `query()`, validation, config loader.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, and the HTTP client every command goes through.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
-- [`scripts/`](scripts/) — seeding, the doc-tree rot check, and the favicon
+- [`scripts/`](scripts/) — seeding, the production database rebuild
+  (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, and the favicon
   renderer (`bun run favicon`, after editing the mark in
   [`brand.ts`](apps/cloud/src/web/brand.ts) — it needs `rsvg-convert` and
   `magick`, which is why it is not part of `bun run build`).
@@ -208,6 +221,7 @@ naming the broken links and orphans.
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
   [model selection](docs/model-selection.md).
+- Runbooks — [rebuild the production database empty](docs/runbooks/rebuild-production-database.md).
 
 ## Principles
 
