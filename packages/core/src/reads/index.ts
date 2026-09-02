@@ -30,7 +30,7 @@ import {
   solutions,
   workstreams,
 } from "../db/schema.js";
-import { NotFoundError } from "../transitions/errors.js";
+import { NotFoundError, ValidationError } from "../transitions/errors.js";
 import type { ViewStore } from "../view-state/store.js";
 import { computeSaveViewMetaBlob, loadViewMetaFromBlob } from "../view-state/persistence.js";
 import { appendRecentQuery } from "../actions/recent-queries.js";
@@ -359,6 +359,9 @@ async function evidenceWithObservations(db: CruxDb, problemId: number, sortByCre
 const SEED_VERSION = "2026-04-21";
 
 const VALID_STAGES = ["now", "next", "later", "unscheduled", "done", "abandoned"] as const;
+
+/** The stages a Problem can be said to be *actively* scheduled in. */
+const ACTIVE_STAGES = ["now", "next", "later"] as const;
 
 function legalNextTransitions(status: string | null, hasShippedSolution: boolean): string[] {
   if (status === "done" || status === "abandoned") return [];
@@ -702,6 +705,17 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       // shipped or was dropped has drifted again (ADR-0012).
       const ws = await requireWorkstream(db, q.workstream);
       const stages = q.stages?.length ? q.stages : ["now"];
+      // Only a Problem still on the board can drift: `done` and `abandoned`
+      // left through a door that demanded a reason, and `unscheduled` was never
+      // claimed to be active in the first place.
+      for (const s of stages) {
+        if (!(ACTIVE_STAGES as readonly string[]).includes(s)) {
+          throw new ValidationError(
+            `Invalid drift stage: "${s}". Valid values: ${ACTIVE_STAGES.join(", ")}`,
+            { stage: s },
+          );
+        }
+      }
       const rows = await db
         .select()
         .from(problems)

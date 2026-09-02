@@ -452,5 +452,11 @@ describe("Attempts", () => {
       expect(widened.result.map((p) => p.title)).toEqual(["Later, untouched"]);
       expect(widened.result.map((p) => p.id)).not.toContain(unscheduled);
     });
+
+    test("a terminal stage is not a stage anything can drift in", async () => {
+      const res = await query({ kind: "PROBLEM_DRIFT", workstream: "crux", stages: ["done"] });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    });
   });
 });
