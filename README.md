@@ -74,6 +74,14 @@ token, not a person — writes it into `config.toml`, and everything you file
 belongs to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Every
 read is scoped to that Principal, so what you see is what you filed.
 
+An unclaimed Principal files against a free allowance — two hundred
+Observations on the public deployment. Past it, a write refuses with
+`CAPACITY_EXCEEDED`, whose `details` carry the URL to claim the Principal and
+lift the cap; claiming it (CRUX-VIZW40) is what removes the wall. **Reads are
+never gated by it**: reloading context into a fresh session keeps working with
+the allowance spent, because refusing to show somebody the notes they already
+captured is the one refusal this product cannot make.
+
 The only check Claude still runs is the Bun runtime — `command -v bun`. If it is
 not installed, Claude surfaces the install command for your platform
 (`curl -fsSL https://bun.sh/install | bash` works on macOS and Linux;
@@ -183,6 +191,13 @@ the `/v1` API and the CLI working and turns off only the browser surfaces, which
 say which one is missing. `CRUX_WORKSPACE_NAME` optionally names the Workspace
 in the header; it defaults to the deployment's host.
 
+Two plain vars tune the free allowance, so changing it is a deploy rather than a
+code change: `CRUX_OBSERVATION_CAP` is how many Observations an unclaimed
+Principal may file before writes refuse (200 by default; anything unparseable
+falls back to that rather than taking writes down), and `CRUX_CLAIM_URL` is the
+address quoted back in the refusal, defaulting to `/claim` on the deployment
+that answered.
+
 The first-identity chicken-and-egg is closed: `POST /v1/principals` is
 unauthenticated and mints a `users` row plus a token, so a deployment with no
 rows creates its own on first contact
@@ -267,9 +282,10 @@ naming the broken links and orphans.
 
 MVP. One cloud deployment, many tenants: adoption is anonymous-first and the
 Principal is the boundary, so first use mints an identity and every read is
-scoped to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Claiming a
-Principal by email, and the Observation cap that makes claiming worth doing, are
-not built yet. In the browser: sign-in, inviting and
+scoped to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). The
+Observation cap that makes claiming worth doing is enforced — writes refuse with
+`CAPACITY_EXCEEDED` and reads keep answering — but claiming a Principal by email,
+which is what lifts it, is not built yet. In the browser: sign-in, inviting and
 removing Members, minting and revoking CLI tokens, pages for Problem and Observation,
 the Observation intake list at `/w/<slug>/observations` — grouped into linked,
 archived and waiting, all three read off related rows rather than a status

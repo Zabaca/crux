@@ -4,7 +4,8 @@ export type ErrorCode =
   | "REFERENTIAL_MISMATCH"
   | "NOT_FOUND"
   | "ALREADY_EXISTS"
-  | "VALIDATION_ERROR";
+  | "VALIDATION_ERROR"
+  | "CAPACITY_EXCEEDED";
 
 export class CruxError extends Error {
   readonly code: ErrorCode;
@@ -38,6 +39,18 @@ export class ReferentialError extends CruxError {
 export class NotFoundError extends CruxError {
   constructor(message: string, details: Record<string, unknown> = {}) {
     super("NOT_FOUND", message, details);
+  }
+}
+
+/**
+ * The free allowance on an unclaimed Principal is spent (ADR-0013).
+ *
+ * Carries the claim URL in `details` rather than only in the message, so the
+ * agent that hit the wall can offer the fix without parsing prose.
+ */
+export class CapacityExceededError extends CruxError {
+  constructor(message: string, details: Record<string, unknown> = {}) {
+    super("CAPACITY_EXCEEDED", message, details);
   }
 }
 

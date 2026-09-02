@@ -26,6 +26,7 @@
     "./auth/invites": "./src/auth/invites.ts",
     "./auth/membership": "./src/auth/membership.ts",
     "./auth/principals": "./src/auth/principals.ts",
+    "./auth/capacity": "./src/auth/capacity.ts",
     "./auth/email": "./src/auth/email.ts"
   },
   "scripts": {

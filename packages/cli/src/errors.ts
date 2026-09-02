@@ -13,6 +13,9 @@ export const EXIT_CODES: Record<string, number> = {
   ALREADY_EXISTS: 24,
   ACTION_NOT_ALLOWED: 25,
   UNAUTHENTICATED: 26,
+  // The free allowance is spent (ADR-0013). Its own code so a script can tell
+  // "claim this Principal" apart from a corpus rejection.
+  CAPACITY_EXCEEDED: 27,
   // A deployment that was never configured is a setup mistake, not a corpus one.
   NO_API_CONFIG: 2,
   USAGE: 2,

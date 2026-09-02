@@ -10,6 +10,7 @@
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { authenticateToken } from "@crux/core/auth";
 import { mintPrincipal } from "@crux/core/auth/principals";
+import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
 import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
 import {
   loadViewMetaFromBlob,
@@ -37,6 +38,21 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** The address sign-in links are sent from, on a domain Resend has verified. */
   EMAIL_FROM?: string;
+  /** Observations an unclaimed Principal may file before writes refuse
+   * (ADR-0013). A deployment tunes the allowance here rather than in code;
+   * absent or unparseable means core's default. */
+  CRUX_OBSERVATION_CAP?: string;
+  /** Where a capped Principal is sent to claim itself. Defaults to `/claim` on
+   * this deployment, which is where claiming lands (CRUX-VIZW40). */
+  CRUX_CLAIM_URL?: string;
+}
+
+/** The allowance this deployment writes against, resolved per request. */
+function capacityFor(env: Env, url: URL): Capacity {
+  return {
+    observationCap: observationCapFrom(env.CRUX_OBSERVATION_CAP),
+    claimUrl: env.CRUX_CLAIM_URL ?? new URL("/claim", url.origin).toString(),
+  };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -55,6 +71,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   ACTION_NOT_ALLOWED: 409,
   ALREADY_EXISTS: 409,
   ILLEGAL_TRANSITION: 422,
+  // The allowance is spent, not the request malformed: 429 is the status whose
+  // meaning is "you, later" rather than "this, never".
+  CAPACITY_EXCEEDED: 429,
   INVARIANT_VIOLATION: 422,
   REFERENTIAL_MISMATCH: 422,
   UNKNOWN: 500,
@@ -186,6 +205,7 @@ export async function handleApi(
         db,
         viewStore: viewStoreFor(env, authed.userId),
         actor: { id: authed.userId },
+        capacity: capacityFor(env, url),
       });
       return json(result);
     } catch (err) {

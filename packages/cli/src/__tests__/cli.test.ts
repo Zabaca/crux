@@ -428,6 +428,30 @@ describe("server rejections reach the terminal unchanged", () => {
     expect(EXIT_CODES[err.code]).toBe(20);
   });
 
+  test("a CAPACITY_EXCEEDED rejection keeps the claim link an agent has to quote", async () => {
+    stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/dispatch": envelope(
+        429,
+        "CAPACITY_EXCEEDED",
+        "this Principal has filed 200 of 200 Observations, so writes are paused",
+        { cap: 200, observations: 200, claimUrl: "https://crux.zabaca.com/claim" },
+      ),
+    });
+
+    const err = (await runCmd(observationCommand as AnyCmd, "add", {
+      content: "one too many",
+      json: true,
+    }).catch((e) => e)) as CruxError;
+
+    expect(err).toBeInstanceOf(CruxError);
+    expect(err.code).toBe("CAPACITY_EXCEEDED");
+    // The fix travels in `details`, not only in the prose, so the agent that hit
+    // the wall can offer it without parsing a sentence.
+    expect(err.details).toMatchObject({ claimUrl: "https://crux.zabaca.com/claim", cap: 200 });
+    expect(EXIT_CODES[err.code]).toBe(27);
+  });
+
   test("an ACTION_NOT_ALLOWED rejection is rebuilt with its allowed lists", async () => {
     stubServer({
       "POST /v1/dispatch": envelope(409, "ACTION_NOT_ALLOWED", "not allowed", {

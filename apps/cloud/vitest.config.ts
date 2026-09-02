@@ -29,6 +29,11 @@ export default defineConfig({
           BETTER_AUTH_SECRET: "test-secret-not-used-in-production",
           RESEND_API_KEY: "re_test_not_a_real_key",
           EMAIL_FROM: "crux@test.invalid",
+          // The free allowance (ADR-0013), deliberately tiny here: the cap is a
+          // deployment var rather than a constant, and capacity.workerd.ts can
+          // only reach it by filing five Observations instead of two hundred.
+          // Nothing else in the suite files more than a handful per test.
+          CRUX_OBSERVATION_CAP: "5",
         },
         // Every outbound fetch from the Worker under test lands here instead of
         // the network, so the suite never mails anyone and never depends on
