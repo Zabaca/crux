@@ -91,14 +91,6 @@ function toErrorResponse(err: unknown): Response {
   return errorBody("UNKNOWN", message);
 }
 
-/** A JSON body, tolerating an absent or empty one — the mint takes no fields. */
-async function readJsonBody(request: Request): Promise<Record<string, unknown>> {
-  const text = await request.text();
-  if (!text.trim()) return {};
-  const parsed: unknown = JSON.parse(text);
-  return parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
-}
-
 function bearer(request: Request): string | null {
   const header = request.headers.get("authorization");
   if (!header) return null;
@@ -167,9 +159,7 @@ export async function handleApi(
   // CLI token.
   if (pathname === "/v1/principals" && request.method === "POST") {
     try {
-      const body = (await readJsonBody(request)) as { name?: unknown };
-      const name = typeof body.name === "string" ? body.name : undefined;
-      const minted = await mintPrincipal(db, name === undefined ? {} : { name });
+      const minted = await mintPrincipal(db);
       return json(
         {
           principal: { id: minted.principalId, name: minted.name },

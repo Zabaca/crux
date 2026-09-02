@@ -10,8 +10,15 @@
  */
 import type { CruxDb } from "../db/client.js";
 import { workstreams, problems, observations, outcomes, attempts } from "../db/schema.js";
-import { and, eq, inArray } from "drizzle-orm";
-import { problemsInScope, type Scope } from "../auth/principals.js";
+import { eq } from "drizzle-orm";
+import {
+  findProblemInScope,
+  requireAttemptInScope,
+  requireObservationInScope,
+  requireProblemInScope,
+  requireWorkstreamInScope,
+  type Scope,
+} from "../auth/principals.js";
 import {
   scheduleProblem,
   unscheduleProblem,
@@ -21,7 +28,8 @@ import {
   recordOutcome,
   archiveObservation,
   renameWorkstream,
-  NotFoundError,
+  CruxError,
+  ReferentialError,
   type RoadmapStage,
 } from "../transitions/index.js";
 import type { MutationAction } from "./schemas.js";
@@ -48,58 +56,8 @@ async function countRows(
   return 0;
 }
 
-async function resolveWs(slugOrId: string, db: CruxDb, scope: Scope) {
-  const missing = () => new NotFoundError(`workstream not found: ${slugOrId}`, { slug: slugOrId });
-  const byId = (
-    await db.select().from(workstreams).where(eq(workstreams.id, slugOrId)).limit(1)
-  )[0];
-  if (byId) {
-    if (!scope.has(byId.id)) throw missing();
-    return byId;
-  }
-  const bySlug = (
-    await db.select().from(workstreams).where(eq(workstreams.slug, slugOrId)).limit(1)
-  )[0];
-  if (bySlug) {
-    if (!scope.has(bySlug.id)) throw missing();
-    return bySlug;
-  }
-  throw missing();
-}
-
 function toIntId(id: string | number): number {
   return typeof id === "number" ? id : parseInt(id, 10);
-}
-
-async function resolveProblem(id: string | number, db: CruxDb, scope: Scope) {
-  const numId = toIntId(id);
-  const rows = await db.select().from(problems).where(eq(problems.id, numId)).limit(1);
-  const row = rows[0];
-  if (!row || !scope.has(row.workstreamId))
-    throw new NotFoundError(`problem not found: ${id}`, { id });
-  return row;
-}
-
-/** The Observation `id` names, if it sits in a Workstream this Principal owns. */
-async function resolveObservation(id: string, db: CruxDb, scope: Scope) {
-  const rows = await db.select().from(observations).where(eq(observations.id, id)).limit(1);
-  const row = rows[0];
-  if (!row || !scope.has(row.workstreamId)) {
-    throw new NotFoundError(`observation not found: ${id}`, { id });
-  }
-  return row;
-}
-
-/** The Attempt `id` names, if its Problem is inside the scope. */
-async function resolveAttempt(id: string, db: CruxDb, scope: Scope) {
-  const rows = await db
-    .select()
-    .from(attempts)
-    .where(and(eq(attempts.id, id), inArray(attempts.problemId, problemsInScope(db, scope))))
-    .limit(1);
-  const row = rows[0];
-  if (!row) throw new NotFoundError(`attempt not found: ${id}`, { id });
-  return row;
 }
 
 /**
@@ -108,6 +66,29 @@ async function resolveAttempt(id: string, db: CruxDb, scope: Scope) {
  * caller's local `config.toml`, which is `node:fs` in the Worker bundle.
  */
 export type Actor = { id: string };
+
+/**
+ * Follow-up Problem ids the caller may actually refer to.
+ *
+ * A follow-up outside the scope is reported with the same message `recordOutcome`
+ * uses for one that does not exist, so the two are one answer.
+ */
+async function scopedFollowUps(
+  ids: Array<string | number> | undefined,
+  db: CruxDb,
+  scope: Scope,
+): Promise<number[]> {
+  if (!ids?.length) return [];
+  return Promise.all(
+    ids.map(async (raw) => {
+      const id = toIntId(raw);
+      if (!(await findProblemInScope(db, id, scope))) {
+        throw new ReferentialError(`Problem not found: ${id}`, { problemId: id });
+      }
+      return id;
+    }),
+  );
+}
 
 export async function runMutation(
   action: MutationAction,
@@ -121,6 +102,22 @@ export async function runMutation(
     case "ADD_WORKSTREAM": {
       const p = action.payload;
       const id = `WS-${p.slug}`;
+      // The slug namespace is the deployment's, not the Principal's: `WS-<slug>`
+      // is the primary key and `slug` is uniquely indexed. On a deployment many
+      // Principals share, the first anonymous adopter to pick "crux" takes it,
+      // and the second needs to be told that in words rather than handed a raw
+      // constraint failure as a 500 on their very first command.
+      const taken = await db
+        .select({ id: workstreams.id })
+        .from(workstreams)
+        .where(eq(workstreams.id, id));
+      if (taken.length) {
+        throw new CruxError(
+          "ALREADY_EXISTS",
+          `the slug "${p.slug}" is taken on this deployment — choose another`,
+          { slug: p.slug },
+        );
+      }
       await db.insert(workstreams).values({
         id,
         slug: p.slug,
@@ -132,7 +129,7 @@ export async function runMutation(
     }
     case "RENAME_WORKSTREAM": {
       const p = action.payload;
-      await resolveWs(p.oldSlug, db, scope);
+      await requireWorkstreamInScope(db, p.oldSlug, scope);
       const r = await renameWorkstream(
         p.oldSlug,
         p.newSlug,
@@ -143,7 +140,7 @@ export async function runMutation(
     }
     case "ADD_PROBLEM": {
       const p = action.payload;
-      const ws = await resolveWs(p.workstream, db, scope);
+      const ws = await requireWorkstreamInScope(db, p.workstream, scope);
       const result = await db
         .insert(problems)
         .values({
@@ -158,25 +155,25 @@ export async function runMutation(
     }
     case "SCHEDULE_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id, db, scope);
+      const prob = await requireProblemInScope(db, p.id, scope);
       await scheduleProblem(prob.id, p.stage as RoadmapStage, db);
       return { ok: true, id: prob.id, status: p.stage };
     }
     case "UNSCHEDULE_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id, db, scope);
+      const prob = await requireProblemInScope(db, p.id, scope);
       await unscheduleProblem(prob.id, db);
       return { ok: true, id: prob.id, status: null };
     }
     case "ABANDON_PROBLEM": {
       const p = action.payload;
-      const prob = await resolveProblem(p.id, db, scope);
+      const prob = await requireProblemInScope(db, p.id, scope);
       await abandonProblem(prob.id, p.rationale, user.id, db);
       return { ok: true, id: prob.id, status: "abandoned" };
     }
     case "ADD_ATTEMPT": {
       const p = action.payload;
-      const prob = await resolveProblem(p.problem, db, scope);
+      const prob = await requireProblemInScope(db, p.problem, scope);
       const n = await countRows("attempts", db);
       const id = `ATT-${String(n + 1).padStart(3, "0")}`;
       await createAttempt(
@@ -187,13 +184,13 @@ export async function runMutation(
     }
     case "CLOSE_ATTEMPT": {
       const p = action.payload;
-      await resolveAttempt(p.id, db, scope);
+      await requireAttemptInScope(db, p.id, scope);
       await closeAttempt({ id: p.id, status: p.status, closingNote: p.closingNote }, db);
       return { ok: true, id: p.id, status: p.status };
     }
     case "ADD_OUTCOME": {
       const p = action.payload;
-      const prob = await resolveProblem(p.problem, db, scope);
+      const prob = await requireProblemInScope(db, p.problem, scope);
       const n = await countRows("outcomes", db);
       const id = `OUT-${String(n + 1).padStart(3, "0")}`;
       await recordOutcome(
@@ -202,11 +199,13 @@ export async function runMutation(
           problemId: prob.id,
           observedImpact: p.observedImpact,
           learnings: p.learnings,
-          // Not scope-checked here: `recordOutcome` already refuses a follow-up
-          // that is not in the same Workstream as the Problem, and the Problem
-          // is in scope, so same-Workstream *is* in-scope. Adding a second gate
-          // would only replace REFERENTIAL_MISMATCH with a less accurate code.
-          followUpProblemIds: p.followUpProblemIds ? p.followUpProblemIds.map(toIntId) : [],
+          // `recordOutcome` refuses a follow-up in a different Workstream, but
+          // it says *which* one — which would name another Principal's
+          // Workstream back to the caller. Resolving through the scope first
+          // makes a foreign follow-up indistinguishable from one that does not
+          // exist, in recordOutcome's own words, while a follow-up in another
+          // Workstream this Principal owns still gets the accurate mismatch.
+          followUpProblemIds: await scopedFollowUps(p.followUpProblemIds, db, scope),
           createdById: user.id,
         },
         db,
@@ -215,7 +214,7 @@ export async function runMutation(
     }
     case "ADD_OBSERVATION": {
       const p = action.payload;
-      const ws = await resolveWs(p.workstream, db, scope);
+      const ws = await requireWorkstreamInScope(db, p.workstream, scope);
       const n = await countRows("observations", db);
       const id = `OBS-${String(n + 1).padStart(3, "0")}`;
       await db.insert(observations).values({
@@ -231,14 +230,14 @@ export async function runMutation(
     }
     case "ARCHIVE_OBSERVATION": {
       const p = action.payload;
-      await resolveObservation(p.id, db, scope);
+      await requireObservationInScope(db, p.id, scope);
       await archiveObservation(p.id, p.rationale ?? "", user.id, db);
       return { ok: true, id: p.id };
     }
     case "ADD_EVIDENCE": {
       const p = action.payload;
-      const prob = await resolveProblem(p.problem, db, scope);
-      await resolveObservation(p.observation, db, scope);
+      const prob = await requireProblemInScope(db, p.problem, scope);
+      await requireObservationInScope(db, p.observation, scope);
       const { evidence } = await import("../db/schema.js");
       const existingEvidence = await db.select({ id: evidence.id }).from(evidence);
       const nums = existingEvidence
@@ -257,7 +256,7 @@ export async function runMutation(
     }
     case "RENAME_OBSERVATION": {
       const p = action.payload;
-      await resolveObservation(p.id, db, scope);
+      await requireObservationInScope(db, p.id, scope);
       await db.update(observations).set({ content: p.content }).where(eq(observations.id, p.id));
       return { ok: true, id: p.id };
     }

@@ -261,7 +261,7 @@ naming the broken links and orphans.
 - **One corpus, reached over HTTP.** No local database, no replicas — the transition layer runs in exactly one place ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)).
 - **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.
-- **Claude is a tool, not an actor.** Attributions resolve to the human user.
+- **Claude is a tool, not an actor.** The agent holds a Principal; a human owns Principals, and every attribution resolves to one ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
 ## Status
 

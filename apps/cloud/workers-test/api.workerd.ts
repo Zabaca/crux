@@ -868,9 +868,12 @@ describe("POST /v1/principals — first use", () => {
     expect(a.token).not.toBe(b.token);
   });
 
-  test("a name is taken when offered, so an agent can say whose machine it is", async () => {
+  test("the mint takes no fields — a Principal is a token, not a person", async () => {
+    // An unauthenticated endpoint that accepted a name would be the one place
+    // an anonymous caller could write free text into the database, for nothing
+    // ADR-0013 asks for. A human name arrives with a claim.
     const named = await mintPrincipal({ name: "Dana's laptop" });
-    expect(named.principal.name).toBe("Dana's laptop");
+    expect(named.principal.name).toBe("Anonymous");
   });
 });
 
@@ -970,5 +973,80 @@ describe("tenancy over HTTP — the boundary is the credential", () => {
     expect((await queryAs(fresh.token, { kind: "WORKSTREAM_SHOW", id: "WS-crux" })).status).toBe(
       404,
     );
+  });
+});
+
+describe("the boundary is not an oracle", () => {
+  test("a follow-up in another Principal's Workstream reads as one that does not exist", async () => {
+    // Two tenants, each with a Problem. The refusal must not tell B that A's
+    // Problem exists, and must not name the Workstream it belongs to.
+    const stranger = await mintPrincipal();
+    await dispatchAs(stranger.token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "stranger", title: "Stranger" },
+    });
+    const theirs = (await (
+      await dispatchAs(stranger.token, {
+        kind: "ADD_PROBLEM",
+        payload: { workstream: "stranger", title: "Theirs", description: "d" },
+      })
+    ).json()) as { result: { id: number } };
+
+    const mine = (await (
+      await dispatch({
+        kind: "ADD_PROBLEM",
+        payload: { workstream: "WS-crux", title: "Mine", description: "d" },
+      })
+    ).json()) as { result: { id: number } };
+
+    const res = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: {
+        problem: mine.result.id,
+        observedImpact: "done",
+        followUpProblemIds: [theirs.result.id],
+      },
+    });
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("REFERENTIAL_MISMATCH");
+    // The words a *missing* follow-up gets — no Workstream id of theirs in it.
+    expect(body.error.message).toBe(`Problem not found: ${theirs.result.id}`);
+    expect(body.error.message).not.toContain("WS-stranger");
+  });
+
+  test("selecting another Principal's Workstream is refused like one that never existed", async () => {
+    const stranger = await mintPrincipal();
+    await dispatchAs(stranger.token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "stranger", title: "Stranger" },
+    });
+
+    // A view guard that looked at the whole database would let this through,
+    // while refusing a slug nobody has — an existence oracle without a row leak.
+    const refusal = async (id: string) => {
+      const res = await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id } });
+      const body = (await res.json()) as { error: { code: string; message: string } };
+      // The id is the caller's own input, so echoing it back tells them nothing.
+      return { status: res.status, ...body.error, message: body.error.message.replace(id, "<id>") };
+    };
+    expect(await refusal("WS-stranger")).toEqual(await refusal("WS-nobody"));
+
+    // And selecting my own still works.
+    expect((await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } })).status).toBe(
+      200,
+    );
+  });
+
+  test("a slug another Principal already took is refused in words, not with a 500", async () => {
+    const other = await mintPrincipal();
+    const res = await dispatchAs(other.token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "crux", title: "Also called crux" },
+    });
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe("ALREADY_EXISTS");
+    expect(body.error.message).toContain("taken on this deployment");
   });
 });

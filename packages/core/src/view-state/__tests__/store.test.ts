@@ -9,13 +9,17 @@ import { loadViewMetaFromBlob, computeSaveViewMetaBlob, type ViewMeta } from "..
 import { dispatch } from "../../actions/dispatch.js";
 import type { CruxDb } from "../../db/client.js";
 
-/** A CruxDb double: only the `select…from…where…limit` guard chain is exercised. */
+/**
+ * A CruxDb double: a `select().from().where()` chain that answers `rows`.
+ *
+ * `where()` answers a real Promise carrying a `limit()`, the way drizzle's
+ * builder does, because a scoped read may end at either: `visiblePrincipalIds`
+ * takes one row, while the Workstream lookup behind the scope awaits the
+ * builder directly.
+ */
 function dbReturning(rows: unknown[]): CruxDb {
-  const chain = {
-    from: () => chain,
-    where: () => chain,
-    limit: async () => rows,
-  };
+  const answer = () => Object.assign(Promise.resolve(rows), { limit: async () => rows });
+  const chain = { from: () => chain, where: answer };
   return { select: () => chain } as unknown as CruxDb;
 }
 

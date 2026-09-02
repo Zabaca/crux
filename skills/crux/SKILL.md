@@ -105,7 +105,7 @@ Before the first `crux` command in a session, run these checks in order. Steady 
    - User must restart shell after install.
 2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. Wrapper auto-installs on first invocation; pre-warm with `${CLAUDE_PLUGIN_ROOT}/bin/crux --help`.
 3. **Deployment**: nothing to do. Adoption is anonymous-first (ADR-0013) — the first command that touches the corpus mints a Principal against the default deployment and writes the token into `~/.claude/.crux/config.toml` itself. Do **not** ask for a URL or a token. Only if the user runs their own deployment: `${CLAUDE_PLUGIN_ROOT}/bin/crux init --url "..." --token "..."`. There is no local database — every command is an HTTP call.
-4. **User config**: `test -f ~/.config/crux/config.toml`. If missing, ask name/email then `crux user init --name "..." --email "..."`.
+4. **User config**: nothing to do, and nothing to ask for. The actor on every request is the Principal the token resolves to, not the local `[user]` block — `crux user init` writes local config and makes no request to the deployment.
 5. **Agent bus**: `TeamCreate` with `team_name: "crux"`. If team already exists, skip. Then write runtime pointer:
    ```sh
    CRUX_HOME="${CRUX_HOME:-$HOME/.claude/.crux}"

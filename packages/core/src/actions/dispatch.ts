@@ -101,10 +101,15 @@ export async function dispatch(
   let result: unknown = undefined;
   let viewState: unknown = undefined;
 
+  // One scope for the whole dispatch. The view branch needs it as much as the
+  // mutation branch does: its guards ask "does this Workstream exist", and an
+  // unscoped answer is an existence oracle even though it moves no rows.
+  const scope = await resolveScope(options.db, options.actor);
+
   if (isViewAction(action)) {
     // Route through XState machine
     const event = { type: action.kind, ...(action.payload ?? {}) } as ViewEvent;
-    const snap = await sendViewEventWithStore(event, { db: options.db, store });
+    const snap = await sendViewEventWithStore(event, { db: options.db, store, scope });
     viewState = snap.value;
 
     // Update meta with new value
@@ -112,12 +117,7 @@ export async function dispatch(
     meta.context = snap.context;
   } else {
     // Route through mutation runner
-    result = await runMutation(
-      action,
-      options.db,
-      options.actor,
-      await resolveScope(options.db, options.actor),
-    );
+    result = await runMutation(action, options.db, options.actor, scope);
   }
 
   // Persist sidecar fields (re-read: a view action already wrote the snapshot).
