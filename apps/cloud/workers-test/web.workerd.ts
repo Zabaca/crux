@@ -766,6 +766,31 @@ describe("contextual page actions", () => {
     expect(body.error.message).toContain("terminal (done)");
   });
 
+  test("recording an Outcome puts it, and the Problem's done state, on the page", async () => {
+    const { cookie } = await inviteAndJoin("out@example.com", "Outcome Filer");
+    const problemId = await seedNarrowedProblem();
+
+    const res = await browserDispatch(
+      {
+        kind: "ADD_OUTCOME",
+        payload: {
+          problem: problemId,
+          observedImpact: "sessions start warm",
+          learnings: "structure beats prose",
+        },
+      },
+      cookie,
+    );
+    expect(res.status).toBe(200);
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("OUT-001");
+    expect(body).toContain("sessions start warm");
+    expect(body).toContain("structure beats prose");
+    // The rail's last step reads as reached, not as awaiting something.
+    expect(body).toContain("OUT-001 · done");
+  });
+
   test("the Workstream board offers the actions that belong to a Workstream", async () => {
     const { cookie } = await inviteAndJoin("wsacts@example.com", "WS Actor");
     const body = await (await get("/w/crux", { headers: { cookie } })).text();

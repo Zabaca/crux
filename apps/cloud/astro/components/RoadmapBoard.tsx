@@ -41,7 +41,8 @@ export type BoardProblem = {
 /**
  * The lanes, in roadmap order. `movable` is the drag rule: `done` and
  * `abandoned` are reached by transitions that carry a reason — an Outcome, an
- * Abandonment — so they are shown but neither picked up from nor dropped into. Everything else here would be a drag that the server refuses.
+ * Abandonment — so they are shown but neither picked up from nor dropped into.
+ * Anything else would be a drag that the server refuses.
  */
 const STAGES: ReadonlyArray<{ id: Stage; label: string; movable: boolean }> = [
   { id: "now", label: "Now", movable: true },

@@ -357,6 +357,22 @@ describe("Outcome — the door to done", () => {
     expect(await statusOf(followUp)).toBeNull();
   });
 
+  test("a follow-up that is not a Problem in this Workstream is refused, and nothing is written", async () => {
+    const id = await fileProblem("Names a stranger");
+
+    const res = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: { problem: id, observedImpact: "done", followUpProblemIds: [9999] },
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: { code: "REFERENTIAL_MISMATCH" } });
+
+    // The refusal is before the write: no Outcome, and the Problem is still open.
+    const all = (await (await query({ kind: "OUTCOME_LIST" })).json()) as { result: unknown[] };
+    expect(all.result).toHaveLength(0);
+    expect(await statusOf(id)).toBeNull();
+  });
+
   test("there is no other way to mark a Problem done", async () => {
     const id = await fileProblem("Not closable by hand");
 

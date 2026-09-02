@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { OkWithIdOutput } from "@crux/core/validation";
+import { OkWithStatusOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
 import type { AddOutcomePayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
@@ -32,7 +32,8 @@ const addCmd = defineCommand({
       followUpProblemIds: asList(args["follow-up-problems"]),
     };
     const { result } = await api().dispatch({ kind: "ADD_OUTCOME", payload });
-    emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
+    const { id } = result as { id: string };
+    emit(result, OkWithStatusOutput, `added ${id} — problem ${args.problem} is done`);
   },
 });
 

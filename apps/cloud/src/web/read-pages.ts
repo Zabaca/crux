@@ -144,7 +144,15 @@ export async function problemPage(
           >
         </div>
         <div class="step ${outcome ? "here" : ""}">
-          Outcome<small>${outcome ? `${outcome.id} · done` : "still open"}</small>
+          Outcome<small
+            >${
+              outcome
+                ? `${outcome.id} · done`
+                : problem.status === "abandoned"
+                  ? "abandoned instead"
+                  : "still open"
+            }</small
+          >
         </div>
       </div>
 

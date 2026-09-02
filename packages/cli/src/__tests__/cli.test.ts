@@ -23,6 +23,7 @@ import { contextCommand } from "../commands/context.js";
 import { solutionCommand } from "../commands/solution.js";
 import { viewCommand } from "../commands/view.js";
 import { searchCommand } from "../commands/search.js";
+import { outcomeCommand } from "../commands/outcome.js";
 
 type AnyCmd = {
   run?: (ctx: { args: Record<string, unknown>; rawArgs?: string[] }) => Promise<void>;
@@ -292,6 +293,33 @@ describe("writes", () => {
       kind: "ADD_OBSERVATION",
       payload: { workstream: "WS-smoke", content: "Something observed", tags: ["alpha", "beta"] },
     });
+  });
+
+  test("outcome add names the Problem it closes, and splits its follow-ups", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": { revision: 3, result: { ok: true, id: "OUT-001", status: "done" } },
+    });
+
+    const out = await capture(() =>
+      runCmd(outcomeCommand as AnyCmd, "add", {
+        problem: "7",
+        "observed-impact": "sessions start warm",
+        learnings: "structure wins",
+        "follow-up-problems": "8, 9",
+        json: true,
+      }),
+    );
+
+    expect(calls[0]!.body).toEqual({
+      kind: "ADD_OUTCOME",
+      payload: {
+        problem: "7",
+        observedImpact: "sessions start warm",
+        learnings: "structure wins",
+        followUpProblemIds: ["8", "9"],
+      },
+    });
+    expect(out).toEqual({ ok: true, id: "OUT-001", status: "done" });
   });
 });
 
