@@ -104,6 +104,95 @@ describe("POST /v1/query — reads", () => {
   });
 });
 
+describe("POST /v1/query — SEARCH", () => {
+  // Seeded through `dispatch`, not straight into D1, so what the search reads is
+  // what the write path actually stores.
+  async function seedCorpus() {
+    await db.insert(workstreams).values({ id: "WS-farm", slug: "farm", title: "Farm" });
+    await dispatch({
+      kind: "ADD_PROBLEM",
+      payload: {
+        workstream: "WS-crux",
+        title: "Reauthentication keeps failing",
+        description: "Tokens expire mid-session and the CLI says nothing.",
+      },
+    });
+    await dispatch({
+      kind: "ADD_PROBLEM",
+      payload: {
+        workstream: "WS-farm",
+        title: "Irrigation schedule drifts",
+        description: "The pump forgets its AUTH token after a power cut.",
+      },
+    });
+    await dispatch({
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-crux", content: "James lost his auth token again mid-demo." },
+    });
+  }
+
+  type Results = {
+    query: string;
+    problems: Array<{ id: number; title: string; description: string; workstreamSlug: string }>;
+    observations: Array<{ id: string; content: string; workstreamSlug: string }>;
+  };
+  const search = async (q: Record<string, unknown>): Promise<Results> =>
+    ((await (await query({ kind: "SEARCH", ...q })).json()) as { result: Results }).result;
+
+  test("returns Problems and Observations with enough of each to judge a duplicate", async () => {
+    await seedCorpus();
+    const result = await search({ q: "auth" });
+    expect(result.query).toBe("auth");
+    const crux = result.problems.find((p) => p.title === "Reauthentication keeps failing")!;
+    expect(crux.description).toBe("Tokens expire mid-session and the CLI says nothing.");
+    expect(crux.workstreamSlug).toBe("crux");
+    expect(result.observations.map((o) => o.content)).toEqual([
+      "James lost his auth token again mid-demo.",
+    ]);
+    expect(result.observations[0]!.workstreamSlug).toBe("crux");
+  });
+
+  test("matches case-insensitively, inside a word, in a title or a description", async () => {
+    await seedCorpus();
+    const result = await search({ q: "AUTH" });
+    // "Reauthentication" is a title substring; "AUTH token" is only in the other
+    // Problem's description — both have to come back.
+    expect(result.problems.map((p) => p.workstreamSlug).sort()).toEqual(["crux", "farm"]);
+  });
+
+  test("searches every Workstream by default and only one when scoped", async () => {
+    await seedCorpus();
+    expect((await search({ q: "auth" })).problems).toHaveLength(2);
+    const scoped = await search({ q: "auth", workstream: "farm" });
+    expect(scoped.problems.map((p) => p.workstreamSlug)).toEqual(["farm"]);
+    expect(scoped.observations).toEqual([]);
+  });
+
+  test("a wildcard in the query is a literal, not a pattern", async () => {
+    await seedCorpus();
+    expect((await search({ q: "%" })).problems).toEqual([]);
+    await dispatch({
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-crux", content: "conversion is stuck at 40% flat" },
+    });
+    const literal = await search({ q: "40%" });
+    expect(literal.observations.map((o) => o.content)).toEqual(["conversion is stuck at 40% flat"]);
+  });
+
+  test("an unknown workstream is NOT_FOUND, and an empty query is refused", async () => {
+    const missing = await query({ kind: "SEARCH", q: "auth", workstream: "nope" });
+    expect(missing.status).toBe(404);
+    const empty = await query({ kind: "SEARCH", q: "" });
+    expect(empty.status).toBe(400);
+  });
+
+  test("limit caps each kind", async () => {
+    await seedCorpus();
+    const capped = await search({ q: "auth", limit: 1 });
+    expect(capped.problems).toHaveLength(1);
+  });
+});
+
 describe("POST /v1/dispatch — writes", () => {
   test("a view action advances view-state and bumps the revision in the DO", async () => {
     const res = await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });

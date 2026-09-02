@@ -52,6 +52,39 @@ When CRUX_COLLAB is absent (default), all commands fall through to direct mode w
 
 That's the full intake surface.
 
+## Search before you synthesize a Problem
+
+**Never file a Problem without searching first.** Duplication among Observations
+is by design — they are cheap, and two people noticing the same thing twice is
+signal. Duplication among Problems is the failure this rule exists to prevent: a
+near-twin splits the Evidence for one thing across two rows, and neither reads as
+load-bearing afterwards.
+
+So before `crux problem add`, run:
+
+```sh
+${CLAUDE_PLUGIN_ROOT}/bin/crux search "<a few distinctive words>"
+```
+
+It answers with `{ query, problems[], observations[] }` — each match carrying its
+`workstreamSlug`, and each Problem its full title and description, which is what
+you judge sameness against. It searches **every** Workstream by default, because a
+near-twin filed in the wrong one is exactly what you want to find; add
+`--workstream <slug>` to narrow, `--limit <n>` to cap (default 20 of each kind).
+
+Matching is a case-insensitive substring, not word-aware: search a distinctive
+stem (`auth`, `onboard`) rather than a whole sentence, and run it two or three
+times with different words before concluding nothing exists.
+
+Then:
+
+- **A match is the same thing** → do not file a second Problem. Attach the
+  Observation to the existing one as Evidence, with a why-note:
+  `crux evidence link <obs-id> <problem-id> --note "..."`.
+- **A match is adjacent but genuinely different** → file the new Problem, and say
+  in its description how it differs from the one you found.
+- **Nothing matches** → file it.
+
 ## When NOT to invoke
 
 - Pure implementation or debugging — code goes in files.
