@@ -37,7 +37,7 @@ export function workstreamActions(slug: string): ActionSpec[] {
 export function problemActions(
   problemId: number,
   solutions: Array<{ id: number; title: string }>,
-  openAttempts: Array<{ id: string; label: string }> = [],
+  openAttempts: Array<{ id: string; label: string }>,
 ): ActionSpec[] {
   const options = solutions.map((s) => ({ value: String(s.id), label: `${s.id} · ${s.title}` }));
   const problem = { name: "problem", fixed: String(problemId), required: true, asNumber: true };
