@@ -81,8 +81,8 @@ h2{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
 .prose{white-space:pre-wrap;color:#ccd4de}
 .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:650;
   text-transform:uppercase;letter-spacing:.04em;border:1px solid}
-.badge.open,.badge.now{color:var(--now);border-color:rgba(255,166,87,.35);background:rgba(255,166,87,.1)}
-.badge.shipped,.badge.next{color:var(--next);border-color:rgba(121,192,255,.35);background:rgba(121,192,255,.1)}
+.badge.now,.badge.open{color:var(--now);border-color:rgba(255,166,87,.35);background:rgba(255,166,87,.1)}
+.badge.next,.badge.shipped{color:var(--next);border-color:rgba(121,192,255,.35);background:rgba(121,192,255,.1)}
 .badge.later{color:var(--later);border-color:rgba(179,154,255,.35);background:rgba(179,154,255,.1)}
 .badge.done{color:var(--done);border-color:rgba(86,211,100,.35);background:rgba(86,211,100,.1)}
 .badge.unscheduled{color:var(--none);border-color:#333b45;background:#1b2028}

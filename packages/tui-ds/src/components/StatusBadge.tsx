@@ -11,6 +11,10 @@ const lifecycleColors: Record<string, string> = {
   committed: color.committed,
   shipped: color.shipped,
   abandoned: color.abandoned,
+  // An Attempt's three: `open` is work in flight, `dropped` is `abandoned`'s
+  // analogue one level down, and `shipped` is shared with the row above.
+  open: color.shaping,
+  dropped: color.abandoned,
 };
 
 const priorityColors: Record<string, string> = {

@@ -221,11 +221,13 @@ export function ProblemDetailView({
   }));
 
   // An Attempt holds no description of the work (ADR-0012), so the row shows
-  // its label and the `ref` that is authoritative about it.
+  // its label, the `ref` that is authoritative about it, and — once it is
+  // closed — the judgment that the tracker never keeps.
   const attemptItems: ScrollableListItem[] = attempts.map((a) => ({
     slug: a.id,
     title: `${a.label} — ${a.ref}`,
     badges: <AttemptStatusBadge status={a.status} />,
+    meta: a.closingNote ?? undefined,
   }));
 
   return (
@@ -266,13 +268,6 @@ export function ProblemDetailView({
                 isFocused={activeSection === "attempts"}
                 onSelect={() => {}}
               />
-              {attempts
-                .filter((a) => a.closingNote)
-                .map((a) => (
-                  <Text key={a.id} color="gray">
-                    {a.id} {a.status}: {a.closingNote}
-                  </Text>
-                ))}
             </DetailSection>
           )}
 

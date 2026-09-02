@@ -255,6 +255,30 @@ async function attemptsFor(db: CruxDb, problemId: number): Promise<AttemptRow[]>
   return [...rows].sort(byFiledOrder);
 }
 
+/**
+ * Attempt tallies for a set of Problems, in one query.
+ *
+ * Two reads want the same two numbers about a Problem — the drift query needs
+ * "any open Attempt?", the board card needs "how many, how many still open" —
+ * and both derive them from the same scan, so the scan lives here.
+ */
+async function attemptTallies(
+  db: CruxDb,
+  problemIds: number[],
+): Promise<{ total: Map<number, number>; open: Map<number, number> }> {
+  const rows = await db
+    .select({ problemId: attempts.problemId, status: attempts.status })
+    .from(attempts)
+    .where(inArray(attempts.problemId, problemIds));
+  const total = new Map<number, number>();
+  const open = new Map<number, number>();
+  for (const a of rows) {
+    total.set(a.problemId, (total.get(a.problemId) ?? 0) + 1);
+    if (a.status === "open") open.set(a.problemId, (open.get(a.problemId) ?? 0) + 1);
+  }
+  return { total, open };
+}
+
 /** The Problem's Outcome, with its follow-up Problems inlined — null until it is done. */
 async function outcomeFor(db: CruxDb, problemId: number): Promise<OutcomeWithFollowUps> {
   const row = (
@@ -640,25 +664,15 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       // `attemptCount` distinguishes one nobody ever touched from one that was
       // worked on and stopped, and `openAttemptCount` is the drift signal — a
       // Problem staged as active with zero open Attempts.
-      const att = await db
-        .select({ problemId: attempts.problemId, status: attempts.status })
-        .from(attempts)
-        .where(inArray(attempts.problemId, ids));
-      const attCount = new Map<number, number>();
-      const openAttCount = new Map<number, number>();
-      for (const a of att) {
-        attCount.set(a.problemId, (attCount.get(a.problemId) ?? 0) + 1);
-        if (a.status === "open")
-          openAttCount.set(a.problemId, (openAttCount.get(a.problemId) ?? 0) + 1);
-      }
+      const att = await attemptTallies(db, ids);
       return rows
         .map(
           (r) =>
             ({
               ...r,
               evidenceCount: evCount.get(r.id) ?? 0,
-              attemptCount: attCount.get(r.id) ?? 0,
-              openAttemptCount: openAttCount.get(r.id) ?? 0,
+              attemptCount: att.total.get(r.id) ?? 0,
+              openAttemptCount: att.open.get(r.id) ?? 0,
             }) satisfies ProblemSummary,
         )
         .sort((a, b) => {
@@ -725,23 +739,12 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         .from(problems)
         .where(and(eq(problems.workstreamId, ws.id), inArray(problems.status, stages)));
       if (rows.length === 0) return [];
-      const attemptRows = await db
-        .select({ problemId: attempts.problemId, status: attempts.status })
-        .from(attempts)
-        .where(
-          inArray(
-            attempts.problemId,
-            rows.map((r) => r.id),
-          ),
-        );
-      const total = new Map<number, number>();
-      const hasOpen = new Set<number>();
-      for (const a of attemptRows) {
-        total.set(a.problemId, (total.get(a.problemId) ?? 0) + 1);
-        if (a.status === "open") hasOpen.add(a.problemId);
-      }
+      const { total, open } = await attemptTallies(
+        db,
+        rows.map((r) => r.id),
+      );
       return rows
-        .filter((r) => !hasOpen.has(r.id))
+        .filter((r) => !open.has(r.id))
         .map((r) => ({ ...r, attemptCount: total.get(r.id) ?? 0 }) satisfies DriftingProblem)
         .sort((a, b) => {
           const d = rankStatus(a.status) - rankStatus(b.status);

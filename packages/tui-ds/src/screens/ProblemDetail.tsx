@@ -71,12 +71,12 @@ export function ProblemDetail(): React.ReactElement {
           </DetailSection>
 
           <DetailSection label={`Attempts (${attempts.length})`}>
-            {attempts.map((s) => (
+            {attempts.map((a) => (
               <ListRow
-                key={s.slug}
-                slug={s.slug}
-                title={s.title}
-                badges={<StatusBadge variant="lifecycle" status={s.status} />}
+                key={a.slug}
+                slug={a.slug}
+                title={a.title}
+                badges={<StatusBadge variant="lifecycle" status={a.status} />}
               />
             ))}
           </DetailSection>

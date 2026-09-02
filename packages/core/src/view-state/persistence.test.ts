@@ -89,14 +89,14 @@ describe("persistence merge: loadViewMetaFromBlob returns merged shape", () => {
       historyValue: {},
       children: {},
       revision: 7,
-      lastAction: { kind: "ADD_DECISION", ts: 1700 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1700 },
       recentQueries: [{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }],
     });
 
     expect(meta.value).toEqual({ viewing: "problem_detail" });
     expect(meta.context).toEqual({ workstreamId: "WS-crux", problemId: "42" });
     expect(meta.revision).toBe(7);
-    expect(meta.lastAction).toEqual({ kind: "ADD_DECISION", ts: 1700 });
+    expect(meta.lastAction).toEqual({ kind: "ADD_ATTEMPT", ts: 1700 });
     expect(meta.recentQueries).toEqual([{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }]);
   });
 
