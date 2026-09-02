@@ -434,3 +434,328 @@ describe("unknown routes", () => {
     expect(res.headers.get("location")).toBe("/signin?next=%2Fnope");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Attempts (ADR-0012)
+// ---------------------------------------------------------------------------
+
+describe("Attempts", () => {
+  /** A Problem to hang Attempts off, filed through the same request path. */
+  async function fileProblem(title = "P"): Promise<number> {
+    const res = await dispatch({
+      kind: "ADD_PROBLEM",
+      payload: { workstream: "WS-crux", title, description: "d" },
+    });
+    return ((await res.json()) as { result: { id: number } }).result.id;
+  }
+
+  async function fileAttempt(
+    problemId: number,
+    ref = "https://tracker.example/T-1",
+    label = "Rewrite the ingest path",
+  ): Promise<string> {
+    const res = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref, label },
+    });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { result: { id: string } }).result.id;
+  }
+
+  test("files an Attempt against a Problem with a ref and a label", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+    expect(id).toBe("ATT-001");
+
+    const listed = (await (await query({ kind: "ATTEMPT_LIST", problem: problemId })).json()) as {
+      result: Array<Record<string, unknown>>;
+    };
+
+    expect(listed.result).toHaveLength(1);
+    expect(listed.result[0]).toMatchObject({
+      id: "ATT-001",
+      problemId,
+      ref: "https://tracker.example/T-1",
+      label: "Rewrite the ingest path",
+      status: "open",
+      closingNote: null,
+      createdById: "USR-james",
+    });
+  });
+
+  test("closes an Attempt as shipped, with the closing note the tracker never keeps", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "shipped", closingNote: "Landed, but backpressure is still unsolved" },
+    });
+    expect(res.status).toBe(200);
+
+    const listed = (await (await query({ kind: "ATTEMPT_LIST", problem: problemId })).json()) as {
+      result: Array<{ status: string; closingNote: string }>;
+    };
+    expect(listed.result[0]).toMatchObject({
+      status: "shipped",
+      closingNote: "Landed, but backpressure is still unsolved",
+    });
+  });
+
+  test("closes an Attempt as dropped", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "dropped", closingNote: "The approach could not handle the load" },
+    });
+    expect(res.status).toBe(200);
+
+    const listed = (await (await query({ kind: "ATTEMPT_LIST", problem: problemId })).json()) as {
+      result: Array<{ status: string; closingNote: string }>;
+    };
+    expect(listed.result[0]).toMatchObject({
+      status: "dropped",
+      closingNote: "The approach could not handle the load",
+    });
+  });
+
+  test("concurrent clients cannot both close the same Attempt", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+
+    const [a, b] = await Promise.all([
+      dispatch({
+        kind: "CLOSE_ATTEMPT",
+        payload: { id, status: "shipped", closingNote: "landed" },
+      }),
+      dispatch({
+        kind: "CLOSE_ATTEMPT",
+        payload: { id, status: "dropped", closingNote: "gave up" },
+      }),
+    ]);
+
+    const statuses = [a.status, b.status].sort();
+    expect(statuses[0]).toBe(200);
+    expect(statuses[1]).toBeGreaterThanOrEqual(400);
+
+    // And the corpus holds exactly one of the two closing notes, not a mix.
+    const listed = (await (await query({ kind: "ATTEMPT_LIST", problem: problemId })).json()) as {
+      result: Array<{ status: string; closingNote: string }>;
+    };
+    const row = listed.result[0]!;
+    expect([
+      { status: "shipped", closingNote: "landed" },
+      { status: "dropped", closingNote: "gave up" },
+    ]).toContainEqual({ status: row.status, closingNote: row.closingNote });
+  });
+
+  test("refuses a status that is neither shipped nor dropped", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "reopened", closingNote: "n" },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+  });
+
+  test("refuses an Attempt with no ref and one with no label", async () => {
+    const problemId = await fileProblem();
+    const noRef = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "  ", label: "L" },
+    });
+    expect(noRef.status).toBeGreaterThanOrEqual(400);
+    expect(await noRef.json()).toMatchObject({ error: { code: "INVARIANT_VIOLATION" } });
+
+    const noLabel = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "https://tracker.example/T-1", label: "" },
+    });
+    expect(noLabel.status).toBeGreaterThanOrEqual(400);
+    expect(await noLabel.json()).toMatchObject({ error: { code: "INVARIANT_VIOLATION" } });
+  });
+
+  test("an Attempt against a Problem that does not exist is NOT_FOUND", async () => {
+    const res = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: 9999, ref: "https://tracker.example/T-1", label: "L" },
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+  });
+
+  test("closing an Attempt that does not exist is NOT_FOUND", async () => {
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id: "ATT-404", status: "dropped", closingNote: "n" },
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+  });
+
+  test("refuses to close an Attempt without a closing note", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "dropped", closingNote: "   " },
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await res.json()).toMatchObject({ error: { code: "INVARIANT_VIOLATION" } });
+  });
+
+  test("refuses a second close — an Attempt closes once", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+    await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "shipped", closingNote: "done" },
+    });
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "dropped", closingNote: "no, actually" },
+    });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await res.json()).toMatchObject({ error: { code: "ILLEGAL_TRANSITION" } });
+  });
+
+  test("has nowhere to record a description of the work", async () => {
+    const problemId = await fileProblem();
+    const res = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: {
+        problem: problemId,
+        ref: "https://tracker.example/T-2",
+        label: "L",
+        description: "a copy of the work that would rot",
+      },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+
+    const listed = (await (await query({ kind: "ATTEMPT_LIST" })).json()) as {
+      result: Array<Record<string, unknown>>;
+    };
+    expect(listed.result).toHaveLength(0);
+  });
+
+  test("a read of an Attempt returns no description field at all", async () => {
+    const problemId = await fileProblem();
+    await fileAttempt(problemId);
+    const listed = (await (await query({ kind: "ATTEMPT_LIST" })).json()) as {
+      result: Array<Record<string, unknown>>;
+    };
+    // The full column set, written out by hand from ADR-0012 rather than read
+    // back off the row: problem, ref, label, status, closing note, authorship.
+    expect(Object.keys(listed.result[0]!).sort()).toEqual([
+      "closingNote",
+      "createdAt",
+      "createdById",
+      "id",
+      "label",
+      "problemId",
+      "ref",
+      "status",
+      "updatedAt",
+    ]);
+  });
+
+  test("closing an Attempt as shipped leaves the Problem's stage untouched", async () => {
+    const problemId = await fileProblem();
+    await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } });
+    const id = await fileAttempt(problemId);
+
+    await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "shipped", closingNote: "shipped it" },
+    });
+
+    const shown = (await (await query({ kind: "PROBLEM_SHOW", id: problemId })).json()) as {
+      result: { status: string | null };
+    };
+    // Still `now`, not `done`: something shipping is a fact about the world;
+    // the Problem being gone is a judgment somebody makes (ADR-0012).
+    expect(shown.result.status).toBe("now");
+  });
+
+  test("Attempts hang off the Problem in PROBLEM_DETAIL and the context digest", async () => {
+    const problemId = await fileProblem();
+    await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } });
+    await fileAttempt(problemId, "https://tracker.example/T-7", "Batch the writes");
+
+    const detail = (await (await query({ kind: "PROBLEM_DETAIL", id: problemId })).json()) as {
+      result: { attempts: Array<{ id: string; label: string; ref: string }> };
+    };
+    expect(detail.result.attempts).toHaveLength(1);
+    expect(detail.result.attempts[0]).toMatchObject({
+      id: "ATT-001",
+      label: "Batch the writes",
+      ref: "https://tracker.example/T-7",
+    });
+
+    const digest = (await (
+      await query({ kind: "CONTEXT", workstream: "crux", stages: ["now"] })
+    ).json()) as { result: { now: Array<{ attempts: Array<{ id: string }> }> } };
+    expect(digest.result.now[0]!.attempts.map((a) => a.id)).toEqual(["ATT-001"]);
+  });
+
+  describe("the drift query", () => {
+    test("names a staged Problem with no open Attempt, and omits one with", async () => {
+      const drifting = await fileProblem("Drifting");
+      const worked = await fileProblem("Worked on");
+      await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: drifting, stage: "now" } });
+      await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: worked, stage: "now" } });
+      await fileAttempt(worked);
+
+      const res = (await (await query({ kind: "PROBLEM_DRIFT", workstream: "crux" })).json()) as {
+        result: Array<{ id: number; title: string; attemptCount: number }>;
+      };
+      expect(res.result.map((p) => p.title)).toEqual(["Drifting"]);
+      expect(res.result[0]!.attemptCount).toBe(0);
+    });
+
+    test("a Problem whose only Attempt is closed has drifted again", async () => {
+      const problemId = await fileProblem("Was worked on");
+      await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } });
+      const id = await fileAttempt(problemId);
+      await dispatch({
+        kind: "CLOSE_ATTEMPT",
+        payload: { id, status: "dropped", closingNote: "could not handle the load" },
+      });
+
+      const res = (await (await query({ kind: "PROBLEM_DRIFT", workstream: "crux" })).json()) as {
+        result: Array<{ title: string; attemptCount: number }>;
+      };
+      expect(res.result.map((p) => p.title)).toEqual(["Was worked on"]);
+      // One Attempt, and it is closed: worked on and stopped, which reads
+      // differently from a Problem nobody ever touched.
+      expect(res.result[0]!.attemptCount).toBe(1);
+    });
+
+    test("only the stages asked for count as active — `now` by default", async () => {
+      const later = await fileProblem("Later, untouched");
+      const unscheduled = await fileProblem("Never scheduled");
+      await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: later, stage: "later" } });
+
+      const byDefault = (await (
+        await query({ kind: "PROBLEM_DRIFT", workstream: "crux" })
+      ).json()) as { result: Array<{ title: string }> };
+      expect(byDefault.result).toEqual([]);
+
+      const widened = (await (
+        await query({ kind: "PROBLEM_DRIFT", workstream: "crux", stages: ["now", "later"] })
+      ).json()) as { result: Array<{ id: number; title: string }> };
+      expect(widened.result.map((p) => p.title)).toEqual(["Later, untouched"]);
+      expect(widened.result.map((p) => p.id)).not.toContain(unscheduled);
+    });
+
+    test("a terminal stage is not a stage anything can drift in", async () => {
+      const res = await query({ kind: "PROBLEM_DRIFT", workstream: "crux", stages: ["done"] });
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    });
+  });
+});

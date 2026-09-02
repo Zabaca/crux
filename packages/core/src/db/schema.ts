@@ -123,6 +123,44 @@ export const evidence = sqliteTable(
   }),
 );
 
+/**
+ * An Attempt: a pointer to work happening somewhere else about a Problem
+ * (ADR-0012).
+ *
+ * There is deliberately no `description` column. The work is described in the
+ * system `ref` points at; a second copy here would rot while looking
+ * trustworthy, which is the failure Crux exists to prevent. What Crux keeps
+ * that no tracker does is `closing_note` — the backward-looking judgment about
+ * why an attempt ended the way it did.
+ *
+ * `status` is a coarse local marker, not a mirror: nothing polls the linked
+ * tracker, so it goes stale, and the `ref` stays authoritative. Its only job is
+ * to answer the drift query — a Problem staged as active with zero open
+ * Attempts.
+ */
+export const attempts = sqliteTable("attempts", {
+  id: text("id").primaryKey(), // ATT-###
+  problemId: integer("problem_id")
+    .notNull()
+    .references(() => problems.id),
+  /** Where the work actually lives — a URL or a tracker key. Authoritative. */
+  ref: text("ref").notNull(),
+  label: text("label").notNull(),
+  /** open | shipped | dropped */
+  status: text("status").notNull().default("open"),
+  /** Why the attempt ended the way it did. Null while open, required on close. */
+  closingNote: text("closing_note"),
+  createdById: text("created_by_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: integer("created_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+  updatedAt: integer("updated_at")
+    .notNull()
+    .default(sql`(unixepoch() * 1000)`),
+});
+
 export const solutions = sqliteTable("solutions", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   problemId: integer("problem_id")

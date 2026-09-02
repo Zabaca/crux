@@ -41,6 +41,8 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
   problem_detail: {
     allowedView: ["BACK"],
     allowedMutation: [
+      "ADD_ATTEMPT",
+      "CLOSE_ATTEMPT",
       "ADD_SOLUTION",
       "EDIT_SOLUTION",
       "ADD_EVIDENCE",

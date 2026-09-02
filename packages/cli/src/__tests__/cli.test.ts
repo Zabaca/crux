@@ -21,6 +21,7 @@ import { problemCommand } from "../commands/problem.js";
 import { observationCommand } from "../commands/observation.js";
 import { contextCommand } from "../commands/context.js";
 import { solutionCommand } from "../commands/solution.js";
+import { attemptCommand } from "../commands/attempt.js";
 import { viewCommand } from "../commands/view.js";
 import { searchCommand } from "../commands/search.js";
 import { outcomeCommand } from "../commands/outcome.js";
@@ -273,6 +274,66 @@ describe("writes", () => {
       payload: { slug: "smoke", title: "Smoke WS", description: undefined },
     });
     expect(out).toEqual({ ok: true, id: "WS-smoke" });
+  });
+
+  test("attempt add dispatches ADD_ATTEMPT with only a ref and a label", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": { revision: 1, result: { ok: true, id: "ATT-001" } },
+    });
+
+    const out = await capture(() =>
+      runCmd(attemptCommand as AnyCmd, "add", {
+        problem: "7",
+        ref: "https://tracker.example/ENG-412",
+        label: "Reload the digest as structure",
+        json: true,
+      }),
+    );
+
+    expect(calls[0]!.body).toEqual({
+      kind: "ADD_ATTEMPT",
+      payload: {
+        problem: "7",
+        ref: "https://tracker.example/ENG-412",
+        label: "Reload the digest as structure",
+      },
+    });
+    expect(out).toEqual({ ok: true, id: "ATT-001" });
+  });
+
+  test("attempt close dispatches CLOSE_ATTEMPT with the closing note", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": { revision: 2, result: { ok: true, id: "ATT-001", status: "dropped" } },
+    });
+
+    await capture(() =>
+      runCmd(attemptCommand as AnyCmd, "close", {
+        id: "ATT-001",
+        status: "dropped",
+        note: "The approach could not handle backpressure",
+        json: true,
+      }),
+    );
+
+    expect(calls[0]!.body).toEqual({
+      kind: "CLOSE_ATTEMPT",
+      payload: {
+        id: "ATT-001",
+        status: "dropped",
+        closingNote: "The approach could not handle backpressure",
+      },
+    });
+  });
+
+  test("attempt drift asks for PROBLEM_DRIFT in the selected workstream", async () => {
+    const calls = stubServer({
+      "GET /v1/view": VIEW_WITH_WS,
+      "POST /v1/query": { result: [] },
+    });
+
+    await capture(() => runCmd(attemptCommand as AnyCmd, "drift", { json: true }));
+
+    expect(calls.at(-1)!.body).toEqual({ kind: "PROBLEM_DRIFT", workstream: "WS-smoke" });
   });
 
   test("observation add splits comma-separated tags and uses the selected workstream", async () => {

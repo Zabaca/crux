@@ -20,6 +20,7 @@ A typed entity model with workflow invariants enforced in code, fronted by a CLI
 | **Observation**            | Atomic intake. Cheap to create, never deleted.                                  |
 | **Problem**                | Synthesized "there's a thing worth solving."                                    |
 | **Evidence**               | Links an Observation to a Problem with a why-note.                              |
+| **Attempt**                | A pointer to work about a Problem happening in another tracker.                 |
 | **Solution**               | An option for a specific Problem.                                               |
 | **Elimination**            | Rejects Solutions without committing to an alternative (progressive narrowing). |
 | **Decision**               | Commits to a chosen Solution, records the losers.                               |

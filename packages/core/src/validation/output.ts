@@ -50,6 +50,10 @@ const DigestProblemEntry = z
     id: z.union([z.string(), z.number()]),
     title: z.string(),
     status: z.string().nullable(),
+    // Optional, not required: the CLI ships as a plugin and is updated
+    // independently of the deployment it points at, so a digest from a Worker
+    // that predates Attempts must still parse.
+    attempts: z.array(z.unknown()).optional(),
     solutions: z.array(z.unknown()),
     latest_decision: z.unknown(),
   })

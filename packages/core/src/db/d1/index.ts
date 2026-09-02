@@ -151,6 +151,22 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS evidence_obs_problem_unique ON evidence (observation_id, problem_id)`,
 
+  // An Attempt points at work in another tracker (ADR-0012). No description
+  // column, deliberately: `ref` is authoritative for what the work is, and
+  // `closing_note` is the judgment no tracker keeps.
+  `CREATE TABLE IF NOT EXISTS attempts (
+    id text PRIMARY KEY NOT NULL,
+    problem_id integer NOT NULL REFERENCES problems(id),
+    ref text NOT NULL,
+    label text NOT NULL,
+    status text DEFAULT 'open' NOT NULL,
+    closing_note text,
+    created_by_id text NOT NULL REFERENCES users(id),
+    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
+    updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS attempts_problem_id ON attempts (problem_id)`,
+
   `CREATE TABLE IF NOT EXISTS solutions (
     id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
     problem_id integer NOT NULL REFERENCES problems(id),
