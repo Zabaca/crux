@@ -3,48 +3,31 @@ import { beforeEach, describe, expect, test } from "vitest";
 
 import { createD1Db, type CruxDb } from "../src/db/client.js";
 import { applyD1Schema } from "../src/db/d1/index.js";
-import {
-  createDecision,
-  createElimination,
-  renameWorkstream,
-  shipSolution,
-} from "../src/transitions/index.js";
-import { observations, problems, solutions, users, workstreams } from "../src/db/schema.js";
+import { renameWorkstream } from "../src/transitions/index.js";
+import { observations, problems, users, workstreams } from "../src/db/schema.js";
 
 // Seam: the transition functions, each of which already takes a `CruxDb`. The
 // point of running them here rather than under bun is that the code executes
 // inside workerd against a real D1 binding — "the invariants hold on D1" is a
 // claim about the runtime that will serve them, not about a proxy to it.
 //
-// Expected values are the rules as ADR/README state them ("you can't file a
-// Decision against a chosen Solution", "you can't eliminate a shipped one"),
-// asserted as error codes from src/transitions/errors.ts. The two terminal
-// doors a Problem leaves the board through — Abandonment and Outcome — are
-// pinned through the deployed request path instead, in
-// apps/cloud/workers-test/api.workerd.ts.
+// What is left at this seam is the workstream rename, whose whole subject is a
+// D1 behaviour: a deferred-FK batch that either lands or is refused as a unit.
+// The invariants a Problem still carries — the two terminal doors, one Outcome
+// per Problem, Observation archiving — are pinned through the deployed request
+// path instead, in apps/cloud/workers-test/api.workerd.ts.
 
 let db: CruxDb;
 
-/** A Problem with two Solutions, both `proposed`. Returns their ids. */
-async function seedProblemWithTwoSolutions(): Promise<{
-  problemId: number;
-  a: number;
-  b: number;
-}> {
+/** One Workstream with one Problem in it. Returns the Problem's id. */
+async function seedProblem(): Promise<number> {
   await db.insert(users).values({ id: "USR-t", slug: "t", name: "T" });
   await db.insert(workstreams).values({ id: "WS-t", slug: "t", title: "T", ownerId: "USR-t" });
   const [p] = await db
     .insert(problems)
     .values({ workstreamId: "WS-t", title: "P", description: "D", createdById: "USR-t" })
     .returning({ id: problems.id });
-  const inserted = await db
-    .insert(solutions)
-    .values([
-      { problemId: p!.id, title: "A", createdById: "USR-t" },
-      { problemId: p!.id, title: "B", createdById: "USR-t" },
-    ])
-    .returning({ id: solutions.id });
-  return { problemId: p!.id, a: inserted[0]!.id, b: inserted[1]!.id };
+  return p!.id;
 }
 
 beforeEach(async () => {
@@ -53,125 +36,9 @@ beforeEach(async () => {
   db = createD1Db(env.DB);
 });
 
-describe("Decision", () => {
-  test("commits the chosen Solution and records the losers", async () => {
-    const { problemId, a, b } = await seedProblemWithTwoSolutions();
-
-    await createDecision(
-      {
-        id: "DEC-001",
-        problemId,
-        chosenSolutionId: a,
-        rejectedSolutionIds: [b],
-        rationale: "a is simpler",
-        decidedById: "USR-t",
-      },
-      db,
-    );
-
-    const rows = await db.select().from(solutions);
-    const byId = new Map(rows.map((r) => [r.id, r.status]));
-    expect(byId.get(a)).toBe("chosen");
-    expect(byId.get(b)).toBe("rejected");
-  });
-
-  test("refuses a Solution that already belongs to another Problem", async () => {
-    const { a, b } = await seedProblemWithTwoSolutions();
-    const [other] = await db
-      .insert(problems)
-      .values({ workstreamId: "WS-t", title: "P2", description: "D", createdById: "USR-t" })
-      .returning({ id: problems.id });
-
-    await expect(
-      createDecision(
-        {
-          id: "DEC-001",
-          problemId: other!.id,
-          chosenSolutionId: a,
-          rejectedSolutionIds: [b],
-          rationale: "wrong problem",
-          decidedById: "USR-t",
-        },
-        db,
-      ),
-    ).rejects.toMatchObject({ code: "REFERENTIAL_MISMATCH" });
-
-    expect(
-      await db
-        .select()
-        .from(solutions)
-        .then((r) => r.map((s) => s.status)),
-    ).toEqual(["proposed", "proposed"]);
-  });
-
-  test("refuses to choose a Solution that is already chosen", async () => {
-    const { problemId, a, b } = await seedProblemWithTwoSolutions();
-    await createDecision(
-      {
-        id: "DEC-001",
-        problemId,
-        chosenSolutionId: a,
-        rejectedSolutionIds: [],
-        rationale: "r",
-        decidedById: "USR-t",
-      },
-      db,
-    );
-
-    await expect(
-      createDecision(
-        {
-          id: "DEC-002",
-          problemId,
-          chosenSolutionId: a,
-          rejectedSolutionIds: [b],
-          rationale: "again",
-          decidedById: "USR-t",
-        },
-        db,
-      ),
-    ).rejects.toMatchObject({ code: "INVARIANT_VIOLATION" });
-  });
-});
-
-describe("Elimination", () => {
-  test("cannot eliminate a Solution that has shipped", async () => {
-    const { problemId, a, b } = await seedProblemWithTwoSolutions();
-    await createDecision(
-      {
-        id: "DEC-001",
-        problemId,
-        chosenSolutionId: a,
-        rejectedSolutionIds: [],
-        rationale: "r",
-        decidedById: "USR-t",
-      },
-      db,
-    );
-    await shipSolution(a, db);
-
-    await expect(
-      createElimination(
-        {
-          id: "ELIM-001",
-          problemId,
-          eliminatedSolutionIds: [a, b],
-          rationale: "too late",
-          eliminatedById: "USR-t",
-        },
-        db,
-      ),
-    ).rejects.toMatchObject({ code: "INVARIANT_VIOLATION" });
-
-    // All-or-nothing: `b` was eliminable, but the batch refused as a unit.
-    const rows = await db.select().from(solutions);
-    expect(new Map(rows.map((r) => [r.id, r.status])).get(b)).toBe("proposed");
-  });
-});
-
 describe("Workstream rename", () => {
   test("carries every referrer to the new id", async () => {
-    const { problemId } = await seedProblemWithTwoSolutions();
+    const problemId = await seedProblem();
     await db.insert(observations).values({
       id: "OBS-001",
       workstreamId: "WS-t",
@@ -192,7 +59,7 @@ describe("Workstream rename", () => {
   });
 
   test("refuses a slug that is already taken, changing nothing", async () => {
-    await seedProblemWithTwoSolutions();
+    await seedProblem();
     await db.insert(workstreams).values({ id: "WS-taken", slug: "taken", title: "Taken" });
 
     await expect(renameWorkstream("t", "taken", {}, db)).rejects.toMatchObject({

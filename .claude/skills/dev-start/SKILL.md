@@ -52,7 +52,7 @@ Writes the `[user]` section of `$CRUX_HOME/config.toml`. The `users` row itself 
 bun run crux context -w crux --json | jq .
 ```
 
-Expect PRB-thinking-residue-gap with its evidence, solutions, and DEC-001 inlined, plus `legal_next_transitions`.
+Expect PRB-thinking-residue-gap with its evidence and attempts inlined, plus `legal_next_transitions`.
 
 ## Troubleshooting
 

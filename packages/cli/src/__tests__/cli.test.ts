@@ -20,7 +20,6 @@ import { workstreamCommand } from "../commands/workstream.js";
 import { problemCommand } from "../commands/problem.js";
 import { observationCommand } from "../commands/observation.js";
 import { contextCommand } from "../commands/context.js";
-import { solutionCommand } from "../commands/solution.js";
 import { attemptCommand } from "../commands/attempt.js";
 import { viewCommand } from "../commands/view.js";
 import { searchCommand } from "../commands/search.js";
@@ -243,8 +242,8 @@ describe("reads", () => {
       createdById: "USR-test",
       createdAt: 1,
       updatedAt: 1,
-      solutions: [],
-      latest_decision: null,
+      attempts: [],
+      outcome: null,
     };
     stubServer({ "POST /v1/query": { result: shown } });
     const out = await capture(() =>
@@ -390,15 +389,15 @@ describe("writes", () => {
 
 describe("server rejections reach the terminal unchanged", () => {
   test("a NOT_FOUND envelope becomes a CruxError with exit code 23", async () => {
-    stubServer({ "POST /v1/query": envelope(404, "NOT_FOUND", "solution not found: 9") });
+    stubServer({ "POST /v1/query": envelope(404, "NOT_FOUND", "problem not found: 9") });
 
-    const err = await runCmd(solutionCommand as AnyCmd, "show", { id: "9", json: true }).catch(
+    const err = await runCmd(problemCommand as AnyCmd, "show", { id: "9", json: true }).catch(
       (e) => e,
     );
 
     expect(err).toBeInstanceOf(CruxError);
     expect((err as CruxError).code).toBe("NOT_FOUND");
-    expect((err as CruxError).message).toBe("solution not found: 9");
+    expect((err as CruxError).message).toBe("problem not found: 9");
     expect(EXIT_CODES[(err as CruxError).code]).toBe(23);
   });
 
@@ -408,18 +407,21 @@ describe("server rejections reach the terminal unchanged", () => {
       "POST /v1/dispatch": envelope(
         422,
         "ILLEGAL_TRANSITION",
-        "cannot ship a solution that was not chosen",
-        { solutionId: 4, status: "proposed" },
+        "cannot close an Attempt that is already closed",
+        { attemptId: "ATT-001", status: "dropped" },
       ),
     });
 
-    const err = (await runCmd(solutionCommand as AnyCmd, "ship", { id: "4", json: true }).catch(
-      (e) => e,
-    )) as CruxError;
+    const err = (await runCmd(attemptCommand as AnyCmd, "close", {
+      id: "ATT-001",
+      status: "shipped",
+      note: "n",
+      json: true,
+    }).catch((e) => e)) as CruxError;
 
     expect(err).toBeInstanceOf(CruxError);
     expect(err.code).toBe("ILLEGAL_TRANSITION");
-    expect(err.details).toEqual({ solutionId: 4, status: "proposed" });
+    expect(err.details).toEqual({ attemptId: "ATT-001", status: "dropped" });
     expect(EXIT_CODES[err.code]).toBe(20);
   });
 

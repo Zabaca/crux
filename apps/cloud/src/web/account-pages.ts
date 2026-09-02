@@ -96,7 +96,7 @@ export function invitePage(
       <input id="name" name="name" type="text" autocomplete="name" required autofocus />
       <p><button class="btn" type="submit">Join</button></p>
       <p style="color:var(--faint);font-size:12px">
-        This is the name your Observations, Problems and Decisions are attributed to. We will email
+        This is the name your Observations, Problems and Outcomes are attributed to. We will email
         you a sign-in link — there is no password to choose.
       </p>
     </form>
@@ -168,7 +168,7 @@ export async function membersPage(
     </div>
     <p style="color:var(--faint);font-size:12px;margin:10px 2px 0">
       Removing a Member revokes their sign-in, their sessions and their CLI tokens. What they filed
-      stays theirs — every Observation, Problem and Decision keeps their name on it.
+      stays theirs — every Observation, Problem and Outcome keeps their name on it.
     </p>
 
     <h2>Invite a Member</h2>

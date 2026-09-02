@@ -36,8 +36,10 @@ export const OkWithStatusOutput = z.object({
 export const ProblemShowOutput = z
   .object({
     id: z.union([z.string(), z.number()]),
-    solutions: z.array(z.unknown()),
-    latest_decision: z.unknown(),
+    // Optional for the same reason `DigestProblemEntry.attempts` is: the CLI
+    // ships as a plugin and is updated independently of the deployment it
+    // points at, so a Problem from a Worker that predates Attempts must parse.
+    attempts: z.array(z.unknown()).optional(),
   })
   .passthrough();
 
@@ -54,8 +56,6 @@ const DigestProblemEntry = z
     // independently of the deployment it points at, so a digest from a Worker
     // that predates Attempts must still parse.
     attempts: z.array(z.unknown()).optional(),
-    solutions: z.array(z.unknown()),
-    latest_decision: z.unknown(),
   })
   .passthrough();
 

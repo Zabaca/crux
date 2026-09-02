@@ -6,12 +6,9 @@ import { workstreamCommand } from "./commands/workstream.js";
 import { observationCommand } from "./commands/observation.js";
 import { problemCommand } from "./commands/problem.js";
 import { evidenceCommand } from "./commands/evidence.js";
-import { solutionCommand } from "./commands/solution.js";
 import { attemptCommand } from "./commands/attempt.js";
-import { decisionCommand } from "./commands/decision.js";
 import { contextCommand } from "./commands/context.js";
 import { searchCommand } from "./commands/search.js";
-import { eliminationCommand } from "./commands/elimination.js";
 import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
 import { initCommand } from "./commands/init.js";
@@ -22,7 +19,7 @@ const main = defineCommand({
   meta: {
     name: "crux",
     version: "0.0.0",
-    description: "Discovery residue CLI — capture observations, shape problems, record decisions.",
+    description: "Discovery residue CLI — capture observations, shape problems, track attempts.",
   },
   subCommands: {
     init: initCommand,
@@ -31,10 +28,7 @@ const main = defineCommand({
     observation: observationCommand,
     problem: problemCommand,
     evidence: evidenceCommand,
-    solution: solutionCommand,
     attempt: attemptCommand,
-    decision: decisionCommand,
-    elimination: eliminationCommand,
     abandonment: abandonmentCommand,
     outcome: outcomeCommand,
     context: contextCommand,

@@ -6,10 +6,10 @@ import { applyD1Schema } from "../src/db/d1/index.js";
 import { query } from "../src/reads/index.js";
 import { MemoryViewStore } from "../src/view-state/store.js";
 import {
+  attempts,
   evidence,
   observations,
   problems,
-  solutions,
   users,
   workstreams,
 } from "../src/db/schema.js";
@@ -20,8 +20,8 @@ import {
 //
 // Expected values come from the CLI contract the skill instructions depend on:
 // `crux context --json` emits a `workstream` + per-stage problem buckets, each
-// problem carrying `evidence`, `solutions`, `latest_decision`, `eliminations`,
-// `abandonment` and `legal_next_transitions`.
+// problem carrying `evidence`, `attempts`, `abandonment`, `outcome` and
+// `legal_next_transitions`.
 
 let db: CruxDb;
 
@@ -45,7 +45,13 @@ async function seed(): Promise<{ problemId: number }> {
     note: "why",
     createdById: "USR-t",
   });
-  await db.insert(solutions).values({ problemId: p!.id, title: "S", createdById: "USR-t" });
+  await db.insert(attempts).values({
+    id: "ATT-001",
+    problemId: p!.id,
+    ref: "https://tracker.example/1",
+    label: "spike",
+    createdById: "USR-t",
+  });
   return { problemId: p!.id };
 }
 
@@ -66,16 +72,17 @@ describe("query()", () => {
     });
   });
 
-  test("PROBLEM_SHOW inlines solutions and the latest decision", async () => {
+  test("PROBLEM_SHOW inlines the Attempts and the Outcome", async () => {
     const { problemId } = await seed();
     const shown = (await query({ kind: "PROBLEM_SHOW", id: problemId }, { db })) as {
       id: number;
-      solutions: unknown[];
-      latest_decision: unknown;
+      attempts: Array<{ id: string; ref: string }>;
+      outcome: unknown;
     };
     expect(shown.id).toBe(problemId);
-    expect(shown.solutions).toHaveLength(1);
-    expect(shown.latest_decision).toBeNull();
+    expect(shown.attempts).toHaveLength(1);
+    expect(shown.attempts[0]).toMatchObject({ id: "ATT-001", ref: "https://tracker.example/1" });
+    expect(shown.outcome).toBeNull();
   });
 
   test("CONTEXT emits the digest shape a fresh session reloads from", async () => {
@@ -94,9 +101,7 @@ describe("query()", () => {
     ]);
     const p = digest.unscheduled[0];
     expect(p.evidence[0].observation.content).toBe("users lose context overnight");
-    expect(p.solutions).toHaveLength(1);
-    expect(p.latest_decision).toBeNull();
-    expect(p.eliminations).toEqual([]);
+    expect(p.attempts).toHaveLength(1);
     expect(p.abandonment).toBeNull();
     expect(p.outcome).toBeNull();
     // No status yet: schedule it, or leave through one of the two doors.

@@ -20,16 +20,11 @@ import type { CruxDb } from "../db/client.js";
 import {
   abandonments,
   attempts,
-  decisionRejectedSolutions,
-  decisions,
-  eliminations,
-  eliminationSolutions,
   evidence,
   observations,
   outcomes,
   outcomeFollowUpProblems,
   problems,
-  solutions,
   workstreams,
 } from "../db/schema.js";
 import { NotFoundError, ValidationError } from "../transitions/errors.js";
@@ -79,17 +74,6 @@ export const QuerySchema = z.discriminatedUnion("kind", [
     stages: z.array(z.string()).optional(),
   }),
 
-  z.object({ kind: z.literal("SOLUTION_LIST"), problem: id.optional() }),
-  z.object({ kind: z.literal("SOLUTION_SHOW"), id }),
-  z.object({ kind: z.literal("SOLUTION_GET"), id }),
-  z.object({ kind: z.literal("SOLUTION_DETAIL"), id }),
-  z.object({ kind: z.literal("SOLUTION_BY_IDS"), ids: z.array(id) }),
-
-  z.object({ kind: z.literal("DECISION_LIST") }),
-
-  z.object({ kind: z.literal("ELIMINATION_LIST"), problem: id.optional() }),
-  z.object({ kind: z.literal("ELIMINATION_SHOW"), id: z.string() }),
-
   z.object({ kind: z.literal("ABANDONMENT_LIST"), workstream: z.string() }),
   z.object({ kind: z.literal("ABANDONMENT_SHOW"), id: z.string() }),
 
@@ -133,7 +117,6 @@ export type QueryKind = QueryRequest["kind"];
  */
 export type WorkstreamRow = typeof workstreams.$inferSelect;
 export type ProblemRow = typeof problems.$inferSelect;
-export type SolutionRow = typeof solutions.$inferSelect;
 export type ObservationRow = typeof observations.$inferSelect;
 export type AbandonmentRow = typeof abandonments.$inferSelect;
 export type AttemptRow = typeof attempts.$inferSelect;
@@ -147,8 +130,6 @@ export type AttemptRow = typeof attempts.$inferSelect;
 export type DriftingProblem = ProblemRow & { attemptCount: number };
 
 export type ObservationWithArchive = ObservationRow & { archive: ArchiveBlock };
-export type DecisionWithRejected = Awaited<ReturnType<typeof latestDecisionFor>>;
-export type EliminationWithTargets = Awaited<ReturnType<typeof eliminationsFor>>[number];
 export type EvidenceWithObservation = Awaited<ReturnType<typeof evidenceWithObservations>>[number];
 
 export type WorkstreamSummary = WorkstreamRow & { openProblemCount: number };
@@ -166,17 +147,14 @@ export type ObservationSummary = ObservationWithArchive & { problemCount: number
 
 export type ProblemSummary = ProblemRow & {
   evidenceCount: number;
-  solutionCount: number;
-  decided: boolean;
+  attemptCount: number;
+  openAttemptCount: number;
 };
 
 export type ProblemDetail = {
   problem: ProblemRow;
   attempts: AttemptRow[];
   evidence: EvidenceWithObservation[];
-  solutions: SolutionRow[];
-  latestDecision: DecisionWithRejected;
-  eliminations: EliminationWithTargets[];
   abandonment: AbandonmentRow | null;
   outcome: OutcomeWithFollowUps;
 };
@@ -184,14 +162,6 @@ export type ProblemDetail = {
 export type OutcomeWithFollowUps =
   | (typeof outcomes.$inferSelect & { followUpProblemIds: number[] })
   | null;
-
-export type SolutionDetail = {
-  solution: SolutionRow;
-  problem: ProblemRow;
-  choosingDecision: DecisionWithRejected;
-  rejectingDecision: DecisionWithRejected;
-  eliminatedBy: EliminationWithTargets[];
-};
 
 export type ObservationDetail = {
   observation: ObservationWithArchive;
@@ -225,14 +195,6 @@ const numeric = (v: string | number): number =>
 
 const STATUS_RANK: Record<string, number> = { now: 0, next: 1, later: 2, done: 4, abandoned: 5 };
 const rankStatus = (s: string | null): number => (s == null ? 3 : (STATUS_RANK[s] ?? 99));
-
-const SOLUTION_STATUS_RANK: Record<string, number> = {
-  chosen: 0,
-  shipped: 1,
-  evaluated: 2,
-  proposed: 3,
-  rejected: 4,
-};
 
 export type ArchiveBlock = {
   rationale: string | null;
@@ -293,32 +255,28 @@ async function attemptsFor(db: CruxDb, problemId: number): Promise<AttemptRow[]>
   return [...rows].sort(byFiledOrder);
 }
 
-/** Rejected-solution ids for one decision, in insertion order. */
-async function rejectedFor(db: CruxDb, decisionId: string): Promise<number[]> {
+/**
+ * Attempt tallies for a set of Problems, in one query.
+ *
+ * Two reads want the same two numbers about a Problem — the drift query needs
+ * "any open Attempt?", the board card needs "how many, how many still open" —
+ * and both derive them from the same scan, so the scan lives here.
+ */
+async function attemptTallies(
+  db: CruxDb,
+  problemIds: number[],
+): Promise<{ total: Map<number, number>; open: Map<number, number> }> {
   const rows = await db
-    .select({ solutionId: decisionRejectedSolutions.solutionId })
-    .from(decisionRejectedSolutions)
-    .where(eq(decisionRejectedSolutions.decisionId, decisionId));
-  return rows.map((r) => r.solutionId);
-}
-
-/** The most recent Decision for a Problem, with its rejected ids inlined. */
-async function latestDecisionFor(db: CruxDb, problemId: number) {
-  const row = (
-    await db
-      .select()
-      .from(decisions)
-      .where(eq(decisions.problemId, problemId))
-      .orderBy(desc(decisions.createdAt))
-      .limit(1)
-  )[0];
-  if (!row) return null;
-  return { ...row, rejectedSolutionIds: await rejectedFor(db, row.id) };
-}
-
-/** Solutions for a Problem. */
-async function solutionsFor(db: CruxDb, problemId: number) {
-  return db.select().from(solutions).where(eq(solutions.problemId, problemId));
+    .select({ problemId: attempts.problemId, status: attempts.status })
+    .from(attempts)
+    .where(inArray(attempts.problemId, problemIds));
+  const total = new Map<number, number>();
+  const open = new Map<number, number>();
+  for (const a of rows) {
+    total.set(a.problemId, (total.get(a.problemId) ?? 0) + 1);
+    if (a.status === "open") open.set(a.problemId, (open.get(a.problemId) ?? 0) + 1);
+  }
+  return { total, open };
 }
 
 /** The Problem's Outcome, with its follow-up Problems inlined — null until it is done. */
@@ -332,25 +290,6 @@ async function outcomeFor(db: CruxDb, problemId: number): Promise<OutcomeWithFol
     .from(outcomeFollowUpProblems)
     .where(eq(outcomeFollowUpProblems.outcomeId, row.id));
   return { ...row, followUpProblemIds: followUps.map((f) => f.problemId) };
-}
-
-/** Eliminations for a Problem, each with the solution ids it targeted. */
-async function eliminationsFor(db: CruxDb, problemId: number) {
-  const rows = await db.select().from(eliminations).where(eq(eliminations.problemId, problemId));
-  const ids = rows.map((e) => e.id);
-  const joins = ids.length
-    ? await db
-        .select()
-        .from(eliminationSolutions)
-        .where(inArray(eliminationSolutions.eliminationId, ids))
-    : [];
-  const byElim = new Map<string, number[]>();
-  for (const j of joins) {
-    const list = byElim.get(j.eliminationId) ?? [];
-    list.push(j.solutionId);
-    byElim.set(j.eliminationId, list);
-  }
-  return rows.map((e) => ({ ...e, eliminatedSolutionIds: byElim.get(e.id) ?? [] }));
 }
 
 /** Evidence for a Problem with each linked Observation (and its archive block). */
@@ -504,9 +443,6 @@ async function contextDigest(
         ...p,
         attempts: await attemptsFor(db, p.id),
         evidence: await evidenceWithObservations(db, p.id),
-        solutions: await solutionsFor(db, p.id),
-        latest_decision: await latestDecisionFor(db, p.id),
-        eliminations: await eliminationsFor(db, p.id),
         abandonment: abandonRows[0] ?? null,
         outcome: await outcomeFor(db, p.id),
         legal_next_transitions: legalNextTransitions(p.status),
@@ -706,8 +642,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       const p = await requireProblem(db, q.id);
       return {
         ...p,
-        solutions: await solutionsFor(db, p.id),
-        latest_decision: await latestDecisionFor(db, p.id),
+        attempts: await attemptsFor(db, p.id),
         outcome: await outcomeFor(db, p.id),
       };
     }
@@ -723,30 +658,21 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         .select({ problemId: evidence.problemId })
         .from(evidence)
         .where(inArray(evidence.problemId, ids));
-      const sol = await db
-        .select({ problemId: solutions.problemId })
-        .from(solutions)
-        .where(inArray(solutions.problemId, ids));
       const evCount = new Map<number, number>();
       for (const e of ev) evCount.set(e.problemId, (evCount.get(e.problemId) ?? 0) + 1);
-      const solCount = new Map<number, number>();
-      for (const s of sol) solCount.set(s.problemId, (solCount.get(s.problemId) ?? 0) + 1);
-      // `decided` completes the Evidence → Solutions → Decision narrowing at a
-      // glance, so a summary row can say how far a Problem got without the
-      // caller fetching each Problem's detail to find out.
-      const dec = await db
-        .select({ problemId: decisions.problemId })
-        .from(decisions)
-        .where(inArray(decisions.problemId, ids));
-      const decided = new Set(dec.map((d) => d.problemId));
+      // Attempt counts are what a summary row says about how far a Problem got:
+      // `attemptCount` distinguishes one nobody ever touched from one that was
+      // worked on and stopped, and `openAttemptCount` is the drift signal — a
+      // Problem staged as active with zero open Attempts.
+      const att = await attemptTallies(db, ids);
       return rows
         .map(
           (r) =>
             ({
               ...r,
               evidenceCount: evCount.get(r.id) ?? 0,
-              solutionCount: solCount.get(r.id) ?? 0,
-              decided: decided.has(r.id),
+              attemptCount: att.total.get(r.id) ?? 0,
+              openAttemptCount: att.open.get(r.id) ?? 0,
             }) satisfies ProblemSummary,
         )
         .sort((a, b) => {
@@ -760,10 +686,6 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       const rows = await db.select().from(problems).where(eq(problems.id, problemId)).limit(1);
       const p = rows[0];
       if (!p) return null;
-      const solutionsInlined = (await solutionsFor(db, problemId)).sort((a, b) => {
-        const d = (SOLUTION_STATUS_RANK[a.status] ?? 9) - (SOLUTION_STATUS_RANK[b.status] ?? 9);
-        return d !== 0 ? d : a.createdAt - b.createdAt;
-      });
       const abandonRow = (
         await db.select().from(abandonments).where(eq(abandonments.problemId, problemId)).limit(1)
       )[0];
@@ -771,9 +693,6 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         problem: p,
         attempts: await attemptsFor(db, problemId),
         evidence: await evidenceWithObservations(db, problemId, true),
-        solutions: solutionsInlined,
-        latestDecision: await latestDecisionFor(db, problemId),
-        eliminations: await eliminationsFor(db, problemId),
         abandonment: abandonRow ?? null,
         outcome: await outcomeFor(db, problemId),
       } satisfies ProblemDetail;
@@ -820,141 +739,17 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         .from(problems)
         .where(and(eq(problems.workstreamId, ws.id), inArray(problems.status, stages)));
       if (rows.length === 0) return [];
-      const attemptRows = await db
-        .select({ problemId: attempts.problemId, status: attempts.status })
-        .from(attempts)
-        .where(
-          inArray(
-            attempts.problemId,
-            rows.map((r) => r.id),
-          ),
-        );
-      const total = new Map<number, number>();
-      const hasOpen = new Set<number>();
-      for (const a of attemptRows) {
-        total.set(a.problemId, (total.get(a.problemId) ?? 0) + 1);
-        if (a.status === "open") hasOpen.add(a.problemId);
-      }
+      const { total, open } = await attemptTallies(
+        db,
+        rows.map((r) => r.id),
+      );
       return rows
-        .filter((r) => !hasOpen.has(r.id))
+        .filter((r) => !open.has(r.id))
         .map((r) => ({ ...r, attemptCount: total.get(r.id) ?? 0 }) satisfies DriftingProblem)
         .sort((a, b) => {
           const d = rankStatus(a.status) - rankStatus(b.status);
           return d !== 0 ? d : a.createdAt - b.createdAt;
         });
-    }
-
-    case "SOLUTION_LIST": {
-      if (q.problem !== undefined) {
-        const p = await requireProblem(db, q.problem);
-        return db.select().from(solutions).where(eq(solutions.problemId, p.id));
-      }
-      return db.select().from(solutions);
-    }
-
-    case "SOLUTION_SHOW": {
-      const rows = await db
-        .select()
-        .from(solutions)
-        .where(eq(solutions.id, numeric(q.id)))
-        .limit(1);
-      if (rows.length === 0) throw new NotFoundError(`solution not found: ${q.id}`, { id: q.id });
-      return rows[0]!;
-    }
-
-    case "SOLUTION_GET": {
-      const rows = await db
-        .select()
-        .from(solutions)
-        .where(eq(solutions.id, numeric(q.id)))
-        .limit(1);
-      return rows[0] ?? null;
-    }
-
-    case "SOLUTION_BY_IDS": {
-      const ids = q.ids.map(numeric);
-      if (ids.length === 0) return [];
-      return db.select().from(solutions).where(inArray(solutions.id, ids));
-    }
-
-    case "SOLUTION_DETAIL": {
-      const solutionId = numeric(q.id);
-      const s = (await db.select().from(solutions).where(eq(solutions.id, solutionId)).limit(1))[0];
-      if (!s) return null;
-      const pr = (await db.select().from(problems).where(eq(problems.id, s.problemId)).limit(1))[0];
-      if (!pr) return null;
-
-      const allDec = await db
-        .select()
-        .from(decisions)
-        .where(eq(decisions.problemId, pr.id))
-        .orderBy(desc(decisions.createdAt));
-      let choosingDecision: DecisionWithRejected = null;
-      let rejectingDecision: DecisionWithRejected = null;
-      for (const d of allDec) {
-        const rej = await rejectedFor(db, d.id);
-        if (d.chosenSolutionId === solutionId && !choosingDecision) {
-          choosingDecision = { ...d, rejectedSolutionIds: rej };
-        }
-        if (!rejectingDecision && rej.includes(solutionId)) {
-          rejectingDecision = { ...d, rejectedSolutionIds: rej };
-        }
-      }
-
-      const elimJoins = await db
-        .select()
-        .from(eliminationSolutions)
-        .where(eq(eliminationSolutions.solutionId, solutionId));
-      const elimIds = elimJoins.map((e) => e.eliminationId);
-      const elimRows = elimIds.length
-        ? await db.select().from(eliminations).where(inArray(eliminations.id, elimIds))
-        : [];
-      const allTargets = elimIds.length
-        ? await db
-            .select()
-            .from(eliminationSolutions)
-            .where(inArray(eliminationSolutions.eliminationId, elimIds))
-        : [];
-      const targetsByElim = new Map<string, number[]>();
-      for (const t of allTargets) {
-        const list = targetsByElim.get(t.eliminationId) ?? [];
-        list.push(t.solutionId);
-        targetsByElim.set(t.eliminationId, list);
-      }
-      const eliminatedBy = elimRows.map((e) => ({
-        ...e,
-        eliminatedSolutionIds: targetsByElim.get(e.id) ?? [],
-      }));
-
-      return {
-        solution: s,
-        problem: pr,
-        choosingDecision,
-        rejectingDecision,
-        eliminatedBy,
-      } satisfies SolutionDetail;
-    }
-
-    case "DECISION_LIST":
-      return db.select().from(decisions);
-
-    case "ELIMINATION_LIST": {
-      if (q.problem !== undefined) {
-        const p = await requireProblem(db, q.problem);
-        return db.select().from(eliminations).where(eq(eliminations.problemId, p.id));
-      }
-      return db.select().from(eliminations);
-    }
-
-    case "ELIMINATION_SHOW": {
-      const rows = await db.select().from(eliminations).where(eq(eliminations.id, q.id)).limit(1);
-      if (rows.length === 0)
-        throw new NotFoundError(`elimination not found: ${q.id}`, { id: q.id });
-      const joins = await db
-        .select({ solutionId: eliminationSolutions.solutionId })
-        .from(eliminationSolutions)
-        .where(eq(eliminationSolutions.eliminationId, q.id));
-      return { ...rows[0]!, eliminatedSolutionIds: joins.map((j) => j.solutionId) };
     }
 
     case "ABANDONMENT_LIST": {

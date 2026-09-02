@@ -11,7 +11,6 @@ import {
   IntakeQueueView,
   ObservationDetailView,
   ProblemDetailView,
-  SolutionDetailView,
   WorkstreamDashboard,
   WorkstreamPicker,
 } from "./views.js";
@@ -21,13 +20,6 @@ type View =
   | { kind: "picker" }
   | { kind: "dashboard"; workstream: Workstream }
   | { kind: "problem"; workstream: Workstream; problemId: number }
-  | {
-      kind: "solution";
-      workstream: Workstream;
-      solutionId: number;
-      parent: "problem" | "dashboard";
-      problemId?: number;
-    }
   | {
       kind: "observation";
       workstream: Workstream;
@@ -127,13 +119,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
       case "problem":
         send({ type: "BACK" }).catch(() => {});
         return;
-      case "solution":
-        if (v.parent === "problem" && v.problemId !== undefined) {
-          setView({ kind: "problem", workstream: v.workstream, problemId: v.problemId });
-        } else {
-          setView({ kind: "dashboard", workstream: v.workstream });
-        }
-        return;
       case "observation":
         if (v.parent === "problem" && v.problemId !== undefined) {
           setView({ kind: "problem", workstream: v.workstream, problemId: v.problemId });
@@ -186,11 +171,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
           { key: "esc", label: "back" },
           { key: "q", label: "quit" },
         ];
-      case "solution":
-        return [
-          { key: "esc", label: "back" },
-          { key: "q", label: "quit" },
-        ];
       case "observation":
         return [
           { key: "esc", label: "back" },
@@ -238,15 +218,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
           <ProblemDetailView
             workstream={view.workstream}
             problemId={view.problemId}
-            onOpenSolution={(solutionId) =>
-              setView({
-                kind: "solution",
-                workstream: view.workstream,
-                solutionId,
-                parent: "problem",
-                problemId: view.problemId,
-              })
-            }
             onOpenObservation={(observationId) =>
               setView({
                 kind: "observation",
@@ -258,8 +229,6 @@ export function App({ initialSlug }: { initialSlug?: string }): React.ReactEleme
             }
           />
         );
-      case "solution":
-        return <SolutionDetailView solutionId={view.solutionId} />;
       case "observation":
         return <ObservationDetailView observationId={view.observationId} />;
       case "intake":

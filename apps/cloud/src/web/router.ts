@@ -29,7 +29,6 @@ import {
   PageNotFound,
   observationListPage,
   observationPage,
-  solutionPage,
   workstreamListPage,
 } from "./read-pages.js";
 import { membersPage, tokensPage, signInPage, invitePage, linkSentPage } from "./account-pages.js";
@@ -85,7 +84,7 @@ async function sendSignInLink(
 
 /**
  * The linkable read surfaces, as pattern → loader. Each capture group becomes a
- * decoded argument, so the four of them differ only in their URL and their page
+ * decoded argument, so the three of them differ only in their URL and their page
  * — which is the whole of the difference, and worth keeping visible as a table.
  */
 const READ_ROUTES: ReadonlyArray<
@@ -95,7 +94,6 @@ const READ_ROUTES: ReadonlyArray<
   // routes so they can carry hydrated islands — the roadmap board and the
   // action bar. `problemPage()` below is still what the latter renders. A slug
   // or id that names nothing still lands back here, as the 404 page.
-  [/^\/w\/([^/]+)\/solutions\/([^/]+)$/, (db, slug, id) => solutionPage(db, slug!, id!)],
   [/^\/w\/([^/]+)\/observations$/, (db, slug) => observationListPage(db, slug!)],
   [/^\/w\/([^/]+)\/observations\/([^/]+)$/, (db, slug, id) => observationPage(db, slug!, id!)],
 ];

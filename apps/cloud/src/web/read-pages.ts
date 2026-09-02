@@ -1,5 +1,5 @@
 /**
- * The read surfaces: Workstream list, Problem, Solution and Observation.
+ * The read surfaces: Workstream list, Problem and Observation.
  *
  * `/w/<slug>` is not among them — it is the roadmap board, an Astro route with
  * a hydrated island, and so lives in `astro/pages/w/[slug]/index.astro`.
@@ -15,7 +15,6 @@ import type {
   ObservationDetail,
   ObservationSummary,
   ProblemDetail,
-  SolutionDetail,
   WorkstreamRow,
   WorkstreamSummary,
 } from "@crux/core/reads";
@@ -108,23 +107,9 @@ export async function problemPage(
     throw new PageNotFound(`no Problem ${id} in ${slug}`);
   }
 
-  const {
-    problem,
-    attempts,
-    evidence,
-    solutions,
-    latestDecision,
-    eliminations,
-    abandonment,
-    outcome,
-  } = detail;
+  const { problem, attempts, evidence, abandonment, outcome } = detail;
 
   const openAttempts = attempts.filter((a) => a.status === "open").length;
-
-  /** Decisions and Eliminations record Solution ids; a reader wants the title. */
-  const titleById = new Map(solutions.map((s) => [s.id, s.title]));
-  const solutionLink = (sid: number): Html =>
-    html`<a href="/w/${ws.slug}/solutions/${sid}">${titleById.get(sid) ?? `SOL-${sid}`}</a>`;
 
   const body = html`
     ${crumb([
@@ -145,24 +130,12 @@ export async function problemPage(
         <div class="step ${evidence.length ? "done" : ""}">
           Evidence<small>${evidence.length} linked with a why-note</small>
         </div>
-        <div class="step ${solutions.length ? "done" : ""}">
-          Solutions<small>${solutions.length} options filed</small>
-        </div>
-        <div class="step ${eliminations.length ? "done" : ""}">
-          Elimination<small
+        <div class="step ${attempts.length ? "done" : ""}">
+          Attempts<small
             >${
-              eliminations.length
-                ? `${eliminations.length} ruled out, no winner`
-                : "nothing ruled out"
-            }</small
-          >
-        </div>
-        <div class="step ${latestDecision ? "here" : ""}">
-          Decision<small
-            >${
-              latestDecision
-                ? `${latestDecision.id} · ${date(latestDecision.createdAt)}`
-                : "not committed"
+              attempts.length
+                ? `${openAttempts} open of ${attempts.length}`
+                : "nothing recorded in flight"
             }</small
           >
         </div>
@@ -222,7 +195,7 @@ export async function problemPage(
                   with no open Attempt is drift.
                 </div>`
               : attempts.map(
-                  (a) => html`<div class="sol ${a.status === "dropped" ? "out" : ""}">
+                  (a) => html`<div class="att ${a.status === "dropped" ? "out" : ""}">
                     <div>${badge(a.status)}</div>
                     <div class="t">
                       ${trackerLink(a.ref, a.label)}
@@ -235,77 +208,6 @@ export async function problemPage(
                     </div>
                   </div>`,
                 )
-          }
-        </div>
-
-        <div class="panel">
-          <div class="hd">Solutions <span class="r">${solutions.length} filed</span></div>
-          ${
-            solutions.length === 0
-              ? html`<div class="pad" style="color:var(--faint)">No Solutions filed yet.</div>`
-              : solutions.map(
-                  (s) => html`<div class="sol ${s.status === "rejected" ? "out" : ""}">
-                    <div>${badge(s.status)}</div>
-                    <div class="t">
-                      <a href="/w/${ws.slug}/solutions/${s.id}">${s.title}</a>
-                    </div>
-                  </div>`,
-                )
-          }
-        </div>
-
-        ${eliminations.map(
-          (e) => html`<div class="panel">
-            <div class="hd">Elimination <span class="r mono">${e.id}</span></div>
-            <div class="pad">
-              <div class="kv">
-                <b>Ruled out</b>
-                <div class="strike">
-                  ${e.eliminatedSolutionIds.map((sid) => html`${solutionLink(sid)}<br />`)}
-                </div>
-                <b>At</b>
-                <div>${date(e.createdAt)}</div>
-              </div>
-              <p class="prose" style="margin:14px 0 0">${e.rationale}</p>
-            </div>
-          </div>`,
-        )}
-
-        <div class="panel">
-          <div class="hd">
-            Decision <span class="r mono">${latestDecision ? latestDecision.id : ""}</span>
-          </div>
-          ${
-            latestDecision
-              ? html`<div class="pad">
-                  <div class="kv">
-                    <b>Chosen</b>
-                    <div>${solutionLink(latestDecision.chosenSolutionId)}</div>
-                    <b>Rejected</b>
-                    <div class="strike">
-                      ${
-                        latestDecision.rejectedSolutionIds.length
-                          ? latestDecision.rejectedSolutionIds.map(
-                              (sid) => html`${solutionLink(sid)}<br />`,
-                            )
-                          : "none"
-                      }
-                    </div>
-                    <b>Recorded</b>
-                    <div>${date(latestDecision.createdAt)}</div>
-                  </div>
-                  <p class="prose" style="margin:14px 0 0">${latestDecision.rationale}</p>
-                  ${
-                    latestDecision.context
-                      ? html`<p style="margin:10px 0 0;color:var(--faint);font-size:12px">
-                          ${latestDecision.context}
-                        </p>`
-                      : ""
-                  }
-                </div>`
-              : html`<div class="pad" style="color:var(--faint)">
-                  No Decision — nothing has been committed to yet.
-                </div>`
           }
         </div>
 
@@ -354,86 +256,6 @@ export async function problemPage(
     </div>
   `;
   return { title: problem.title, body };
-}
-
-/** `/w/<slug>/solutions/<id>` — one option, and what happened to it. */
-export async function solutionPage(
-  db: CruxDb,
-  slug: string,
-  id: string,
-): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, { kind: "WORKSTREAM_BY_SLUG", slug });
-  if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const detail = await ask<SolutionDetail | null>(db, { kind: "SOLUTION_DETAIL", id });
-  if (!detail || detail.problem.workstreamId !== ws.id) {
-    throw new PageNotFound(`no Solution ${id} in ${slug}`);
-  }
-  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy } = detail;
-
-  const verdict = choosingDecision ?? rejectingDecision;
-  const body = html`
-    ${crumb([
-      { href: "/", label: "Workstreams" },
-      { href: `/w/${ws.slug}`, label: ws.slug },
-      { label: "Solutions" },
-      { label: String(solution.id) },
-    ])}
-    <div style="display:flex;align-items:center;gap:10px;margin:10px 0 0">
-      ${badge(solution.status)}<span class="mono" style="color:var(--faint);font-size:12px"
-        >SOL-${solution.id}</span
-      >
-    </div>
-    <h1>${solution.title}</h1>
-    <p class="sub">
-      An option for
-      <a href="/w/${ws.slug}/problems/${problem.id}">${problem.title}</a>
-    </p>
-
-    ${
-      solution.description
-        ? html`<div class="panel"><div class="pad prose">${solution.description}</div></div>`
-        : ""
-    }
-
-    <div class="panel">
-      <div class="hd">
-        Verdict
-        <span class="r">${verdict ? (choosingDecision ? "chosen" : "rejected") : "open"}</span>
-      </div>
-      ${
-        verdict
-          ? html`<div class="pad">
-              <div class="kv">
-                <b>${choosingDecision ? "Chosen by" : "Rejected by"}</b>
-                <div class="mono">${verdict.id}</div>
-                <b>Recorded</b>
-                <div>${date(verdict.createdAt)}</div>
-              </div>
-              <p class="prose" style="margin:14px 0 0">${verdict.rationale}</p>
-            </div>`
-          : html`<div class="pad" style="color:var(--faint)">
-              No Decision has ruled on this Solution.
-            </div>`
-      }
-    </div>
-
-    ${
-      eliminatedBy.length
-        ? eliminatedBy.map(
-            (e) => html`<div class="panel">
-              <div class="hd">Eliminated by <span class="r mono">${e.id}</span></div>
-              <div class="pad">
-                <p class="prose" style="margin:0">${e.rationale}</p>
-                <p style="margin:10px 0 0;color:var(--faint);font-size:12px">
-                  ${date(e.createdAt)} — a “no” with no winner.
-                </p>
-              </div>
-            </div>`,
-          )
-        : ""
-    }
-  `;
-  return { title: solution.title, body };
 }
 
 /**

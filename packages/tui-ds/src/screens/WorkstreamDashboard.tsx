@@ -13,7 +13,7 @@ const problems = [
     status: "shaping",
     priority: "P0",
     evidence: 11,
-    solutions: 4,
+    attempts: 4,
   },
   {
     slug: "schema-change-destroys-residue",
@@ -21,7 +21,7 @@ const problems = [
     status: "shaping",
     priority: "P1",
     evidence: 1,
-    solutions: 3,
+    attempts: 3,
   },
   {
     slug: "silent-env-override-misroutes-data",
@@ -29,7 +29,7 @@ const problems = [
     status: "shaping",
     priority: "P1",
     evidence: 2,
-    solutions: 3,
+    attempts: 3,
   },
   {
     slug: "observation-correction-gap",
@@ -37,7 +37,7 @@ const problems = [
     status: "shaping",
     priority: "P2",
     evidence: 1,
-    solutions: 2,
+    attempts: 2,
   },
   {
     slug: "external-intake-gap",
@@ -45,7 +45,7 @@ const problems = [
     status: "shaping",
     priority: "P2",
     evidence: 2,
-    solutions: 0,
+    attempts: 0,
   },
   {
     slug: "skill-proposal-form-mismatch",
@@ -53,7 +53,7 @@ const problems = [
     status: "shaping",
     priority: "P2",
     evidence: 1,
-    solutions: 2,
+    attempts: 2,
   },
 ];
 
@@ -76,7 +76,7 @@ export function WorkstreamDashboard(): React.ReactElement {
               slug: p.slug,
               title: p.title,
               badges: <StatusBadge variant="priority" tier={p.priority} />,
-              meta: `ev:${p.evidence} sol:${p.solutions}`,
+              meta: `ev:${p.evidence} att:${p.attempts}`,
             }))}
           />
         </Box>

@@ -42,34 +42,12 @@ export const EvidenceInput = z.object({
   note: z.string().optional(),
 });
 
-export const SolutionInput = z.object({
-  problemId: z.union([z.string().min(1), z.number()]), // integer problem ID
-  title: z.string().min(1),
-  description: z.string().optional(),
-});
-
-export const DecisionInput = z.object({
-  workstream: z.string().min(1),
-  problemId: z.union([z.string().min(1), z.number()]),
-  chosen: z.union([z.string().min(1), z.number()]),
-  rejected: z.array(z.union([z.string(), z.number()])).default([]),
-  rationale: z.string().min(1),
-  context: z.string().optional(),
-});
-
 export const UserInitInput = z.object({
   name: z.string().min(1),
   email: z.string().email().optional(),
 });
 
 // --- Pass 2 ---
-
-export const EliminationInput = z.object({
-  problemId: z.union([z.string().min(1), z.number()]),
-  solutions: z.array(z.union([z.string(), z.number()])).min(1),
-  rationale: z.string().min(1),
-  context: z.string().optional(),
-});
 
 export const OutcomeInput = z.object({
   problemId: z.union([z.string().min(1), z.number()]),

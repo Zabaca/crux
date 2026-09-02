@@ -1,5 +1,17 @@
 # Context-Aware Defaults — Design Exploration
 
+> **Superseded (2026-09-02).** An exploration note, kept for the reasoning
+> rather than the plan. It is not part of the doc tree — nothing in `README.md`
+> links to it, so `bun run docs:check` neither validates nor reports it.
+>
+> Most of it was already stale: the corpus is no longer a local database and
+> `view-state.json` is no longer a file the CLI reads
+> ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)). The rest went with
+> [ADR-0012](docs/adr/0012-crux-does-not-own-the-build.md) — `Solution`,
+> `Elimination` and `Decision` are deleted, so `crux decision add`, the
+> `ADD_DECISION` dispatch and the single-Solution inference below name commands
+> and actions that do not exist.
+
 ## Problem (cli-ergonomics-gap)
 
 CLI has scattered friction points:

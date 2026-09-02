@@ -61,21 +61,21 @@ describe("persistence merge: computeSaveViewMetaBlob preserves XState fields", (
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 1,
-      lastAction: { kind: "ADD_SOLUTION", ts: 1 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1 },
       recentQueries: [],
     });
     blob = computeSaveViewMetaBlob(blob, {
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 2,
-      lastAction: { kind: "SHIP_SOLUTION", ts: 2 },
+      lastAction: { kind: "CLOSE_ATTEMPT", ts: 2 },
       recentQueries: [{ kind: "PROBLEM_SHOW", slug: "42", ts: 5 }],
     });
 
     expect(blob.value).toEqual({ viewing: "problem_detail" });
     expect(blob.context).toEqual({ workstreamId: "WS-crux", problemId: "42" });
     expect(blob.revision).toBe(2);
-    expect((blob.lastAction as { kind: string }).kind).toBe("SHIP_SOLUTION");
+    expect((blob.lastAction as { kind: string }).kind).toBe("CLOSE_ATTEMPT");
     expect((blob.recentQueries as unknown[])[0]).toMatchObject({ kind: "PROBLEM_SHOW" });
   });
 });
@@ -89,14 +89,14 @@ describe("persistence merge: loadViewMetaFromBlob returns merged shape", () => {
       historyValue: {},
       children: {},
       revision: 7,
-      lastAction: { kind: "ADD_DECISION", ts: 1700 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1700 },
       recentQueries: [{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }],
     });
 
     expect(meta.value).toEqual({ viewing: "problem_detail" });
     expect(meta.context).toEqual({ workstreamId: "WS-crux", problemId: "42" });
     expect(meta.revision).toBe(7);
-    expect(meta.lastAction).toEqual({ kind: "ADD_DECISION", ts: 1700 });
+    expect(meta.lastAction).toEqual({ kind: "ADD_ATTEMPT", ts: 1700 });
     expect(meta.recentQueries).toEqual([{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }]);
   });
 
@@ -175,12 +175,12 @@ describe("computeSaveStateBlob lastActionKind option: stamps lastAction + bumps 
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 2,
-      lastAction: { kind: "ADD_SOLUTION", ts: 5000 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 5000 },
       recentQueries: [],
     });
 
     expect(after.revision).toBe(2);
-    expect((after.lastAction as { kind: string }).kind).toBe("ADD_SOLUTION");
+    expect((after.lastAction as { kind: string }).kind).toBe("ADD_ATTEMPT");
     expect(after.value).toBeDefined();
     expect(after.context).toBeDefined();
   });
@@ -191,10 +191,10 @@ describe("computeSaveStateBlob lastActionKind option: stamps lastAction + bumps 
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 1,
-      lastAction: { kind: "ADD_SOLUTION", ts: 1000 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1000 },
       recentQueries: [],
     });
-    expect((afterMutation.lastAction as { kind: string }).kind).toBe("ADD_SOLUTION");
+    expect((afterMutation.lastAction as { kind: string }).kind).toBe("ADD_ATTEMPT");
     expect(afterMutation.revision).toBe(1);
 
     const after = computeSaveStateBlob(afterMutation, snap, { lastActionKind: "BACK" });

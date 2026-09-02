@@ -131,7 +131,7 @@ If the root Box has `height={rows}` and the rendered content exceeds that height
 
 ## Multi-section focus
 
-When a screen has multiple `ScrollableList` instances (e.g., evidence + solutions in `ProblemDetailView`):
+When a screen has multiple `ScrollableList` instances (e.g., evidence + attempts in `ProblemDetailView`):
 1. Track an `activeSection` state in the parent.
 2. Pass `isFocused={activeSection === "x"}` to each list.
 3. Use a key (e.g., Tab) to flip the active section in `useInput`.

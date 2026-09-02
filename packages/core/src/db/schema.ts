@@ -6,7 +6,7 @@ import { sql } from "drizzle-orm";
  *
  * Conventions:
  * - Workstreams: text PK "WS-<slug>", slug column kept for human-readable URLs.
- * - Problems/Solutions: integer autoincrement PK, no slug column.
+ * - Problems: integer autoincrement PK, no slug column.
  * - Other entities: prefixed text PKs (OBS-###, EVD-###, …).
  * - Timestamps are integer epoch ms.
  */
@@ -160,88 +160,6 @@ export const attempts = sqliteTable("attempts", {
     .notNull()
     .default(sql`(unixepoch() * 1000)`),
 });
-
-export const solutions = sqliteTable("solutions", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  problemId: integer("problem_id")
-    .notNull()
-    .references(() => problems.id),
-  title: text("title").notNull(),
-  description: text("description"),
-  /** proposed | evaluated | chosen | rejected | shipped */
-  status: text("status").notNull().default("proposed"),
-  /** S | M | L | XL — rough effort hint, nullable. */
-  effort: text("effort"),
-  createdById: text("created_by_id")
-    .notNull()
-    .references(() => users.id),
-  createdAt: integer("created_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer("updated_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-});
-
-export const eliminations = sqliteTable("eliminations", {
-  id: text("id").primaryKey(), // ELIM-###
-  problemId: integer("problem_id")
-    .notNull()
-    .references(() => problems.id),
-  rationale: text("rationale").notNull(),
-  context: text("context"),
-  createdById: text("created_by_id")
-    .notNull()
-    .references(() => users.id),
-  createdAt: integer("created_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-});
-
-export const eliminationSolutions = sqliteTable(
-  "elimination_solutions",
-  {
-    eliminationId: text("elimination_id")
-      .notNull()
-      .references(() => eliminations.id),
-    solutionId: integer("solution_id")
-      .notNull()
-      .references(() => solutions.id),
-  },
-  (t) => ({ pk: primaryKey({ columns: [t.eliminationId, t.solutionId] }) }),
-);
-
-export const decisions = sqliteTable("decisions", {
-  id: text("id").primaryKey(), // DEC-###
-  problemId: integer("problem_id")
-    .notNull()
-    .references(() => problems.id),
-  chosenSolutionId: integer("chosen_solution_id")
-    .notNull()
-    .references(() => solutions.id),
-  rationale: text("rationale").notNull(),
-  context: text("context"),
-  decidedById: text("decided_by_id")
-    .notNull()
-    .references(() => users.id),
-  supersedesDecisionId: text("supersedes_decision_id"),
-  createdAt: integer("created_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-});
-
-export const decisionRejectedSolutions = sqliteTable(
-  "decision_rejected_solutions",
-  {
-    decisionId: text("decision_id")
-      .notNull()
-      .references(() => decisions.id),
-    solutionId: integer("solution_id")
-      .notNull()
-      .references(() => solutions.id),
-  },
-  (t) => ({ pk: primaryKey({ columns: [t.decisionId, t.solutionId] }) }),
-);
 
 export const abandonments = sqliteTable("abandonments", {
   id: text("id").primaryKey(), // ABN-<integer-problem-id>

@@ -6,7 +6,7 @@
  *
  * What each page offers is decided on the server and handed in as `actions`,
  * because "which actions belong here" is a property of the entity, not of the
- * browser — the Problem page offers ADD_DECISION, the Workstream board offers
+ * browser — the Problem page offers ADD_ATTEMPT, the Workstream board offers
  * ADD_PROBLEM, and neither offers what the other does.
  */
 import { useEffect, useRef, useState } from "react";
@@ -21,8 +21,6 @@ export type FieldSpec = {
   required?: boolean;
   /** Filled from page context and not editable — the Problem this is filed on. */
   fixed?: string;
-  /** Send as a one-element array (ADD_ELIMINATION's `solutions`). */
-  asArray?: boolean;
   /** Send as a number (entity ids are numeric for everything but Observation). */
   asNumber?: boolean;
 };
@@ -34,8 +32,7 @@ export type ActionSpec = {
 };
 
 function coerce(field: FieldSpec, value: string): unknown {
-  const one = field.asNumber ? Number(value) : value;
-  return field.asArray ? [one] : one;
+  return field.asNumber ? Number(value) : value;
 }
 
 function Dialog({ action, onDone }: { action: ActionSpec; onDone: () => void }) {
