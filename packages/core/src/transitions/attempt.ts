@@ -61,11 +61,19 @@ export async function closeAttempt(
     throw new InvariantError("Closing an Attempt requires a closing note", { id: input.id });
   }
 
-  // Scoped to `status = 'open'` as well as the id: two closes racing each
-  // other both pass the check above, and only one of them should get to write
-  // a closing note over the other's.
-  await db
+  // Scoped to `status = 'open'` as well as the id, because the check above is
+  // a read: two closes racing each other both pass it, and only one of them
+  // should get to write a closing note over the other's. `RETURNING` is how the
+  // loser finds out — without it, it would report the close it did not make.
+  const written = await db
     .update(attempts)
     .set({ status: input.status, closingNote, updatedAt: Date.now() })
-    .where(and(eq(attempts.id, input.id), eq(attempts.status, "open")));
+    .where(and(eq(attempts.id, input.id), eq(attempts.status, "open")))
+    .returning({ id: attempts.id });
+  if (written.length === 0) {
+    throw new TransitionError(`Attempt ${input.id} was closed by someone else first`, {
+      id: input.id,
+      to: input.status,
+    });
+  }
 }

@@ -305,6 +305,36 @@ describe("Attempts", () => {
     });
   });
 
+  test("concurrent clients cannot both close the same Attempt", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+
+    const [a, b] = await Promise.all([
+      dispatch({
+        kind: "CLOSE_ATTEMPT",
+        payload: { id, status: "shipped", closingNote: "landed" },
+      }),
+      dispatch({
+        kind: "CLOSE_ATTEMPT",
+        payload: { id, status: "dropped", closingNote: "gave up" },
+      }),
+    ]);
+
+    const statuses = [a.status, b.status].sort();
+    expect(statuses[0]).toBe(200);
+    expect(statuses[1]).toBeGreaterThanOrEqual(400);
+
+    // And the corpus holds exactly one of the two closing notes, not a mix.
+    const listed = (await (await query({ kind: "ATTEMPT_LIST", problem: problemId })).json()) as {
+      result: Array<{ status: string; closingNote: string }>;
+    };
+    const row = listed.result[0]!;
+    expect([
+      { status: "shipped", closingNote: "landed" },
+      { status: "dropped", closingNote: "gave up" },
+    ]).toContainEqual({ status: row.status, closingNote: row.closingNote });
+  });
+
   test("refuses a status that is neither shipped nor dropped", async () => {
     const problemId = await fileProblem();
     const id = await fileAttempt(problemId);

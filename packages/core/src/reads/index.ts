@@ -257,10 +257,20 @@ async function requireProblem(db: CruxDb, raw: string | number) {
   return row;
 }
 
+/**
+ * Oldest first, breaking ties on the id.
+ *
+ * `created_at` defaults to `(unixepoch() * 1000)` — whole seconds scaled up —
+ * so two Attempts filed in the same second carry identical timestamps. `ATT-###`
+ * is monotonic by construction, so it is what makes the order deterministic.
+ */
+const byFiledOrder = (a: AttemptRow, b: AttemptRow): number =>
+  a.createdAt - b.createdAt || a.id.localeCompare(b.id);
+
 /** Attempts against a Problem, oldest first. */
 async function attemptsFor(db: CruxDb, problemId: number): Promise<AttemptRow[]> {
   const rows = await db.select().from(attempts).where(eq(attempts.problemId, problemId));
-  return [...rows].sort((a, b) => a.createdAt - b.createdAt);
+  return [...rows].sort(byFiledOrder);
 }
 
 /** Rejected-solution ids for one decision, in insertion order. */
@@ -696,7 +706,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
               .from(attempts)
               .where(eq(attempts.problemId, (await requireProblem(db, q.problem)).id))
           : await db.select().from(attempts);
-      return [...rows].sort((a, b) => a.createdAt - b.createdAt) satisfies AttemptRow[];
+      return [...rows].sort(byFiledOrder) satisfies AttemptRow[];
     }
 
     case "PROBLEM_DRIFT": {
