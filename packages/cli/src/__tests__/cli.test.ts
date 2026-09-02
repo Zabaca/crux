@@ -22,6 +22,7 @@ import { observationCommand } from "../commands/observation.js";
 import { contextCommand } from "../commands/context.js";
 import { solutionCommand } from "../commands/solution.js";
 import { viewCommand } from "../commands/view.js";
+import { searchCommand } from "../commands/search.js";
 
 type AnyCmd = {
   run?: (ctx: { args: Record<string, unknown>; rawArgs?: string[] }) => Promise<void>;
@@ -128,6 +129,50 @@ describe("reads", () => {
     expect(calls[0]!.auth).toBe("Bearer tok-1");
     expect(calls[0]!.body).toEqual({ kind: "WORKSTREAM_LIST" });
     expect(out).toEqual(rows);
+  });
+
+  test("search goes out unscoped, and does not touch view state", async () => {
+    const results = { query: "auth", problems: [], observations: [] };
+    const calls = stubServer({ "POST /v1/query": { result: results } });
+
+    const out = await capture(() =>
+      runCmd(searchCommand as AnyCmd, "run", { terms: "auth", json: true }),
+    );
+
+    expect(calls.map((c) => c.url)).toEqual(["https://crux.test/v1/query"]);
+    expect(calls[0]!.body).toEqual({
+      kind: "SEARCH",
+      q: "auth",
+      workstream: undefined,
+      limit: undefined,
+    });
+    expect(out).toEqual(results);
+  });
+
+  test("search passes --workstream and --limit through", async () => {
+    const calls = stubServer({
+      "POST /v1/query": { result: { query: "auth", problems: [], observations: [] } },
+    });
+
+    await capture(() =>
+      runCmd(searchCommand as AnyCmd, "run", {
+        terms: "auth",
+        workstream: "crux",
+        limit: "5",
+        json: true,
+      }),
+    );
+
+    expect(calls[0]!.body).toEqual({ kind: "SEARCH", q: "auth", workstream: "crux", limit: 5 });
+  });
+
+  test("a non-numeric --limit is refused before a request goes out", async () => {
+    const calls = stubServer({ "POST /v1/query": { result: {} } });
+
+    await expect(
+      runCmd(searchCommand as AnyCmd, "run", { terms: "auth", limit: "lots" }),
+    ).rejects.toThrow(/whole number/);
+    expect(calls).toHaveLength(0);
   });
 
   test("problem list carries the selected workstream and the status filter", async () => {

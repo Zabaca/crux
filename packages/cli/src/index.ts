@@ -9,6 +9,7 @@ import { evidenceCommand } from "./commands/evidence.js";
 import { solutionCommand } from "./commands/solution.js";
 import { decisionCommand } from "./commands/decision.js";
 import { contextCommand } from "./commands/context.js";
+import { searchCommand } from "./commands/search.js";
 import { eliminationCommand } from "./commands/elimination.js";
 import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
@@ -35,6 +36,7 @@ const main = defineCommand({
     abandonment: abandonmentCommand,
     outcome: outcomeCommand,
     context: contextCommand,
+    search: searchCommand,
     browse: browseCommand,
     view: viewCommand,
   },
