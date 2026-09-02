@@ -12,7 +12,9 @@
  * uses, so it works against a file locally and a Durable Object in the cloud.
  */
 import { z } from "zod";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+
+import type { SQLiteColumn } from "drizzle-orm/sqlite-core";
 
 import type { CruxDb } from "../db/client.js";
 import {
@@ -85,6 +87,13 @@ export const QuerySchema = z.discriminatedUnion("kind", [
 
   z.object({ kind: z.literal("OUTCOME_LIST") }),
   z.object({ kind: z.literal("OUTCOME_SHOW"), id: z.string() }),
+
+  z.object({
+    kind: z.literal("SEARCH"),
+    q: z.string().min(1),
+    workstream: z.string().optional(),
+    limit: z.number().int().positive().max(100).optional(),
+  }),
 
   z.object({
     kind: z.literal("CONTEXT"),
@@ -170,6 +179,18 @@ export type SolutionDetail = {
 export type ObservationDetail = {
   observation: ObservationWithArchive;
   evidenceLinks: Array<typeof evidence.$inferSelect & { problem: ProblemRow }>;
+};
+
+/**
+ * What a search answers with: the rows themselves, each tagged with the slug of
+ * the Workstream it belongs to. A cross-workstream search is the one read where
+ * `workstreamId` alone is not enough to place a match, and placing it is half of
+ * deciding whether it is the same thing.
+ */
+export type SearchResults = {
+  query: string;
+  problems: Array<ProblemRow & { workstreamSlug: string }>;
+  observations: Array<ObservationWithArchive & { workstreamSlug: string }>;
 };
 
 /** Read kinds that leave a trace in `recentQueries`, and the entry they write. */
@@ -326,6 +347,86 @@ async function evidenceWithObservations(db: CruxDb, problemId: number, sortByCre
     const obs = obsById.get(e.observationId);
     return { ...e, observation: obs ? { ...obs, archive: toArchive(obs) } : null };
   });
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+/** How many matches of each kind a search answers with unless asked otherwise. */
+const SEARCH_DEFAULT_LIMIT = 20;
+
+/**
+ * A case-insensitive substring predicate, with the caller's `%` and `_` made
+ * literal so a query containing either matches the character rather than acting
+ * as a wildcard.
+ *
+ * Substring rather than FTS5, settled by probing D1 inside workerd rather than
+ * assumed: FTS5 *is* available there — the virtual table creates, in a batch
+ * too, and `MATCH` returns rows — but its match semantics are wrong for this
+ * job. `MATCH 'auth'` finds nothing in "reauthentication keeps failing", where
+ * `LIKE '%auth%'` finds it, and near-duplicate hunting wants the loose match.
+ * Raw user text is also not a legal MATCH query (`sign-in "flow` throws
+ * "unterminated string"), so FTS5 would owe us query sanitising plus triggers
+ * keeping the index in step with every write. At this corpus size that buys
+ * nothing. The read's shape does not encode the choice, so it can be swapped.
+ */
+function substringMatch(column: SQLiteColumn, needle: string) {
+  const pattern = `%${needle.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  return sql`${column} LIKE ${pattern} ESCAPE '\\'`;
+}
+
+async function searchCorpus(
+  db: CruxDb,
+  q: Extract<QueryRequest, { kind: "SEARCH" }>,
+): Promise<SearchResults> {
+  const ws = q.workstream ? await requireWorkstream(db, q.workstream) : null;
+  const limit = q.limit ?? SEARCH_DEFAULT_LIMIT;
+  const scoped = (workstreamColumn: SQLiteColumn, match: ReturnType<typeof substringMatch>) =>
+    ws ? and(eq(workstreamColumn, ws.id), match) : match;
+
+  const problemRows = await db
+    .select()
+    .from(problems)
+    .where(
+      scoped(
+        problems.workstreamId,
+        or(substringMatch(problems.title, q.q), substringMatch(problems.description, q.q))!,
+      ),
+    )
+    .orderBy(desc(problems.createdAt))
+    .limit(limit);
+
+  const observationRows = await db
+    .select()
+    .from(observations)
+    .where(scoped(observations.workstreamId, substringMatch(observations.content, q.q)))
+    .orderBy(desc(observations.createdAt))
+    .limit(limit);
+
+  const wsIds = [
+    ...new Set([
+      ...problemRows.map((p) => p.workstreamId),
+      ...observationRows.map((o) => o.workstreamId),
+    ]),
+  ];
+  const wsRows = wsIds.length
+    ? await db.select().from(workstreams).where(inArray(workstreams.id, wsIds))
+    : [];
+  // Every row was just selected by its own `workstream_id`, which is a foreign
+  // key — the lookup cannot miss.
+  const slugById = new Map(wsRows.map((w) => [w.id, w.slug]));
+  const slugOf = (id: string) => slugById.get(id)!;
+
+  return {
+    query: q.q,
+    problems: problemRows.map((p) => ({ ...p, workstreamSlug: slugOf(p.workstreamId) })),
+    observations: observationRows.map((o) => ({
+      ...o,
+      archive: toArchive(o),
+      workstreamSlug: slugOf(o.workstreamId),
+    })),
+  } satisfies SearchResults;
 }
 
 // ---------------------------------------------------------------------------
@@ -815,6 +916,9 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
         .where(eq(outcomeFollowUpProblems.outcomeId, q.id));
       return { ...rows[0]!, followUpProblemIds: followUps.map((f) => f.problemId) };
     }
+
+    case "SEARCH":
+      return searchCorpus(db, q);
 
     case "CONTEXT":
       return contextDigest(db, q);

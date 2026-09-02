@@ -42,6 +42,24 @@ That emits a model-shaped digest: open Problems (sorted by priority), their Evid
 
 For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt.
 
+Before a Problem gets synthesized, the one that already exists has to be findable:
+
+```sh
+crux search "<a few distinctive words>"
+```
+
+That searches Problem titles and descriptions and Observation content, every
+Workstream by default (`--workstream <slug>` narrows it), and answers with the
+matching rows plus the slug of the Workstream each belongs to — enough to judge
+whether it is the same thing. Duplication is handled by finding, not by merging:
+Observations are deliberately cheap and duplication among them is by design,
+while a near-twin Problem splits one thing's Evidence across two rows. The skill
+requires the search and prefers attaching Evidence to the Problem it finds.
+Matching is a case-insensitive substring rather than FTS5 — that choice was
+settled by probing D1 inside workerd, where FTS5 works but tokenizes
+(`MATCH 'auth'` misses "reauthentication") and refuses raw user text as a query;
+the read's shape does not encode it, so it can be swapped at a larger corpus.
+
 ## Install (Claude Code plugin)
 
 The intended way to adopt Crux is as a Claude Code plugin. One command adds the skill, slash commands, and CLI to every session:
