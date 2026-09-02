@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
 import { attempts } from "../db/schema.js";
 import { InvariantError, NotFoundError, TransitionError } from "./errors.js";
@@ -61,8 +61,11 @@ export async function closeAttempt(
     throw new InvariantError("Closing an Attempt requires a closing note", { id: input.id });
   }
 
+  // Scoped to `status = 'open'` as well as the id: two closes racing each
+  // other both pass the check above, and only one of them should get to write
+  // a closing note over the other's.
   await db
     .update(attempts)
     .set({ status: input.status, closingNote, updatedAt: Date.now() })
-    .where(eq(attempts.id, input.id));
+    .where(and(eq(attempts.id, input.id), eq(attempts.status, "open")));
 }

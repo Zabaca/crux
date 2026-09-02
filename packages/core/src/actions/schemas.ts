@@ -7,6 +7,8 @@
  */
 import { z } from "zod";
 
+import { ATTEMPT_CLOSED_STATUSES } from "../transitions/attempt.js";
+
 // ---------------------------------------------------------------------------
 // ViewAction — mirrors ViewEventSchema in machine.ts
 // ---------------------------------------------------------------------------
@@ -108,7 +110,7 @@ export const CloseAttemptAction = z.object({
   payload: z
     .object({
       id: z.string(),
-      status: z.enum(["shipped", "dropped"]),
+      status: z.enum(ATTEMPT_CLOSED_STATUSES),
       closingNote: z.string(),
     })
     .strict(),
