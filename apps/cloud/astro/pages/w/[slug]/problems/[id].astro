@@ -28,8 +28,8 @@ const id = Astro.params.id!;
 let rendered;
 let detail: ProblemDetail;
 try {
-  rendered = await problemPage(ctx.db, slug, id);
-  detail = (await query({ kind: "PROBLEM_DETAIL", id: Number(id) }, { db: ctx.db })) as ProblemDetail;
+  rendered = await problemPage(ctx.db, ctx.viewer, slug, id);
+  detail = (await query({ kind: "PROBLEM_DETAIL", id: Number(id) }, { db: ctx.db, principal: ctx.viewer })) as ProblemDetail;
 } catch (err) {
   if (!(err instanceof PageNotFound)) throw err;
   return new Response(null, { status: 404 });

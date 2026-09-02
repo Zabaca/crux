@@ -14,7 +14,7 @@ import {
   workstreams,
 } from "../src/db/schema.js";
 
-// Seam: `query(request, { db })` — the single read entry point. It runs here
+// Seam: `query(request, { db, principal })` — the single read entry point. It runs here
 // rather than under bun for the same reason the transitions do (ADR-0006): the
 // shapes these tests pin are shapes D1 has to produce inside workerd.
 //
@@ -24,6 +24,12 @@ import {
 // `legal_next_transitions`.
 
 let db: CruxDb;
+
+// Every read is scoped to the Principal that asked (ADR-0013), and the seed
+// below files everything under `USR-t`, so that is who these tests read as.
+// The cross-tenant half — what a *different* Principal sees — is
+// `scoping.workerd.ts`.
+const principal = { id: "USR-t" };
 
 async function seed(): Promise<{ problemId: number }> {
   await db.insert(users).values({ id: "USR-t", slug: "t", name: "T" });
@@ -63,18 +69,20 @@ beforeEach(async () => {
 
 describe("query()", () => {
   test("rejects a kind it does not serve", async () => {
-    await expect(query({ kind: "DROP_EVERYTHING" }, { db })).rejects.toThrow();
+    await expect(query({ kind: "DROP_EVERYTHING" }, { db, principal })).rejects.toThrow();
   });
 
   test("WORKSTREAM_SHOW is NOT_FOUND for a missing workstream", async () => {
-    await expect(query({ kind: "WORKSTREAM_SHOW", id: "WS-nope" }, { db })).rejects.toMatchObject({
+    await expect(
+      query({ kind: "WORKSTREAM_SHOW", id: "WS-nope" }, { db, principal }),
+    ).rejects.toMatchObject({
       code: "NOT_FOUND",
     });
   });
 
   test("PROBLEM_SHOW inlines the Attempts and the Outcome", async () => {
     const { problemId } = await seed();
-    const shown = (await query({ kind: "PROBLEM_SHOW", id: problemId }, { db })) as {
+    const shown = (await query({ kind: "PROBLEM_SHOW", id: problemId }, { db, principal })) as {
       id: number;
       attempts: Array<{ id: string; ref: string }>;
       outcome: unknown;
@@ -89,7 +97,7 @@ describe("query()", () => {
     await seed();
     const digest = (await query(
       { kind: "CONTEXT", workstream: "t", stages: ["unscheduled"], includeExtras: true },
-      { db },
+      { db, principal },
     )) as Record<string, any>;
 
     expect(digest.workstream.slug).toBe("t");
@@ -113,14 +121,14 @@ describe("query()", () => {
   test("CONTEXT rejects a stage bucket that does not exist", async () => {
     await seed();
     await expect(
-      query({ kind: "CONTEXT", workstream: "t", stages: ["someday"] }, { db }),
+      query({ kind: "CONTEXT", workstream: "t", stages: ["someday"] }, { db, principal }),
     ).rejects.toThrow(/Invalid stage value/);
   });
 
   test("a recorded read leaves a trace in recentQueries", async () => {
     const { problemId } = await seed();
     const store = new MemoryViewStore();
-    await query({ kind: "PROBLEM_SHOW", id: problemId }, { db, viewStore: store });
+    await query({ kind: "PROBLEM_SHOW", id: problemId }, { db, principal, viewStore: store });
     const blob = (await store.read()) as { recentQueries: Array<{ kind: string; slug: string }> };
     expect(blob.recentQueries.map((q) => [q.kind, q.slug])).toEqual([
       ["PROBLEM_SHOW", String(problemId)],
@@ -144,7 +152,7 @@ describe("query()", () => {
 
     const rows = (await query(
       { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t" },
-      { db },
+      { db, principal },
     )) as Array<{ id: string; problemCount: number; archive: unknown }>;
     const byId = new Map(rows.map((r) => [r.id, r]));
 
@@ -175,14 +183,14 @@ describe("query()", () => {
 
     const rows = (await query(
       { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t" },
-      { db },
+      { db, principal },
     )) as Array<{ id: string; problemCount: number }>;
     expect(rows.find((r) => r.id === "OBS-1")?.problemCount).toBe(2);
   });
 
   test("an unrecorded read leaves none", async () => {
     const store = new MemoryViewStore();
-    await query({ kind: "WORKSTREAM_LIST" }, { db, viewStore: store });
+    await query({ kind: "WORKSTREAM_LIST" }, { db, principal, viewStore: store });
     expect(await store.read()).toEqual({});
   });
 });

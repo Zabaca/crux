@@ -19,7 +19,7 @@
  * invite that turns out to be redundant is not an error; it is a Member being
  * told, correctly, how to sign in.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 
 import type { CruxDb } from "../db/client.js";
 import { authUsers } from "../db/auth-schema.js";
@@ -33,12 +33,20 @@ export type MemberOutcome = {
   created: boolean;
 };
 
-/** Everyone currently in the Workspace. A removed row is not a Member. */
+/**
+ * Everyone currently in the Workspace. A removed row is not a Member.
+ *
+ * Nor is an unclaimed Principal. Since ADR-0013 a `users` row is minted by first
+ * use as well as by an invite, and the anonymous ones have no email — nobody to
+ * mail a sign-in link to, nobody to name on a Members page, and nothing an
+ * operator could do about one. An address is what makes a row a *person* here,
+ * so that is the predicate.
+ */
 export async function listMembers(db: CruxDb): Promise<Member[]> {
   return db
     .select({ id: authUsers.id, name: authUsers.name, email: authUsers.email })
     .from(authUsers)
-    .where(isNull(authUsers.removedAt));
+    .where(and(isNull(authUsers.removedAt), isNotNull(authUsers.email)));
 }
 
 /**

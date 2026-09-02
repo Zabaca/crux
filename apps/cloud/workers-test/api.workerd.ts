@@ -34,7 +34,11 @@ beforeEach(async () => {
   db = createD1Db(env.DB);
   await applyD1Schema(env.DB);
   await db.insert(users).values({ id: "USR-james", slug: "james", name: "James Lee" });
-  await db.insert(workstreams).values({ id: "WS-crux", slug: "crux", title: "Crux" });
+  // Owned by the token's Principal: since ADR-0013 a Workstream nobody owns is
+  // a Workstream nobody can read, so an unowned seed would 404 every read here.
+  await db
+    .insert(workstreams)
+    .values({ id: "WS-crux", slug: "crux", title: "Crux", ownerId: "USR-james" });
   token = (await mintToken(db, { userId: "USR-james" })).token;
 });
 
@@ -112,7 +116,9 @@ describe("POST /v1/query — SEARCH", () => {
   // Seeded through `dispatch`, not straight into D1, so what the search reads is
   // what the write path actually stores.
   async function seedCorpus() {
-    await db.insert(workstreams).values({ id: "WS-farm", slug: "farm", title: "Farm" });
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-farm", slug: "farm", title: "Farm", ownerId: "USR-james" });
     await dispatch({
       kind: "ADD_PROBLEM",
       payload: {
@@ -788,5 +794,181 @@ describe("Attempts", () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Anonymous Principals
+// ---------------------------------------------------------------------------
+
+/** Mint a Principal the way a machine with no configuration does. */
+async function mintPrincipal(body: unknown = {}): Promise<{
+  token: string;
+  principal: { id: string; name: string };
+  status: number;
+}> {
+  const res = await SELF.fetch("https://crux.example/v1/principals", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const parsed = (await res.json()) as { token: string; principal: { id: string; name: string } };
+  return { ...parsed, status: res.status };
+}
+
+/** Any request, as a given bearer token — the CLI's exact shape. */
+function as(bearer: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return SELF.fetch(`https://crux.example${path}`, {
+    ...init,
+    headers: {
+      authorization: `Bearer ${bearer}`,
+      "content-type": "application/json",
+      ...(init.headers as Record<string, string> | undefined),
+    },
+  });
+}
+
+const queryAs = (bearer: string, q: unknown) =>
+  as(bearer, "/v1/query", { method: "POST", body: JSON.stringify(q) });
+const dispatchAs = (bearer: string, action: unknown) =>
+  as(bearer, "/v1/dispatch", { method: "POST", body: JSON.stringify(action) });
+
+describe("POST /v1/principals — first use", () => {
+  test("an unauthenticated client mints a Principal and can immediately write", async () => {
+    const minted = await mintPrincipal();
+    expect(minted.status).toBe(201);
+    expect(minted.token).toMatch(/^crux_/);
+    expect(minted.principal.name).toBe("Anonymous");
+
+    // No invite, no email, no operator: the token is the whole of the identity.
+    const ws = await dispatchAs(minted.token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "fresh", title: "Fresh" },
+    });
+    expect(ws.status).toBe(200);
+
+    const obs = await dispatchAs(minted.token, {
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "fresh", content: "filed without signing up for anything" },
+    });
+    expect(obs.status).toBe(200);
+
+    const read = (await (
+      await queryAs(minted.token, { kind: "OBSERVATION_LIST", workstream: "fresh" })
+    ).json()) as { result: Array<{ content: string; reporterId: string }> };
+    expect(read.result.map((o) => o.content)).toEqual(["filed without signing up for anything"]);
+    // Authorship still resolves to an actor — the Principal that filed it.
+    expect(read.result[0]!.reporterId).toBe(minted.principal.id);
+  });
+
+  test("two mints are two Principals, not one shared one", async () => {
+    const a = await mintPrincipal();
+    const b = await mintPrincipal();
+    expect(a.principal.id).not.toBe(b.principal.id);
+    expect(a.token).not.toBe(b.token);
+  });
+
+  test("a name is taken when offered, so an agent can say whose machine it is", async () => {
+    const named = await mintPrincipal({ name: "Dana's laptop" });
+    expect(named.principal.name).toBe("Dana's laptop");
+  });
+});
+
+describe("tenancy over HTTP — the boundary is the credential", () => {
+  /** A Principal with a Workstream, a Problem and an Observation of its own. */
+  async function tenant(slug: string) {
+    const { token, principal } = await mintPrincipal();
+    await dispatchAs(token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug, title: `${slug} title` },
+    });
+    const problem = (await (
+      await dispatchAs(token, {
+        kind: "ADD_PROBLEM",
+        payload: { workstream: slug, title: `${slug} private`, description: `${slug} private` },
+      })
+    ).json()) as { result: { id: number } };
+    const observation = (await (
+      await dispatchAs(token, {
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: slug, content: `${slug} private signal` },
+      })
+    ).json()) as { result: { id: string } };
+    return { token, principal, slug, problemId: problem.result.id, obsId: observation.result.id };
+  }
+
+  test("one Principal's corpus is invisible to another's token", async () => {
+    const a = await tenant("alpha");
+    const b = await tenant("bravo");
+
+    // The scope comes from the bearer token the server resolved, not from
+    // anything either request said about itself.
+    const list = (await (await queryAs(b.token, { kind: "WORKSTREAM_LIST" })).json()) as {
+      result: Array<{ slug: string }>;
+    };
+    expect(list.result.map((w) => w.slug)).toEqual(["bravo"]);
+
+    // Named directly, A's rows are *missing*, not forbidden.
+    expect((await queryAs(b.token, { kind: "PROBLEM_SHOW", id: a.problemId })).status).toBe(404);
+    expect((await queryAs(b.token, { kind: "OBSERVATION_SHOW", id: a.obsId })).status).toBe(404);
+    expect(
+      (await queryAs(b.token, { kind: "CONTEXT", workstream: "alpha", stages: ["now"] })).status,
+    ).toBe(404);
+
+    const search = (await (await queryAs(b.token, { kind: "SEARCH", q: "private" })).json()) as {
+      result: { problems: unknown[]; observations: unknown[] };
+    };
+    expect(JSON.stringify(search.result)).not.toContain("alpha");
+
+    // And A still sees all of its own.
+    const mine = (await (await queryAs(a.token, { kind: "WORKSTREAM_LIST" })).json()) as {
+      result: Array<{ slug: string }>;
+    };
+    expect(mine.result.map((w) => w.slug)).toEqual(["alpha"]);
+  });
+
+  test("a write cannot reach across the boundary either", async () => {
+    const a = await tenant("alpha");
+    const b = await tenant("bravo");
+
+    // Linking A's Observation to B's Problem would put A's words inside B's
+    // corpus, where every later read would disclose them while doing its job.
+    const evidence = await dispatchAs(b.token, {
+      kind: "ADD_EVIDENCE",
+      payload: { problem: b.problemId, observation: a.obsId, note: "borrowed" },
+    });
+    expect(evidence.status).toBe(404);
+
+    const schedule = await dispatchAs(b.token, {
+      kind: "SCHEDULE_PROBLEM",
+      payload: { id: a.problemId, stage: "now" },
+    });
+    expect(schedule.status).toBe(404);
+
+    const archive = await dispatchAs(b.token, {
+      kind: "ARCHIVE_OBSERVATION",
+      payload: { id: a.obsId, rationale: "not mine to archive" },
+    });
+    expect(archive.status).toBe(404);
+
+    // Nothing was written by any of the three.
+    const detail = (await (
+      await queryAs(a.token, { kind: "PROBLEM_DETAIL", id: a.problemId })
+    ).json()) as { result: { problem: { status: string | null }; evidence: unknown[] } };
+    expect(detail.result.problem.status).toBeNull();
+    expect(detail.result.evidence).toEqual([]);
+  });
+
+  test("a previously minted token keeps working, and keeps its own corpus", async () => {
+    const fresh = await tenant("bravo");
+    // `token` is the invited Member's, minted in beforeEach — the CLI door that
+    // existed before Principals did.
+    const mine = (await (await query({ kind: "WORKSTREAM_LIST" })).json()) as {
+      result: Array<{ slug: string }>;
+    };
+    expect(mine.result.map((w) => w.slug)).toEqual(["crux"]);
+    expect((await queryAs(fresh.token, { kind: "WORKSTREAM_SHOW", id: "WS-crux" })).status).toBe(
+      404,
+    );
   });
 });

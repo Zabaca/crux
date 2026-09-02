@@ -3,10 +3,11 @@
  * and the Members / CLI-token screens.
  *
  * Every page except the two that exist because there is no session yet is
- * gated on one — and the gate is the only access check in the file. There is
- * deliberately no second check per Workstream: the deployment is the Workspace
- * and every Member sees all of it (ADR-0003), so a signed-in reader is
- * authorised for every page here by construction.
+ * gated on one. The session is the only *authentication* check in the file;
+ * authorisation is not decided here either, but by `query()`, which scopes every
+ * read to the Principal it is given (ADR-0013). A Workstream the viewer does not
+ * own therefore reads as missing and the page 404s, without this file growing a
+ * per-Workstream check of its own.
  *
  * URLs are the addressing scheme: `/w/<slug>/problems/<id>` resolves to the
  * same view in any session, which is what makes a link paste-able into a
@@ -88,14 +89,20 @@ async function sendSignInLink(
  * — which is the whole of the difference, and worth keeping visible as a table.
  */
 const READ_ROUTES: ReadonlyArray<
-  readonly [RegExp, (db: CruxDb, ...params: string[]) => Promise<{ title: string; body: Html }>]
+  readonly [
+    RegExp,
+    (db: CruxDb, viewer: Viewer, ...params: string[]) => Promise<{ title: string; body: Html }>,
+  ]
 > = [
   // `/w/<slug>` and `/w/<slug>/problems/<id>` are not here: both moved to Astro
   // routes so they can carry hydrated islands — the roadmap board and the
   // action bar. `problemPage()` below is still what the latter renders. A slug
   // or id that names nothing still lands back here, as the 404 page.
-  [/^\/w\/([^/]+)\/observations$/, (db, slug) => observationListPage(db, slug!)],
-  [/^\/w\/([^/]+)\/observations\/([^/]+)$/, (db, slug, id) => observationPage(db, slug!, id!)],
+  [/^\/w\/([^/]+)\/observations$/, (db, viewer, slug) => observationListPage(db, viewer, slug!)],
+  [
+    /^\/w\/([^/]+)\/observations\/([^/]+)$/,
+    (db, viewer, slug, id) => observationPage(db, viewer, slug!, id!),
+  ],
 ];
 
 function redirect(location: string, status = 302): Response {
@@ -275,7 +282,7 @@ export async function handleWeb(
   }
 
   try {
-    if (path === "/") return render(await workstreamListPage(db));
+    if (path === "/") return render(await workstreamListPage(db, viewer));
 
     if (path === "/members") {
       const confirming = url.searchParams.get("confirm");
@@ -341,7 +348,7 @@ export async function handleWeb(
       const match = pattern.exec(path);
       if (match) {
         const [, ...params] = match;
-        return render(await load(db, ...params.map((p) => decodeURIComponent(p!))));
+        return render(await load(db, viewer, ...params.map((p) => decodeURIComponent(p!))));
       }
     }
   } catch (err) {

@@ -10,6 +10,14 @@
  * Read kinds that used to leave a trace in `recentQueries` still do; the
  * bookkeeping moved here with them, behind the same `ViewStore` seam dispatch
  * uses, so it works against a file locally and a Durable Object in the cloud.
+ *
+ * Every read is scoped to the Principal that asked for it (ADR-0013). The scope
+ * is resolved once, here, from the identity the *server* attached to the request
+ * — never from anything the client sent — and it is a required option rather
+ * than an optional filter, so a caller cannot reach the corpus without saying
+ * whose corpus it is. One missed predicate is a cross-tenant disclosure, not a
+ * bug, which is why the predicate lives at the single entry point instead of at
+ * twenty call sites.
  */
 import { z } from "zod";
 import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -28,6 +36,7 @@ import {
   workstreams,
 } from "../db/schema.js";
 import { NotFoundError, ValidationError } from "../transitions/errors.js";
+import { problemsInScope, resolveScope, type Principal, type Scope } from "../auth/principals.js";
 import type { ViewStore } from "../view-state/store.js";
 import { computeSaveViewMetaBlob, loadViewMetaFromBlob } from "../view-state/persistence.js";
 import { appendRecentQuery } from "../actions/recent-queries.js";
@@ -216,27 +225,60 @@ function toArchive(row: {
     : null;
 }
 
-async function requireWorkstream(db: CruxDb, idOrSlug: string) {
+/**
+ * The Workstream `idOrSlug` names, if this Principal owns it.
+ *
+ * A Workstream outside the scope is reported as missing, with the same message
+ * and the same code as one that never existed. That is deliberate: an error that
+ * distinguished "not yours" from "not there" would turn every read into an
+ * oracle for whether a slug is taken on the deployment.
+ */
+async function requireWorkstream(db: CruxDb, idOrSlug: string, scope: Scope) {
+  const missing = () => new NotFoundError(`workstream not found: ${idOrSlug}`, { id: idOrSlug });
   const byId = (
     await db.select().from(workstreams).where(eq(workstreams.id, idOrSlug)).limit(1)
   )[0];
-  if (byId) return byId;
+  if (byId) {
+    if (!scope.has(byId.id)) throw missing();
+    return byId;
+  }
   const bySlug = (
     await db.select().from(workstreams).where(eq(workstreams.slug, idOrSlug)).limit(1)
   )[0];
-  if (bySlug) return bySlug;
-  throw new NotFoundError(`workstream not found: ${idOrSlug}`, { id: idOrSlug });
+  if (bySlug) {
+    if (!scope.has(bySlug.id)) throw missing();
+    return bySlug;
+  }
+  throw missing();
 }
 
-async function requireProblem(db: CruxDb, raw: string | number) {
+/** The same gate for a Workstream named by id alone, answering the row's id. */
+async function requireWorkstreamId(db: CruxDb, id: string, scope: Scope): Promise<string> {
+  return (await requireWorkstream(db, id, scope)).id;
+}
+
+async function requireProblem(db: CruxDb, raw: string | number, scope: Scope) {
   const rows = await db
     .select()
     .from(problems)
     .where(eq(problems.id, numeric(raw)))
     .limit(1);
   const row = rows[0];
-  if (!row) throw new NotFoundError(`problem not found: ${raw}`, { id: raw });
+  if (!row || !scope.has(row.workstreamId)) {
+    throw new NotFoundError(`problem not found: ${raw}`, { id: raw });
+  }
   return row;
+}
+
+/** The Problem, or null — for the reads that answer null rather than throwing. */
+async function findProblem(db: CruxDb, raw: string | number, scope: Scope) {
+  const rows = await db
+    .select()
+    .from(problems)
+    .where(eq(problems.id, numeric(raw)))
+    .limit(1);
+  const row = rows[0];
+  return row && scope.has(row.workstreamId) ? row : null;
 }
 
 /**
@@ -337,11 +379,18 @@ function substringMatch(column: SQLiteColumn, needle: string) {
 async function searchCorpus(
   db: CruxDb,
   q: Extract<QueryRequest, { kind: "SEARCH" }>,
+  scope: Scope,
 ): Promise<SearchResults> {
-  const ws = q.workstream ? await requireWorkstream(db, q.workstream) : null;
+  const ws = q.workstream ? await requireWorkstream(db, q.workstream, scope) : null;
   const limit = q.limit ?? SEARCH_DEFAULT_LIMIT;
+  // Narrowing to one Workstream is the caller's option; narrowing to the ones
+  // this Principal owns is not. An unfiltered search is the read most likely to
+  // surface somebody else's words, so the tenancy predicate is applied to both
+  // halves whether or not `--workstream` was given.
   const scoped = (workstreamColumn: SQLiteColumn, match: ReturnType<typeof substringMatch>) =>
-    ws ? and(eq(workstreamColumn, ws.id), match) : match;
+    ws
+      ? and(eq(workstreamColumn, ws.id), match)
+      : and(inArray(workstreamColumn, scope.workstreamIds), match);
 
   const problemRows = await db
     .select()
@@ -413,6 +462,7 @@ function legalNextTransitions(status: string | null): string[] {
 async function contextDigest(
   db: CruxDb,
   q: Extract<QueryRequest, { kind: "CONTEXT" }>,
+  scope: Scope,
 ): Promise<Record<string, unknown>> {
   const requested = new Set(q.stages?.length ? q.stages : ["now"]);
   for (const s of requested) {
@@ -421,7 +471,7 @@ async function contextDigest(
     }
   }
   const showArchived = Boolean(q.showArchived);
-  const wsRow = await requireWorkstream(db, q.workstream);
+  const wsRow = await requireWorkstream(db, q.workstream, scope);
 
   const allProblemsRaw = await db
     .select()
@@ -460,12 +510,22 @@ async function contextDigest(
   if (requested.has("abandoned"))
     output.abandoned = digestProblems.filter((p) => p.status === "abandoned");
   if (q.includeExtras) {
-    output.recent_observations_unlinked = await unlinkedObservations(db, wsRow.id, showArchived);
+    output.recent_observations_unlinked = await unlinkedObservations(
+      db,
+      wsRow.id,
+      showArchived,
+      scope,
+    );
   }
   return output;
 }
 
-async function unlinkedObservations(db: CruxDb, workstreamId: string, showArchived: boolean) {
+async function unlinkedObservations(
+  db: CruxDb,
+  workstreamId: string,
+  showArchived: boolean,
+  scope: Scope,
+) {
   const rows = await db
     .select()
     .from(observations)
@@ -474,8 +534,18 @@ async function unlinkedObservations(db: CruxDb, workstreamId: string, showArchiv
         ? eq(observations.workstreamId, workstreamId)
         : and(eq(observations.workstreamId, workstreamId), isNull(observations.archivedAt)),
     );
+  // "Linked" means linked to a Problem this Principal can see. The scan stays
+  // unfiltered by Observation — an `inArray` over every Observation id in the
+  // Workstream is the parameter limit this deployment would hit first — and is
+  // narrowed on the Problem side instead, where the id list is the Workstream
+  // set and therefore small.
   const linked = new Set(
-    (await db.select({ id: evidence.observationId }).from(evidence)).map((r) => r.id),
+    (
+      await db
+        .select({ id: evidence.observationId })
+        .from(evidence)
+        .where(inArray(evidence.problemId, problemsInScope(db, scope)))
+    ).map((r) => r.id),
   );
   return rows.filter((o) => !linked.has(o.id)).map((o) => ({ ...o, archive: toArchive(o) }));
 }
@@ -485,18 +555,26 @@ async function unlinkedObservations(db: CruxDb, workstreamId: string, showArchiv
 // ---------------------------------------------------------------------------
 
 /**
- * Run a named read. Throws `NotFoundError` for a missing entity a command
- * requires, exactly as the local path did, so the error envelope and the CLI's
- * exit code are unchanged.
+ * Run a named read, scoped to the Principal that asked for it.
+ *
+ * `principal` is required, not optional: an optional scope is one a caller can
+ * forget, and the thing a caller forgetting it produces is a cross-tenant
+ * disclosure. It must come from the server's own resolution of the request —
+ * a bearer token or a browser session — never from the request body, which the
+ * client controls.
+ *
+ * Throws `NotFoundError` for a missing entity a command requires, exactly as
+ * before, so the error envelope and the CLI's exit code are unchanged. A row
+ * outside the scope is reported as missing rather than as forbidden.
  */
 export async function query(
   rawQuery: unknown,
-  options: { db: CruxDb; viewStore?: ViewStore },
+  options: { db: CruxDb; principal: Principal; viewStore?: ViewStore },
 ): Promise<unknown> {
   const q = QuerySchema.parse(rawQuery);
   const { db } = options;
 
-  const result = await run(q, db);
+  const result = await run(q, db, await resolveScope(db, options.principal));
 
   const record = RECORDED[q.kind];
   if (record && options.viewStore) {
@@ -520,30 +598,40 @@ async function recordRecentQuery(store: ViewStore, kind: string, slug: string): 
   }
 }
 
-async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
+async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> {
   switch (q.kind) {
     case "WORKSTREAM_LIST":
-      return db.select().from(workstreams);
+      return db.select().from(workstreams).where(inArray(workstreams.id, scope.workstreamIds));
 
     case "WORKSTREAM_SHOW": {
       const rows = await db.select().from(workstreams).where(eq(workstreams.id, q.id)).limit(1);
-      if (rows.length === 0) throw new NotFoundError(`workstream not found: ${q.id}`, { id: q.id });
+      if (rows.length === 0 || !scope.has(rows[0]!.id)) {
+        throw new NotFoundError(`workstream not found: ${q.id}`, { id: q.id });
+      }
       return rows[0]!;
     }
 
     case "WORKSTREAM_GET": {
       const rows = await db.select().from(workstreams).where(eq(workstreams.id, q.id)).limit(1);
-      return rows[0] ?? null;
+      const row = rows[0];
+      return row && scope.has(row.id) ? row : null;
     }
 
     case "WORKSTREAM_BY_SLUG": {
       const rows = await db.select().from(workstreams).where(eq(workstreams.slug, q.slug)).limit(1);
-      return rows[0] ?? null;
+      const row = rows[0];
+      return row && scope.has(row.id) ? row : null;
     }
 
     case "WORKSTREAM_SUMMARIES": {
-      const wsRows = await db.select().from(workstreams);
-      const allProblems = await db.select().from(problems);
+      const wsRows = await db
+        .select()
+        .from(workstreams)
+        .where(inArray(workstreams.id, scope.workstreamIds));
+      const allProblems = await db
+        .select()
+        .from(problems)
+        .where(inArray(problems.workstreamId, scope.workstreamIds));
       const openByWs = new Map<string, number>();
       for (const p of allProblems) {
         if (p.status !== "done" && p.status !== "abandoned") {
@@ -556,22 +644,31 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "OBSERVATION_LIST": {
-      const ws = await requireWorkstream(db, q.workstream);
+      const ws = await requireWorkstream(db, q.workstream, scope);
       return db.select().from(observations).where(eq(observations.workstreamId, ws.id));
     }
 
     case "OBSERVATION_SHOW": {
       const rows = await db.select().from(observations).where(eq(observations.id, q.id)).limit(1);
-      if (rows.length === 0)
+      if (rows.length === 0 || !scope.has(rows[0]!.workstreamId)) {
         throw new NotFoundError(`observation not found: ${q.id}`, { id: q.id });
+      }
       return rows[0]!;
     }
 
     case "OBSERVATION_DETAIL": {
       const rows = await db.select().from(observations).where(eq(observations.id, q.id)).limit(1);
       const obs = rows[0];
-      if (!obs) return null;
-      const evRows = await db.select().from(evidence).where(eq(evidence.observationId, q.id));
+      if (!obs || !scope.has(obs.workstreamId)) return null;
+      const evRows = await db
+        .select()
+        .from(evidence)
+        .where(
+          and(
+            eq(evidence.observationId, q.id),
+            inArray(evidence.problemId, problemsInScope(db, scope)),
+          ),
+        );
       const probIds = evRows.map((e) => e.problemId);
       const probRows = probIds.length
         ? await db.select().from(problems).where(inArray(problems.id, probIds))
@@ -587,20 +684,22 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "OBSERVATION_UNLINKED": {
-      const rows = await unlinkedObservations(db, q.workstreamId, Boolean(q.showArchived));
+      const wsId = await requireWorkstreamId(db, q.workstreamId, scope);
+      const rows = await unlinkedObservations(db, wsId, Boolean(q.showArchived), scope);
       return [...rows].sort((a, b) => b.createdAt - a.createdAt);
     }
 
     case "OBSERVATION_SUMMARIES": {
-      const rows = await db
-        .select()
-        .from(observations)
-        .where(eq(observations.workstreamId, q.workstreamId));
-      // Every Evidence row, unfiltered — the same shape `unlinkedObservations`
-      // uses above, and for the same reason: the alternative is an `inArray`
-      // over every Observation id in the Workstream, which is the parameter
-      // limit this deployment would hit first.
-      const ev = await db.select({ observationId: evidence.observationId }).from(evidence);
+      const wsId = await requireWorkstreamId(db, q.workstreamId, scope);
+      const rows = await db.select().from(observations).where(eq(observations.workstreamId, wsId));
+      // Every Evidence row this Principal can see, unfiltered by Observation —
+      // the same shape `unlinkedObservations` uses above, and for the same
+      // reason: the alternative is an `inArray` over every Observation id in the
+      // Workstream, which is the parameter limit this deployment would hit first.
+      const ev = await db
+        .select({ observationId: evidence.observationId })
+        .from(evidence)
+        .where(inArray(evidence.problemId, problemsInScope(db, scope)));
       // Counting rows *is* counting Problems: `evidence_obs_problem_unique`
       // permits one Evidence row per (Observation, Problem) pair, so a second
       // why-note about the same Problem is a conflict, not a second row.
@@ -619,7 +718,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "PROBLEM_LIST": {
-      const ws = await requireWorkstream(db, q.workstream);
+      const ws = await requireWorkstream(db, q.workstream, scope);
       const where =
         q.status === "unscheduled"
           ? and(eq(problems.workstreamId, ws.id), isNull(problems.status))
@@ -629,17 +728,11 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       return db.select().from(problems).where(where);
     }
 
-    case "PROBLEM_GET": {
-      const rows = await db
-        .select()
-        .from(problems)
-        .where(eq(problems.id, numeric(q.id)))
-        .limit(1);
-      return rows[0] ?? null;
-    }
+    case "PROBLEM_GET":
+      return findProblem(db, q.id, scope);
 
     case "PROBLEM_SHOW": {
-      const p = await requireProblem(db, q.id);
+      const p = await requireProblem(db, q.id, scope);
       return {
         ...p,
         attempts: await attemptsFor(db, p.id),
@@ -648,10 +741,8 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "PROBLEM_SUMMARIES": {
-      const rows = await db
-        .select()
-        .from(problems)
-        .where(eq(problems.workstreamId, q.workstreamId));
+      const wsId = await requireWorkstreamId(db, q.workstreamId, scope);
+      const rows = await db.select().from(problems).where(eq(problems.workstreamId, wsId));
       if (rows.length === 0) return [];
       const ids = rows.map((r) => r.id);
       const ev = await db
@@ -683,8 +774,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
 
     case "PROBLEM_DETAIL": {
       const problemId = numeric(q.id);
-      const rows = await db.select().from(problems).where(eq(problems.id, problemId)).limit(1);
-      const p = rows[0];
+      const p = await findProblem(db, problemId, scope);
       if (!p) return null;
       const abandonRow = (
         await db.select().from(abandonments).where(eq(abandonments.problemId, problemId)).limit(1)
@@ -700,10 +790,14 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
 
     case "EVIDENCE_LIST": {
       if (q.problem !== undefined) {
-        const p = await requireProblem(db, q.problem);
+        const p = await requireProblem(db, q.problem, scope);
         return db.select().from(evidence).where(eq(evidence.problemId, p.id));
       }
-      return db.select().from(evidence);
+      // No Problem named: every Evidence row whose Problem is inside the scope.
+      return db
+        .select()
+        .from(evidence)
+        .where(inArray(evidence.problemId, problemsInScope(db, scope)));
     }
 
     case "ATTEMPT_LIST": {
@@ -712,8 +806,11 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
           ? await db
               .select()
               .from(attempts)
-              .where(eq(attempts.problemId, (await requireProblem(db, q.problem)).id))
-          : await db.select().from(attempts);
+              .where(eq(attempts.problemId, (await requireProblem(db, q.problem, scope)).id))
+          : await db
+              .select()
+              .from(attempts)
+              .where(inArray(attempts.problemId, problemsInScope(db, scope)));
       return [...rows].sort(byFiledOrder) satisfies AttemptRow[];
     }
 
@@ -721,7 +818,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
       // Drift: a Problem staged as active with zero *open* Attempts. A closed
       // Attempt is history, not work in flight, so a Problem whose only Attempt
       // shipped or was dropped has drifted again (ADR-0012).
-      const ws = await requireWorkstream(db, q.workstream);
+      const ws = await requireWorkstream(db, q.workstream, scope);
       const stages = q.stages?.length ? q.stages : ["now"];
       // Only a Problem still on the board can drift: `done` and `abandoned`
       // left through a door that demanded a reason, and `unscheduled` was never
@@ -753,7 +850,7 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "ABANDONMENT_LIST": {
-      const ws = await requireWorkstream(db, q.workstream);
+      const ws = await requireWorkstream(db, q.workstream, scope);
       const wsProblems = await db
         .select({ id: problems.id })
         .from(problems)
@@ -764,17 +861,33 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "ABANDONMENT_SHOW": {
-      const rows = await db.select().from(abandonments).where(eq(abandonments.id, q.id)).limit(1);
+      const rows = await db
+        .select()
+        .from(abandonments)
+        .where(
+          and(
+            eq(abandonments.id, q.id),
+            inArray(abandonments.problemId, problemsInScope(db, scope)),
+          ),
+        )
+        .limit(1);
       if (rows.length === 0)
         throw new NotFoundError(`abandonment not found: ${q.id}`, { id: q.id });
       return rows[0]!;
     }
 
     case "OUTCOME_LIST":
-      return db.select().from(outcomes);
+      return db
+        .select()
+        .from(outcomes)
+        .where(inArray(outcomes.problemId, problemsInScope(db, scope)));
 
     case "OUTCOME_SHOW": {
-      const rows = await db.select().from(outcomes).where(eq(outcomes.id, q.id)).limit(1);
+      const rows = await db
+        .select()
+        .from(outcomes)
+        .where(and(eq(outcomes.id, q.id), inArray(outcomes.problemId, problemsInScope(db, scope))))
+        .limit(1);
       if (rows.length === 0) throw new NotFoundError(`outcome not found: ${q.id}`, { id: q.id });
       const followUps = await db
         .select({ problemId: outcomeFollowUpProblems.problemId })
@@ -784,9 +897,9 @@ async function run(q: QueryRequest, db: CruxDb): Promise<unknown> {
     }
 
     case "SEARCH":
-      return searchCorpus(db, q);
+      return searchCorpus(db, q, scope);
 
     case "CONTEXT":
-      return contextDigest(db, q);
+      return contextDigest(db, q, scope);
   }
 }

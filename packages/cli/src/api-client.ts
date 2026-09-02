@@ -9,6 +9,7 @@
  * terminal exactly as the local path used to.
  */
 import { userConfig } from "@crux/core";
+import { writeConfig } from "@crux/core/config";
 import { CruxError, type ErrorCode } from "@crux/core/transitions";
 import { ActionNotAllowedError } from "@crux/core/actions";
 
@@ -62,6 +63,16 @@ function toError(body: ErrorEnvelope): Error {
   return new ApiError(code, message, details);
 }
 
+/**
+ * The deployment a machine with no configuration talks to.
+ *
+ * Adoption is anonymous-first (ADR-0013): installing the plugin and filing an
+ * Observation must not require a Cloudflare account first, and it cannot require
+ * one if there is nowhere to send the request. `crux init --url` still points a
+ * machine at a different deployment, and `CRUX_API_URL` overrides both.
+ */
+export const DEFAULT_API_URL = "https://crux.zabaca.com";
+
 /** The HTTP call the client makes. Injected in tests; `fetch` in production. */
 export type Transport = (url: string, init: RequestInit) => Promise<Response>;
 
@@ -79,19 +90,30 @@ export interface CruxApiClient {
 
 export function createApiClient(options: {
   baseUrl: string;
-  token: string;
+  /** The bearer token, or a way to get one. A function is resolved on the first
+   * request and its answer reused, which is what lets an unconfigured machine
+   * mint a Principal without every command paying for a round-trip. */
+  token: string | (() => Promise<string>);
   transport?: Transport;
 }): CruxApiClient {
   const base = options.baseUrl.replace(/\/+$/, "");
   const transport = options.transport ?? ((url, init) => fetch(url, init));
 
+  let pending: Promise<string> | null = null;
+  const resolveToken = (): Promise<string> => {
+    if (typeof options.token === "string") return Promise.resolve(options.token);
+    pending ??= options.token();
+    return pending;
+  };
+
   async function call<T>(path: string, init: RequestInit): Promise<T> {
+    const token = await resolveToken();
     let res: Response;
     try {
       res = await transport(`${base}${path}`, {
         ...init,
         headers: {
-          authorization: `Bearer ${options.token}`,
+          authorization: `Bearer ${token}`,
           "content-type": "application/json",
           ...(init.headers as Record<string, string> | undefined),
         },
@@ -151,20 +173,36 @@ export function setApiClient(next: CruxApiClient | null): void {
 }
 
 /**
- * The client for this invocation, built from `config.toml`. Missing coordinates
- * are a setup problem, not a corpus problem, so they fail with the command that
- * fixes them rather than a network error.
+ * Mint a Principal against `baseUrl` and remember it.
+ *
+ * This is first use (ADR-0013): there is no registration to complete and no
+ * invite to redeem, so the deployment hands back a token that owns everything
+ * filed through it. Persisting it immediately is the point — a token minted and
+ * then lost would strand the corpus it just created on the next command.
+ */
+async function mintPrincipalToken(baseUrl: string): Promise<string> {
+  const anonymous = createApiClient({ baseUrl, token: "" });
+  const minted = await anonymous.post<{ token?: string }>("/v1/principals", {});
+  if (!minted.token) {
+    throw new ApiError("UNKNOWN", `${baseUrl} did not return a token for a new Principal`);
+  }
+  writeConfig({ api: { url: anonymous.baseUrl, token: minted.token } });
+  return minted.token;
+}
+
+/**
+ * The client for this invocation.
+ *
+ * Neither half of the configuration is required any more. A missing URL falls
+ * back to the public deployment, and a missing token is minted on the first
+ * request and written to `config.toml` — so `crux observation add` works on a
+ * machine that has never run anything else. `crux init` still exists for
+ * pointing at a deployment of your own.
  */
 export function api(): CruxApiClient {
   if (override) return override;
   const { url, token } = userConfig.loadApiConfig();
-  if (!url || !token) {
-    const missing = !url && !token ? "url and token" : !url ? "url" : "token";
-    throw new ApiError(
-      "NO_API_CONFIG",
-      `no crux deployment configured — [api] ${missing} missing from ${userConfig.configPath()}. ` +
-        `Run: crux init --url <https://…> --token <token>`,
-    );
-  }
-  return createApiClient({ baseUrl: url, token });
+  const baseUrl = url ?? DEFAULT_API_URL;
+  if (token) return createApiClient({ baseUrl, token });
+  return createApiClient({ baseUrl, token: () => mintPrincipalToken(baseUrl) });
 }
