@@ -14,7 +14,6 @@ import { eq } from "drizzle-orm";
 import {
   scheduleProblem,
   unscheduleProblem,
-  markProblemDone,
   abandonProblem,
   shipSolution,
   editSolution,
@@ -144,12 +143,6 @@ export async function runMutation(
       await unscheduleProblem(prob.id, db);
       return { ok: true, id: prob.id, status: null };
     }
-    case "MARK_PROBLEM_DONE": {
-      const p = action.payload;
-      const prob = await resolveProblem(p.id, db);
-      await markProblemDone(prob.id, db);
-      return { ok: true, id: prob.id, status: "done" };
-    }
     case "ABANDON_PROBLEM": {
       const p = action.payload;
       const prob = await resolveProblem(p.id, db);
@@ -213,22 +206,21 @@ export async function runMutation(
     }
     case "ADD_OUTCOME": {
       const p = action.payload;
-      const sol = await resolveSolution(p.solution, db);
+      const prob = await resolveProblem(p.problem, db);
       const n = await countRows("outcomes", db);
       const id = `OUT-${String(n + 1).padStart(3, "0")}`;
       await recordOutcome(
         {
           id,
-          solutionId: sol.id,
+          problemId: prob.id,
           observedImpact: p.observedImpact,
-          expectedImpact: p.expectedImpact,
           learnings: p.learnings,
           followUpProblemIds: p.followUpProblemIds ? p.followUpProblemIds.map(toIntId) : [],
           createdById: user.id,
         },
         db,
       );
-      return { ok: true, id };
+      return { ok: true, id, status: "done" };
     }
     case "ADD_OBSERVATION": {
       const p = action.payload;

@@ -6,8 +6,6 @@ import { applyD1Schema } from "../src/db/d1/index.js";
 import {
   createDecision,
   createElimination,
-  markProblemDone,
-  recordOutcome,
   renameWorkstream,
   shipSolution,
 } from "../src/transitions/index.js";
@@ -19,8 +17,11 @@ import { observations, problems, solutions, users, workstreams } from "../src/db
 // claim about the runtime that will serve them, not about a proxy to it.
 //
 // Expected values are the rules as ADR/README state them ("you can't file a
-// Decision against a chosen Solution", "no Outcome without a shipped
-// Solution"), asserted as error codes from src/transitions/errors.ts.
+// Decision against a chosen Solution", "you can't eliminate a shipped one"),
+// asserted as error codes from src/transitions/errors.ts. The two terminal
+// doors a Problem leaves the board through — Abandonment and Outcome — are
+// pinned through the deployed request path instead, in
+// apps/cloud/workers-test/api.workerd.ts.
 
 let db: CruxDb;
 
@@ -168,58 +169,6 @@ describe("Elimination", () => {
   });
 });
 
-describe("Outcome", () => {
-  test("cannot be recorded against a Solution that has not shipped", async () => {
-    const { problemId, a } = await seedProblemWithTwoSolutions();
-    await createDecision(
-      {
-        id: "DEC-001",
-        problemId,
-        chosenSolutionId: a,
-        rejectedSolutionIds: [],
-        rationale: "r",
-        decidedById: "USR-t",
-      },
-      db,
-    );
-
-    await expect(
-      recordOutcome(
-        { id: "OUT-001", solutionId: a, observedImpact: "none yet", createdById: "USR-t" },
-        db,
-      ),
-    ).rejects.toMatchObject({ code: "INVARIANT_VIOLATION" });
-  });
-
-  test("is recorded once a Solution ships, and only once", async () => {
-    const { problemId, a } = await seedProblemWithTwoSolutions();
-    await createDecision(
-      {
-        id: "DEC-001",
-        problemId,
-        chosenSolutionId: a,
-        rejectedSolutionIds: [],
-        rationale: "r",
-        decidedById: "USR-t",
-      },
-      db,
-    );
-    await shipSolution(a, db);
-
-    await recordOutcome(
-      { id: "OUT-001", solutionId: a, observedImpact: "worked", createdById: "USR-t" },
-      db,
-    );
-
-    await expect(
-      recordOutcome(
-        { id: "OUT-002", solutionId: a, observedImpact: "again", createdById: "USR-t" },
-        db,
-      ),
-    ).rejects.toMatchObject({ code: "INVARIANT_VIOLATION" });
-  });
-});
-
 describe("Workstream rename", () => {
   test("carries every referrer to the new id", async () => {
     const { problemId } = await seedProblemWithTwoSolutions();
@@ -252,36 +201,5 @@ describe("Workstream rename", () => {
 
     const ids = (await db.select().from(workstreams)).map((w) => w.id).sort();
     expect(ids).toEqual(["WS-t", "WS-taken"]);
-  });
-});
-
-describe("Problem", () => {
-  test("cannot be marked done with no shipped Solution", async () => {
-    const { problemId } = await seedProblemWithTwoSolutions();
-
-    await expect(markProblemDone(problemId, db)).rejects.toMatchObject({
-      code: "INVARIANT_VIOLATION",
-    });
-  });
-
-  test("is done once its chosen Solution ships", async () => {
-    const { problemId, a } = await seedProblemWithTwoSolutions();
-    await createDecision(
-      {
-        id: "DEC-001",
-        problemId,
-        chosenSolutionId: a,
-        rejectedSolutionIds: [],
-        rationale: "r",
-        decidedById: "USR-t",
-      },
-      db,
-    );
-    await shipSolution(a, db);
-
-    await markProblemDone(problemId, db);
-
-    const [p] = await db.select().from(problems);
-    expect(p!.status).toBe("done");
   });
 });

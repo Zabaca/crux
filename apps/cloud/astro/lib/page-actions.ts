@@ -33,7 +33,13 @@ export function workstreamActions(slug: string): ActionSpec[] {
   ];
 }
 
-/** `/w/<slug>/problems/<id>` — narrowing this Problem, and closing it. */
+/**
+ * `/w/<slug>/problems/<id>` — narrowing this Problem, and closing it.
+ *
+ * The two closing actions are the only doors off the board, and both demand a
+ * reason: an Abandonment carries a rationale, an Outcome carries what became of
+ * the Problem (ADR-0012). There is no "mark done".
+ */
 export function problemActions(
   problemId: number,
   solutions: Array<{ id: number; title: string }>,
@@ -107,9 +113,13 @@ export function problemActions(
       ],
     },
     {
-      kind: "MARK_PROBLEM_DONE",
-      label: "Mark done",
-      fields: [{ name: "id", fixed: String(problemId), required: true, asNumber: true }],
+      kind: "ADD_OUTCOME",
+      label: "Record an Outcome",
+      fields: [
+        problem,
+        { name: "observedImpact", label: "What became of it", type: "textarea", required: true },
+        { name: "learnings", label: "Learnings", type: "textarea" },
+      ],
     },
     {
       kind: "ABANDON_PROBLEM",

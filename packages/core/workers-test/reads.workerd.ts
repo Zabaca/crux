@@ -98,8 +98,9 @@ describe("query()", () => {
     expect(p.latest_decision).toBeNull();
     expect(p.eliminations).toEqual([]);
     expect(p.abandonment).toBeNull();
-    // No status yet, and nothing shipped: schedule or abandon, nothing else.
-    expect(p.legal_next_transitions).toEqual(["schedule", "abandon"]);
+    expect(p.outcome).toBeNull();
+    // No status yet: schedule it, or leave through one of the two doors.
+    expect(p.legal_next_transitions).toEqual(["schedule", "abandon", "outcome"]);
     // OBS-1 is linked as evidence, so it is not in the unlinked queue.
     expect(digest.recent_observations_unlinked).toEqual([]);
   });

@@ -72,9 +72,8 @@ export const EliminationInput = z.object({
 });
 
 export const OutcomeInput = z.object({
-  solutionId: z.union([z.string().min(1), z.number()]),
+  problemId: z.union([z.string().min(1), z.number()]),
   observedImpact: z.string().min(1),
-  expectedImpact: z.string().optional(),
   learnings: z.string().optional(),
   followUpProblems: z.array(z.union([z.string(), z.number()])).optional(),
 });

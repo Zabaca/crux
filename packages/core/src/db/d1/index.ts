@@ -206,14 +206,13 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
 
   `CREATE TABLE IF NOT EXISTS outcomes (
     id text PRIMARY KEY NOT NULL,
-    solution_id integer NOT NULL REFERENCES solutions(id),
+    problem_id integer NOT NULL REFERENCES problems(id),
     observed_impact text NOT NULL,
-    expected_impact text,
     learnings text,
     recorded_by_id text NOT NULL REFERENCES users(id),
     observed_at integer DEFAULT (unixepoch() * 1000) NOT NULL
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS outcomes_solution_id_unique ON outcomes (solution_id)`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS outcomes_problem_id_unique ON outcomes (problem_id)`,
 
   `CREATE TABLE IF NOT EXISTS outcome_follow_up_problems (
     outcome_id text NOT NULL REFERENCES outcomes(id),

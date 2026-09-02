@@ -1,60 +1,38 @@
 import { eq } from "drizzle-orm";
 import type { BatchItem } from "drizzle-orm/batch";
 import { runBatch, type CruxDb } from "../db/client.js";
-import { outcomes, outcomeFollowUpProblems, solutions } from "../db/schema.js";
-import { InvariantError, NotFoundError } from "./errors.js";
+import { outcomes, outcomeFollowUpProblems, problems } from "../db/schema.js";
+import { requireOpenProblem } from "./problem.js";
 
 export interface RecordOutcomeInput {
   id: string; // OUT-###
-  solutionId: number;
+  problemId: number;
   observedImpact: string;
-  expectedImpact?: string | null;
   learnings?: string | null;
   followUpProblemIds?: ReadonlyArray<number>;
   createdById: string;
 }
 
 /**
- * Record an Outcome for a shipped Solution. Enforces:
- * - Solution exists and is in `shipped` status.
- * - One Outcome per Solution (uniqueness on solution_id).
+ * Record the Outcome of a Problem — the door to `done`.
+ *
+ * Writing the row and marking the Problem done is one batch, the same shape
+ * `abandonProblem` has: a Problem only ever leaves the board through a
+ * transition that carries a reason (ADR-0012).
+ *
+ * That batch is also what keeps a Problem to one Outcome: recording one makes
+ * the Problem terminal, so the second attempt is refused before it can write.
+ * The unique index on `problem_id` is the schema-level backstop.
  */
 export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Promise<string> {
-  const solRows = await db
-    .select()
-    .from(solutions)
-    .where(eq(solutions.id, input.solutionId))
-    .limit(1);
-  const sol = solRows[0];
-  if (!sol)
-    throw new NotFoundError(`Solution not found: ${input.solutionId}`, {
-      solutionId: input.solutionId,
-    });
-  if (sol.status !== "shipped") {
-    throw new InvariantError(
-      `Cannot record Outcome: Solution ${input.solutionId} is ${sol.status}, must be shipped`,
-      { solutionId: input.solutionId, status: sol.status },
-    );
-  }
-  const existing = await db
-    .select({ id: outcomes.id })
-    .from(outcomes)
-    .where(eq(outcomes.solutionId, input.solutionId))
-    .limit(1);
-  if (existing.length > 0) {
-    throw new InvariantError(
-      `Outcome already recorded for Solution ${input.solutionId} (${existing[0]!.id})`,
-      { solutionId: input.solutionId, existingOutcomeId: existing[0]!.id },
-    );
-  }
+  await requireOpenProblem(input.problemId, "record an Outcome for", db);
 
   const now = Date.now();
   await runBatch(db, [
     db.insert(outcomes).values({
       id: input.id,
-      solutionId: input.solutionId,
+      problemId: input.problemId,
       observedImpact: input.observedImpact,
-      expectedImpact: input.expectedImpact ?? null,
       learnings: input.learnings ?? null,
       recordedById: input.createdById,
       observedAt: now,
@@ -62,6 +40,10 @@ export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Prom
     ...(input.followUpProblemIds ?? []).map((pid) =>
       db.insert(outcomeFollowUpProblems).values({ outcomeId: input.id, problemId: pid }),
     ),
+    db
+      .update(problems)
+      .set({ status: "done", updatedAt: now })
+      .where(eq(problems.id, input.problemId)),
   ] satisfies BatchItem<"sqlite">[]);
   return input.id;
 }

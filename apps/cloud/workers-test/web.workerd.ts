@@ -748,15 +748,22 @@ describe("contextual page actions", () => {
     const { cookie } = await inviteAndJoin("inv@example.com", "Invariant");
     const problemId = await seedNarrowedProblem();
 
-    // The chosen Solution has not shipped, so the Problem cannot be done.
+    // Recording an Outcome closes the Problem, so a second one has nothing to
+    // close — the transition is refused rather than silently ignored.
+    const first = await browserDispatch(
+      { kind: "ADD_OUTCOME", payload: { problem: problemId, observedImpact: "warm starts" } },
+      cookie,
+    );
+    expect(first.status).toBe(200);
+
     const res = await browserDispatch(
-      { kind: "MARK_PROBLEM_DONE", payload: { id: problemId } },
+      { kind: "ADD_OUTCOME", payload: { problem: problemId, observedImpact: "again" } },
       cookie,
     );
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { code: string; message: string } };
-    expect(body.error.code).toBe("INVARIANT_VIOLATION");
-    expect(body.error.message).toContain("no shipped Solution");
+    expect(body.error.code).toBe("ILLEGAL_TRANSITION");
+    expect(body.error.message).toContain("terminal (done)");
   });
 
   test("the Workstream board offers the actions that belong to a Workstream", async () => {

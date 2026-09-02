@@ -222,12 +222,11 @@ export const abandonments = sqliteTable("abandonments", {
 
 export const outcomes = sqliteTable("outcomes", {
   id: text("id").primaryKey(), // OUT-###
-  solutionId: integer("solution_id")
+  problemId: integer("problem_id")
     .notNull()
-    .references(() => solutions.id)
+    .references(() => problems.id)
     .unique(),
   observedImpact: text("observed_impact").notNull(),
-  expectedImpact: text("expected_impact"),
   learnings: text("learnings"),
   recordedById: text("recorded_by_id")
     .notNull()
