@@ -382,8 +382,8 @@ async function searchCorpus(
 ): Promise<SearchResults> {
   const ws = q.workstream ? await requireWorkstream(db, q.workstream) : null;
   const limit = q.limit ?? SEARCH_DEFAULT_LIMIT;
-  const scoped = (table: SQLiteColumn, match: ReturnType<typeof substringMatch>) =>
-    ws ? and(eq(table, ws.id), match) : match;
+  const scoped = (workstreamColumn: SQLiteColumn, match: ReturnType<typeof substringMatch>) =>
+    ws ? and(eq(workstreamColumn, ws.id), match) : match;
 
   const problemRows = await db
     .select()
@@ -413,8 +413,10 @@ async function searchCorpus(
   const wsRows = wsIds.length
     ? await db.select().from(workstreams).where(inArray(workstreams.id, wsIds))
     : [];
+  // Every row was just selected by its own `workstream_id`, which is a foreign
+  // key — the lookup cannot miss.
   const slugById = new Map(wsRows.map((w) => [w.id, w.slug]));
-  const slugOf = (id: string) => slugById.get(id) ?? id;
+  const slugOf = (id: string) => slugById.get(id)!;
 
   return {
     query: q.q,

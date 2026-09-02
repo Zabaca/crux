@@ -1,5 +1,6 @@
 import { defineCommand } from "citty";
 import type { SearchResults } from "@crux/core/reads";
+import { CruxError } from "@crux/core/transitions";
 import { emit, setJsonMode } from "../output.js";
 import { api } from "../api-client.js";
 
@@ -17,7 +18,7 @@ export const searchCommand = defineCommand({
     description: "Search Problems and Observations for a near-duplicate, before filing one.",
   },
   args: {
-    terms: { type: "positional", required: true, description: "Substring to look for." },
+    query: { type: "positional", required: true, description: "Substring to look for." },
     workstream: {
       type: "string",
       alias: "w",
@@ -28,23 +29,33 @@ export const searchCommand = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const limit = args.limit ? Number(args.limit) : undefined;
+    // Only the parse is local — the range `SEARCH` accepts is the server's, so
+    // there is one definition of it (ADR-0003) and the same code comes back
+    // whether the number is unparseable or merely out of range.
+    const limit = args.limit === undefined ? undefined : Number(args.limit);
     if (limit !== undefined && !Number.isInteger(limit)) {
-      throw new Error(`--limit must be a whole number, got: ${args.limit}`);
+      throw new CruxError(
+        "VALIDATION_ERROR",
+        `--limit must be a whole number, got: ${args.limit}`,
+        {
+          limit: args.limit,
+        },
+      );
     }
     const results = await api().query<SearchResults>({
       kind: "SEARCH",
-      q: args.terms,
+      q: args.query,
       workstream: args.workstream,
       limit,
     });
     const lines = [
-      ...results.problems.map(
-        (p) => `PROBLEM\t${p.id}\t${p.workstreamSlug}\t${p.status ?? "unscheduled"}\t${p.title}`,
-      ),
-      ...results.observations.map(
-        (o) => `OBSERVATION\t${o.id}\t${o.workstreamSlug}\t${o.content.slice(0, 80)}`,
-      ),
+      ...results.problems.flatMap((p) => [
+        `PROBLEM\t${p.id}\t${p.workstreamSlug}\t${p.status ?? "unscheduled"}\t${p.title}`,
+        // The description, not just the title: sameness is judged on it, and a
+        // list of titles is not enough to decide you already filed this.
+        `\t${p.description}`,
+      ]),
+      ...results.observations.map((o) => `OBSERVATION\t${o.id}\t${o.workstreamSlug}\t${o.content}`),
     ];
     emit(results, lines.join("\n") || "(no matches)");
   },

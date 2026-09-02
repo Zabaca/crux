@@ -136,7 +136,7 @@ describe("reads", () => {
     const calls = stubServer({ "POST /v1/query": { result: results } });
 
     const out = await capture(() =>
-      runCmd(searchCommand as AnyCmd, "run", { terms: "auth", json: true }),
+      runCmd(searchCommand as AnyCmd, "run", { query: "auth", json: true }),
     );
 
     expect(calls.map((c) => c.url)).toEqual(["https://crux.test/v1/query"]);
@@ -156,7 +156,7 @@ describe("reads", () => {
 
     await capture(() =>
       runCmd(searchCommand as AnyCmd, "run", {
-        terms: "auth",
+        query: "auth",
         workstream: "crux",
         limit: "5",
         json: true,
@@ -166,12 +166,15 @@ describe("reads", () => {
     expect(calls[0]!.body).toEqual({ kind: "SEARCH", q: "auth", workstream: "crux", limit: 5 });
   });
 
-  test("a non-numeric --limit is refused before a request goes out", async () => {
+  test("a non-numeric --limit is refused as VALIDATION_ERROR, before a request goes out", async () => {
     const calls = stubServer({ "POST /v1/query": { result: {} } });
 
-    await expect(
-      runCmd(searchCommand as AnyCmd, "run", { terms: "auth", limit: "lots" }),
-    ).rejects.toThrow(/whole number/);
+    const err = await runCmd(searchCommand as AnyCmd, "run", { query: "auth", limit: "lots" }).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(CruxError);
+    expect((err as CruxError).code).toBe("VALIDATION_ERROR");
     expect(calls).toHaveLength(0);
   });
 
