@@ -792,6 +792,22 @@ describe("Attempts on the Problem page", () => {
     expect(body).toContain("Reload the digest as structure");
     expect(body).toContain("https://tracker.example/ENG-412");
     expect(body).toContain("ATT-001");
+    expect(body).toContain(`class="badge open"`);
+  });
+
+  test("a ref that is not a URL is printed, never turned into an href", async () => {
+    const { cookie } = await inviteAndJoin("xss@example.com", "Ref Author");
+    const problemId = await seedNarrowedProblem();
+    // A ref is corpus text somebody typed. A tracker key is the honest case;
+    // a `javascript:` scheme is the one that must not become a link.
+    await dispatchAs("USR-james", {
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "javascript:alert(1)", label: "Not a link" },
+    });
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("Not a link");
+    expect(body).not.toContain(`href="javascript:`);
   });
 
   test("a closed Attempt shows the closing note, which is the point of keeping it", async () => {
