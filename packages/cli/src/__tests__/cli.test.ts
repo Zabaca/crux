@@ -9,6 +9,9 @@
  * a real D1 — `packages/core/workers-test/reads.workerd.ts`.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import { createApiClient, setApiClient, ApiError } from "../api-client.js";
 import { setCaptureWriter, setJsonMode } from "../output.js";
@@ -486,43 +489,96 @@ describe("server rejections reach the terminal unchanged", () => {
 // ---------------------------------------------------------------------------
 
 describe("api configuration", () => {
-  test("a missing url and token names both and the command that fixes them", async () => {
+  /**
+   * First use, with nothing configured at all.
+   *
+   * Adoption is anonymous-first (ADR-0013): there is no registration, so the
+   * absence of a token is not a setup error to report — it is the request that
+   * mints one. `global.fetch` is stubbed rather than the client, because the
+   * whole point of this test is the path `api()` takes when nothing has pinned
+   * a client for it.
+   */
+  test("an unconfigured machine mints a Principal, persists it, and files the write", async () => {
     setApiClient(null);
-    const prevUrl = process.env.CRUX_API_URL;
-    const prevToken = process.env.CRUX_API_TOKEN;
-    const prevHome = process.env.CRUX_HOME;
-    delete process.env.CRUX_API_URL;
+    const home = mkdtempSync(join(tmpdir(), "crux-first-use-"));
+    const prev = {
+      url: process.env.CRUX_API_URL,
+      token: process.env.CRUX_API_TOKEN,
+      home: process.env.CRUX_HOME,
+      fetch: globalThis.fetch,
+    };
     delete process.env.CRUX_API_TOKEN;
-    process.env.CRUX_HOME = "/nonexistent-crux-home";
+    process.env.CRUX_API_URL = "https://crux.test";
+    process.env.CRUX_HOME = home;
+
+    const seen: Array<{ path: string; auth: string | undefined }> = [];
+    globalThis.fetch = (async (url: string | URL | Request, init?: RequestInit) => {
+      const path = new URL(String(url)).pathname;
+      const auth = (init?.headers as Record<string, string> | undefined)?.authorization;
+      seen.push({ path, auth });
+      if (path === "/v1/principals") {
+        return new Response(
+          JSON.stringify({ principal: { id: "USR-anon", name: "Anonymous" }, token: "tok-minted" }),
+          { status: 201 },
+        );
+      }
+      if (path === "/v1/view") return new Response(JSON.stringify(VIEW_WITH_WS));
+      return new Response(JSON.stringify({ revision: 1, result: { ok: true, id: "OBS-001" } }));
+    }) as unknown as typeof fetch;
+
     try {
-      const err = (await runCmd(workstreamCommand as AnyCmd, "list", { json: true }).catch(
-        (e) => e,
-      )) as ApiError;
-      expect(err.code).toBe("NO_API_CONFIG");
-      expect(err.message).toContain("url and token");
-      expect(err.message).toContain("crux init");
-      expect(EXIT_CODES[err.code]).toBe(2);
+      const out = await capture(() =>
+        runCmd(observationCommand as AnyCmd, "add", {
+          content: "the corpus is unreachable from a fresh machine",
+          json: true,
+        }),
+      );
+      expect(out).toEqual({ ok: true, id: "OBS-001" });
+      // Minted once, before anything else, and every later call bears it.
+      expect(seen.map((c) => c.path)).toEqual(["/v1/principals", "/v1/view", "/v1/dispatch"]);
+      expect(seen.slice(1).map((c) => c.auth)).toEqual(["Bearer tok-minted", "Bearer tok-minted"]);
+      // Persisted, so the next command reuses the Principal rather than
+      // stranding this Observation on a token nobody kept.
+      expect(readFileSync(join(home, "config.toml"), "utf8")).toContain("tok-minted");
     } finally {
-      if (prevUrl) process.env.CRUX_API_URL = prevUrl;
-      if (prevToken) process.env.CRUX_API_TOKEN = prevToken;
-      if (prevHome) process.env.CRUX_HOME = prevHome;
+      globalThis.fetch = prev.fetch;
+      if (prev.url) process.env.CRUX_API_URL = prev.url;
+      else delete process.env.CRUX_API_URL;
+      if (prev.token) process.env.CRUX_API_TOKEN = prev.token;
+      if (prev.home) process.env.CRUX_HOME = prev.home;
       else delete process.env.CRUX_HOME;
+      rmSync(home, { recursive: true, force: true });
     }
   });
 
-  test("a token alone is not enough, and the missing half is named", async () => {
+  test("a configured token is used as-is — no Principal is minted", async () => {
     setApiClient(null);
-    const prevHome = process.env.CRUX_HOME;
+    const prev = {
+      url: process.env.CRUX_API_URL,
+      token: process.env.CRUX_API_TOKEN,
+      home: process.env.CRUX_HOME,
+      fetch: globalThis.fetch,
+    };
+    process.env.CRUX_API_URL = "https://crux.test";
+    process.env.CRUX_API_TOKEN = "tok-configured";
     process.env.CRUX_HOME = "/nonexistent-crux-home";
-    process.env.CRUX_API_TOKEN = "tok-1";
+
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      seen.push(new URL(String(url)).pathname);
+      return new Response(JSON.stringify({ result: [] }));
+    }) as unknown as typeof fetch;
+
     try {
-      const err = (await runCmd(workstreamCommand as AnyCmd, "list", { json: true }).catch(
-        (e) => e,
-      )) as ApiError;
-      expect(err.message).toContain("[api] url missing");
+      await capture(() => runCmd(workstreamCommand as AnyCmd, "list", { json: true }));
+      expect(seen).toEqual(["/v1/query"]);
     } finally {
-      delete process.env.CRUX_API_TOKEN;
-      if (prevHome) process.env.CRUX_HOME = prevHome;
+      globalThis.fetch = prev.fetch;
+      if (prev.url) process.env.CRUX_API_URL = prev.url;
+      else delete process.env.CRUX_API_URL;
+      if (prev.token) process.env.CRUX_API_TOKEN = prev.token;
+      else delete process.env.CRUX_API_TOKEN;
+      if (prev.home) process.env.CRUX_HOME = prev.home;
       else delete process.env.CRUX_HOME;
     }
   });

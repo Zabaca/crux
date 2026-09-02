@@ -27,12 +27,12 @@ const ctx = await pageContext(env, Astro.request);
 if (!ctx.ok) return ctx.response;
 
 const slug = Astro.params.slug!;
-const ws = (await query({ kind: "WORKSTREAM_BY_SLUG", slug }, { db: ctx.db })) as WorkstreamRow | null;
+const ws = (await query({ kind: "WORKSTREAM_BY_SLUG", slug }, { db: ctx.db, principal: ctx.viewer })) as WorkstreamRow | null;
 if (!ws) return new Response(null, { status: 404 });
 
 const summaries = (await query(
   { kind: "PROBLEM_SUMMARIES", workstreamId: ws.id },
-  { db: ctx.db },
+  { db: ctx.db, principal: ctx.viewer },
 )) as ProblemSummary[];
 
 // `null` is *unscheduled* — filed, not yet on the roadmap. Every other status
@@ -53,7 +53,7 @@ const open = summaries.filter((p) => p.status !== "done" && p.status !== "abando
 // filed, and neither linked to a Problem nor archived.
 const observations = (await query(
   { kind: "OBSERVATION_SUMMARIES", workstreamId: ws.id },
-  { db: ctx.db },
+  { db: ctx.db, principal: ctx.viewer },
 )) as ObservationSummary[];
 const waiting = observations.filter((o) => !o.archive && o.problemCount === 0).length;
 

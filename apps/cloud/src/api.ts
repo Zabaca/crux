@@ -1,12 +1,15 @@
 /**
- * The versioned JSON API (`/v1/*`). Every route is bearer-authenticated: the CLI
- * presents `Authorization: Bearer <token>`, the token resolves to a users row,
- * and that user is the actor for the request. Writes go through core's
+ * The versioned JSON API (`/v1/*`). Every route but one is bearer-authenticated:
+ * the CLI presents `Authorization: Bearer <token>`, the token resolves to a
+ * users row, and that row is the Principal — the actor for the request and the
+ * boundary of what it can see (ADR-0013). The exception is `POST /v1/principals`,
+ * which is how a client with no credentials gets one. Writes go through core's
  * `dispatch()` — no invariant is reimplemented here — with view-state living in
  * the caller's ViewStateDO. Reads mirror the CLI's `--json` shapes exactly.
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { authenticateToken } from "@crux/core/auth";
+import { mintPrincipal } from "@crux/core/auth/principals";
 import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
 import {
   loadViewMetaFromBlob,
@@ -148,6 +151,28 @@ export async function handleApi(
   if (pathname !== "/v1" && !pathname.startsWith("/v1/")) return null;
 
   const db = deps.db ?? createD1Db(env.DB);
+
+  // POST /v1/principals — mint an anonymous Principal. Deliberately before the
+  // authentication gate and deliberately open: this is what a machine with no
+  // configuration calls, so there is nothing to authenticate it with (ADR-0013).
+  // The token comes back once and is never recoverable, exactly like a minted
+  // CLI token.
+  if (pathname === "/v1/principals" && request.method === "POST") {
+    try {
+      const minted = await mintPrincipal(db);
+      return json(
+        {
+          principal: { id: minted.principalId, name: minted.name },
+          token: minted.token,
+          tokenId: minted.tokenId,
+        },
+        201,
+      );
+    } catch (err) {
+      return toErrorResponse(err);
+    }
+  }
+
   const authed = await authenticate(request, env, db, url);
   if (!authed) {
     return errorBody("UNAUTHENTICATED", "missing or invalid bearer token");
@@ -173,6 +198,10 @@ export async function handleApi(
     try {
       const result = await query(await request.json(), {
         db,
+        // The Principal comes from the credential the server just resolved, not
+        // from the body. A read that took its own scope as an argument would be
+        // no scope at all.
+        principal: { id: authed.userId },
         viewStore: viewStoreFor(env, authed.userId),
       });
       return json({ result });

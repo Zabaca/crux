@@ -5,6 +5,7 @@ import { createD1Db, type CruxDb } from "@crux/core/db";
 import { applyD1Schema } from "@crux/core/db/d1";
 import { observations, problems, users, workstreams } from "@crux/core/db/schema";
 import { dispatch } from "@crux/core/actions";
+import { eq } from "drizzle-orm";
 
 // Seam: the deployed request path, same as api.workerd.ts. The browser surfaces
 // — sign-in, invite, the read pages, Members and CLI tokens — are all HTTP on
@@ -25,8 +26,22 @@ beforeEach(async () => {
   db = createD1Db(env.DB);
   await applyD1Schema(env.DB);
   await db.insert(users).values({ id: "USR-james", slug: "james", name: "James Lee" });
-  await db.insert(workstreams).values({ id: "WS-crux", slug: "crux", title: "Crux" });
+  await db
+    .insert(workstreams)
+    .values({ id: "WS-crux", slug: "crux", title: "Crux", ownerId: "USR-james" });
+  corpusOwner = "USR-james";
 });
+
+/**
+ * Whose corpus these pages are showing.
+ *
+ * Since ADR-0013 a Workstream belongs to the Principal that owns it and is
+ * invisible to every other, so a page rendered for a Member who owns nothing is
+ * correctly empty. `inviteAndJoin` hands the seeded Workstream to whoever just
+ * joined, and the seed helpers file under whoever that is — which is the
+ * arrangement a real browser Member is in, reading what they filed.
+ */
+let corpusOwner = "USR-james";
 
 /** Collect cookies from a response into a `cookie` header for the next request. */
 function cookieJar(res: Response): string {
@@ -74,6 +89,10 @@ async function inviteAndJoin(
   const rows = await db.select().from(users);
   const created = rows.find((u) => u.email === email);
   expect(created, "redeeming an invite creates a row in users").toBeTruthy();
+  // The seeded Workstream moves to the Member who just joined, so the pages
+  // below are read by the Principal that owns what they render.
+  corpusOwner = created!.id;
+  await db.update(workstreams).set({ ownerId: created!.id }).where(eq(workstreams.id, "WS-crux"));
   return { cookie: await sessionCookieFor(email), userId: created!.id };
 }
 
@@ -112,7 +131,7 @@ async function dispatchAs(userId: string, action: unknown): Promise<any> {
 
 /** A Problem with its Evidence and an open Attempt — the shape the pages render. */
 async function seedWorkedProblem(): Promise<number> {
-  const p = await dispatchAs("USR-james", {
+  const p = await dispatchAs(corpusOwner, {
     kind: "ADD_PROBLEM",
     payload: {
       workstream: "WS-crux",
@@ -122,7 +141,7 @@ async function seedWorkedProblem(): Promise<number> {
   });
   const problemId = (p as { result: { id: number } }).result.id;
 
-  const o = await dispatchAs("USR-james", {
+  const o = await dispatchAs(corpusOwner, {
     kind: "ADD_OBSERVATION",
     payload: {
       workstream: "WS-crux",
@@ -132,12 +151,12 @@ async function seedWorkedProblem(): Promise<number> {
   });
   const observationId = (o as { result: { id: string } }).result.id;
 
-  await dispatchAs("USR-james", {
+  await dispatchAs(corpusOwner, {
     kind: "ADD_EVIDENCE",
     payload: { problem: problemId, observation: observationId, note: "the cost being paid" },
   });
 
-  await dispatchAs("USR-james", {
+  await dispatchAs(corpusOwner, {
     kind: "ADD_ATTEMPT",
     payload: {
       problem: problemId,
@@ -307,14 +326,16 @@ describe("CLI tokens", () => {
 
 describe("removing a Member", () => {
   test("a removed Member leaves the list, and what they filed still names them", async () => {
-    const remover = await inviteAndJoin("stays@example.com", "Staying Member");
+    // The leaver files while the Workstream is theirs; it changes hands when
+    // the remover joins. The Workstream moves, the authorship does not — which
+    // is the whole of what removal is allowed to touch (ADR-0011).
     const leaver = await inviteAndJoin("goes@example.com", "Departing Member");
-
     const filed = await dispatchAs(leaver.userId, {
       kind: "ADD_PROBLEM",
       payload: { workstream: "WS-crux", title: "Filed before leaving", description: "d" },
     });
     const problemId = (filed as { result: { id: number } }).result.id;
+    const remover = await inviteAndJoin("stays@example.com", "Staying Member");
 
     const before = await (await get("/members", { headers: { cookie: remover.cookie } })).text();
     expect(before).toContain("Departing Member");
@@ -411,15 +432,21 @@ describe("removing a Member", () => {
 });
 
 describe("read pages", () => {
-  test("every Member sees every Workstream in the deployment", async () => {
-    await db.insert(workstreams).values({ id: "WS-other", slug: "other", title: "Someone Else" });
+  test("a Member sees the Workstreams their Principal owns, and no others", async () => {
+    await db.insert(users).values({ id: "USR-stranger", slug: "stranger", name: "Stranger" });
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-other", slug: "other", title: "Someone Else", ownerId: "USR-stranger" });
     const { cookie } = await inviteAndJoin("newcomer@example.com", "Newcomer");
 
     const body = await (await get("/", { headers: { cookie } })).text();
-    // A Member invited after both Workstreams existed still sees both: coarse
-    // membership grants the deployment, never a subset (ADR-0003).
-    expect(body).toContain("Someone Else");
+    // Membership is a way in, not a grant over the deployment: the boundary is
+    // the Principal (ADR-0013), so another Principal's Workstream is not there.
     expect(body).toContain("Crux");
+    expect(body).not.toContain("Someone Else");
+
+    // Not merely unlisted — unreachable, and indistinguishable from missing.
+    expect((await get("/w/other", { headers: { cookie } })).status).toBe(404);
   });
 
   test("a Problem URL resolves to the Problem, its Evidence and its Attempts", async () => {
@@ -457,15 +484,15 @@ describe("read pages", () => {
     const { cookie } = await inviteAndJoin("obslist@example.com", "Obs Lister");
     await seedWorkedProblem(); // files one Observation and links it as Evidence
 
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_OBSERVATION",
       payload: { workstream: "WS-crux", content: "nobody has looked at this one yet" },
     });
-    const dupe = await dispatchAs("USR-james", {
+    const dupe = await dispatchAs(corpusOwner, {
       kind: "ADD_OBSERVATION",
       payload: { workstream: "WS-crux", content: "a signal we decided not to use" },
     });
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ARCHIVE_OBSERVATION",
       payload: { id: (dupe as { result: { id: string } }).result.id, rationale: "duplicate" },
     });
@@ -483,7 +510,7 @@ describe("read pages", () => {
 
   test("the Workstream page says how much intake is waiting", async () => {
     const { cookie } = await inviteAndJoin("waiting@example.com", "Waiting");
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_OBSERVATION",
       payload: { workstream: "WS-crux", content: "untriaged" },
     });
@@ -501,7 +528,7 @@ describe("read pages", () => {
 
   test("corpus text is escaped, not interpolated as markup", async () => {
     const { cookie } = await inviteAndJoin("xss@example.com", "Careful");
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_PROBLEM",
       payload: {
         workstream: "WS-crux",
@@ -641,7 +668,7 @@ describe("the roadmap board", () => {
   test("a Problem in a terminal Stage is shown, and is not draggable", async () => {
     const { cookie } = await inviteAndJoin("terminal@example.com", "Terminal");
     const problemId = await seedWorkedProblem();
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ABANDON_PROBLEM",
       payload: { id: problemId, rationale: "the cost turned out to be someone else's" },
     });
@@ -800,7 +827,7 @@ describe("Attempts on the Problem page", () => {
   test("an open Attempt shows its label, its ref and its status", async () => {
     const { cookie } = await inviteAndJoin("att@example.com", "Attempter");
     const problemId = await seedWorkedProblem();
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_ATTEMPT",
       payload: {
         problem: problemId,
@@ -821,7 +848,7 @@ describe("Attempts on the Problem page", () => {
     const problemId = await seedWorkedProblem();
     // A ref is corpus text somebody typed. A tracker key is the honest case;
     // a `javascript:` scheme is the one that must not become a link.
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_ATTEMPT",
       payload: { problem: problemId, ref: "javascript:alert(1)", label: "Not a link" },
     });
@@ -834,11 +861,11 @@ describe("Attempts on the Problem page", () => {
   test("a closed Attempt shows the closing note, which is the point of keeping it", async () => {
     const { cookie } = await inviteAndJoin("closed@example.com", "Closer");
     const problemId = await seedWorkedProblem();
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_ATTEMPT",
       payload: { problem: problemId, ref: "https://tracker.example/ENG-9", label: "First pass" },
     });
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "CLOSE_ATTEMPT",
       payload: {
         id: "ATT-001",
@@ -854,7 +881,7 @@ describe("Attempts on the Problem page", () => {
   test("the Problem page offers filing and closing an Attempt", async () => {
     const { cookie } = await inviteAndJoin("actatt@example.com", "Attempt Actor");
     const problemId = await seedWorkedProblem();
-    await dispatchAs("USR-james", {
+    await dispatchAs(corpusOwner, {
       kind: "ADD_ATTEMPT",
       payload: { problem: problemId, ref: "https://tracker.example/ENG-1", label: "In flight" },
     });

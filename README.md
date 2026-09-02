@@ -16,6 +16,7 @@ A typed entity model with workflow invariants enforced in code, fronted by a CLI
 
 | Entity                     | Role                                                                            |
 | -------------------------- | ------------------------------------------------------------------------------- |
+| **Principal**              | The identity a client acts as: a token, not a person. Owns what it files.       |
 | **Workstream**             | A coherent area of focus (per client, per product).                             |
 | **Observation**            | Atomic intake. Cheap to create, never deleted.                                  |
 | **Problem**                | Synthesized "there's a thing worth solving."                                    |
@@ -38,7 +39,7 @@ crux context -w <workstream> --json
 
 That emits a model-shaped digest: open Problems (sorted by priority), their Evidence with inlined Observations, their Attempts, Abandonment, Outcome. Drop it into a new conversation and Claude starts warm.
 
-For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt.
+For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt. "All workstreams" means all of *yours*: every read is scoped to the Principal that made the request, and one Principal's corpus is invisible to another's ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
 Before a Problem gets synthesized, the one that already exists has to be findable:
 
@@ -67,14 +68,21 @@ The intended way to adopt Crux is as a Claude Code plugin. One command adds the 
 /plugin install crux
 ```
 
-First time you use it in a conversation, Claude walks you through four checks and only acts on what's missing:
+There is no account to create and no token to paste. The first command that
+touches the corpus mints a **Principal** against the public deployment — a
+token, not a person — writes it into `config.toml`, and everything you file
+belongs to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Every
+read is scoped to that Principal, so what you see is what you filed.
 
-1. Bun runtime — `command -v bun`. Crux runs on Bun. If it's not installed, Claude surfaces the install command for your platform (`curl -fsSL https://bun.sh/install | bash` works on macOS and Linux; `brew install oven-sh/bun/bun` on Homebrew; PowerShell one-liner on Windows). After install, restart your shell so the new PATH takes effect.
-2. Plugin deps — runs `bun install` in the plugin dir if `node_modules` is absent.
-3. Deployment — runs `crux init --url <deployment> --token <token>` if `[api]` is missing from `config.toml`. The corpus lives in the cloud (ADR-0003); this is what points your machine at it.
-4. User identity — prompts for your name/email, runs `crux user init`.
+The only check Claude still runs is the Bun runtime — `command -v bun`. If it is
+not installed, Claude surfaces the install command for your platform
+(`curl -fsSL https://bun.sh/install | bash` works on macOS and Linux;
+`brew install oven-sh/bun/bun` on Homebrew; PowerShell one-liner on Windows).
+Restart your shell afterwards so the new PATH takes effect.
 
-After that first run, all four checks are no-ops and the CLI is ready.
+To point at a deployment of your own instead, run
+`crux init --url <deployment> --token <token>`; `CRUX_API_URL` and
+`CRUX_API_TOKEN` override the file for one invocation.
 
 ## The client-server split
 
@@ -90,8 +98,12 @@ What the CLI still owns is argument parsing, the request it sends, and the
 terminal: the server's `{error:{code,message,details}}` envelope is rebuilt into
 the same error objects as before, so codes and exit codes are unchanged.
 
-`crux init` writes `[api] url` / `token` into `config.toml` after checking they
-work. `CRUX_API_URL` and `CRUX_API_TOKEN` override the file for one invocation.
+Neither half of that configuration is required. A machine with no `[api]`
+section talks to the public deployment and mints itself a Principal on its first
+request, persisting the token — which is what makes "install the plugin and go"
+true again (ADR-0013). `crux init` writes `[api] url` / `token` into
+`config.toml` after checking they work, for pointing at a deployment of your
+own; `CRUX_API_URL` and `CRUX_API_TOKEN` override the file for one invocation.
 
 ## Develop from source
 
@@ -171,13 +183,15 @@ the `/v1` API and the CLI working and turns off only the browser surfaces, which
 say which one is missing. `CRUX_WORKSPACE_NAME` optionally names the Workspace
 in the header; it defaults to the deployment's host.
 
-The first Member is a chicken-and-egg case, and is still open. Signing in mails
-a link to any address that already has a `users` row, and an invite is what
-creates a row — but invites are issued by a Member, so a deployment with no
-rows at all has no way in that does not involve writing one into D1 by hand.
-`crux user init` does **not** close this: it writes local config and makes no
-request to the deployment. `bun run db:restore-identity` is that hand-written
-row, made repeatable — see the runbook below.
+The first-identity chicken-and-egg is closed: `POST /v1/principals` is
+unauthenticated and mints a `users` row plus a token, so a deployment with no
+rows creates its own on first contact
+([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). What that does *not*
+give you is a **browser** session — signing in mails a link only to an address
+that already has a row, an invite is what attaches one, and invites are issued
+by a Member. Until claiming lands, `bun run db:restore-identity` is still how a
+freshly wiped deployment gets its first addressable Member back; see the runbook
+below.
 
 **Schema application only ever adds.** The DDL is an end state of
 `CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a table from
@@ -245,12 +259,17 @@ naming the broken links and orphans.
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
 - **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded.
 - **One corpus, reached over HTTP.** No local database, no replicas — the transition layer runs in exactly one place ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)).
+- **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.
-- **Claude is a tool, not an actor.** Attributions resolve to the human user.
+- **Claude is a tool, not an actor.** The agent holds a Principal; a human owns Principals, and every attribution resolves to one ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
 ## Status
 
-MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting and
+MVP. One cloud deployment, many tenants: adoption is anonymous-first and the
+Principal is the boundary, so first use mints an identity and every read is
+scoped to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Claiming a
+Principal by email, and the Observation cap that makes claiming worth doing, are
+not built yet. In the browser: sign-in, inviting and
 removing Members, minting and revoking CLI tokens, pages for Problem and Observation,
 the Observation intake list at `/w/<slug>/observations` — grouped into linked,
 archived and waiting, all three read off related rows rather than a status

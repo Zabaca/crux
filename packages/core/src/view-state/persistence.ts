@@ -1,7 +1,8 @@
 import { createActor, type Snapshot } from "xstate";
 import type { CruxDb } from "../db/client.js";
 import { problems, workstreams } from "../db/schema.js";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
+import type { Scope } from "../auth/principals.js";
 import { viewMachine, ViewEventSchema, type ViewEvent } from "./machine.js";
 import type { ViewBlob, ViewStore } from "./store.js";
 
@@ -232,7 +233,7 @@ export class ViewEventRefusedError extends Error {
  */
 export async function sendViewEventWithStore(
   event: ViewEvent,
-  options: { db: CruxDb; store: ViewStore },
+  options: { db: CruxDb; store: ViewStore; scope: Scope },
 ): Promise<ViewSnapshot> {
   const parsed = ViewEventSchema.safeParse(event);
   if (!parsed.success) {
@@ -250,10 +251,12 @@ export async function sendViewEventWithStore(
   let problemExistsInWorkstream = false;
 
   if (event.type === "SELECT_WORKSTREAM") {
-    workstreamExists = await wsExists(event.id, options.db);
+    workstreamExists = await wsExists(event.id, options.db, options.scope);
   } else if (event.type === "OPEN_PROBLEM") {
     const wsId = current.context.workstreamId;
-    problemExistsInWorkstream = wsId ? await probExists(wsId, event.id, options.db) : false;
+    problemExistsInWorkstream = wsId
+      ? await probExists(wsId, event.id, options.db, options.scope)
+      : false;
   }
 
   const machineWithGuards = viewMachine.provide({
@@ -364,18 +367,34 @@ function sameState(a: ViewSnapshot, b: ViewSnapshot): boolean {
 
 // --- db-backed guard helpers ---
 
-async function wsExists(id: string, db: CruxDb): Promise<boolean> {
+/**
+ * These two answer "does it exist" and are therefore scoped like every read.
+ *
+ * A guard that looked at the whole database would refuse a selection of another
+ * Principal's Workstream by *permitting* it, and refuse a nonexistent one with
+ * `GUARD_REJECTED` — two different answers, which is an existence oracle for
+ * the deployment. Scoping the lookup makes somebody else's Workstream and a
+ * Workstream that never existed the same answer, which is the rule the read
+ * layer already follows (ADR-0013).
+ */
+async function wsExists(id: string, db: CruxDb, scope: Scope): Promise<boolean> {
   const rows = await db
     .select({ id: workstreams.id })
     .from(workstreams)
-    .where(eq(workstreams.id, id))
+    .where(and(eq(workstreams.id, id), inArray(workstreams.id, scope.workstreamIds)))
     .limit(1);
   return rows.length > 0;
 }
 
-async function probExists(workstreamId: string, problemId: string, db: CruxDb): Promise<boolean> {
+async function probExists(
+  workstreamId: string,
+  problemId: string,
+  db: CruxDb,
+  scope: Scope,
+): Promise<boolean> {
   const numId = parseInt(problemId, 10);
   if (isNaN(numId)) return false;
+  if (!scope.has(workstreamId)) return false;
   const rows = await db
     .select({ id: problems.id })
     .from(problems)

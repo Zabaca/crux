@@ -24,6 +24,7 @@ import {
 import type { ViewStore } from "../view-state/store.js";
 import type { ViewEvent } from "../view-state/machine.js";
 import { runMutation, type Actor } from "./mutations.js";
+import { resolveScope } from "../auth/principals.js";
 
 /** Error thrown when an action is not allowed in the current view state. */
 export class ActionNotAllowedError extends Error {
@@ -67,7 +68,9 @@ export async function dispatch(
      * medium chosen by omission, and the filesystem one is what put `node:fs`
      * in the Worker bundle. */
     viewStore: ViewStore;
-    /** Who the write is attributed to. Required for the same reason. */
+    /** Who the write is attributed to, and whose corpus it may touch. Required
+     * for the same reason — and it is the *Principal*, resolved server-side, so
+     * the tenancy boundary is the same one `query()` enforces (ADR-0013). */
     actor: Actor;
     enforceAllow?: boolean;
   },
@@ -98,10 +101,15 @@ export async function dispatch(
   let result: unknown = undefined;
   let viewState: unknown = undefined;
 
+  // One scope for the whole dispatch. The view branch needs it as much as the
+  // mutation branch does: its guards ask "does this Workstream exist", and an
+  // unscoped answer is an existence oracle even though it moves no rows.
+  const scope = await resolveScope(options.db, options.actor);
+
   if (isViewAction(action)) {
     // Route through XState machine
     const event = { type: action.kind, ...(action.payload ?? {}) } as ViewEvent;
-    const snap = await sendViewEventWithStore(event, { db: options.db, store });
+    const snap = await sendViewEventWithStore(event, { db: options.db, store, scope });
     viewState = snap.value;
 
     // Update meta with new value
@@ -109,7 +117,7 @@ export async function dispatch(
     meta.context = snap.context;
   } else {
     // Route through mutation runner
-    result = await runMutation(action, options.db, options.actor);
+    result = await runMutation(action, options.db, options.actor, scope);
   }
 
   // Persist sidecar fields (re-read: a view action already wrote the snapshot).

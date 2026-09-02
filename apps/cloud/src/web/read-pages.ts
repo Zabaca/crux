@@ -6,9 +6,11 @@
  *
  * Every page is server-rendered from `query()` — the same named reads the CLI
  * asks for — so a `--json` shape and the page that displays it can never drift
- * apart, and no page composes SQL of its own. Nothing here is Workstream-scoped
- * by Member: the deployment is the Workspace and every Member sees all of it
- * (ADR-0003), so these functions take no permission argument by design.
+ * apart, and no page composes SQL of its own. Which rows a page may show is not
+ * decided here either: every function takes the viewing Principal and hands it
+ * to `query()`, which is the one place the tenancy boundary is applied
+ * (ADR-0013). A Workstream the viewer does not own reads as missing, so these
+ * pages 404 on it exactly as they do on a slug that never existed.
  */
 import { query } from "@crux/core/reads";
 import type {
@@ -19,6 +21,7 @@ import type {
   WorkstreamSummary,
 } from "@crux/core/reads";
 import type { CruxDb } from "@crux/core/db";
+import type { Principal } from "@crux/core/auth/principals";
 
 import { html, isoDate as date, type Html } from "./html.js";
 
@@ -32,7 +35,8 @@ export class PageNotFound extends Error {}
  * `satisfies`, so a shape that changes upstream breaks this file's typecheck
  * instead of silently rendering nothing.
  */
-const ask = <T>(db: CruxDb, q: unknown): Promise<T> => query(q, { db }) as Promise<T>;
+const ask = <T>(db: CruxDb, principal: Principal, q: unknown): Promise<T> =>
+  query(q, { db, principal }) as Promise<T>;
 
 // ---------------------------------------------------------------------------
 // Shared fragments
@@ -68,14 +72,17 @@ const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
 // Pages
 // ---------------------------------------------------------------------------
 
-/** `/` — every Workstream in the deployment. */
-export async function workstreamListPage(db: CruxDb): Promise<{ title: string; body: Html }> {
-  const rows = await ask<WorkstreamSummary[]>(db, { kind: "WORKSTREAM_SUMMARIES" });
+/** `/` — every Workstream this Principal owns. */
+export async function workstreamListPage(
+  db: CruxDb,
+  principal: Principal,
+): Promise<{ title: string; body: Html }> {
+  const rows = await ask<WorkstreamSummary[]>(db, principal, { kind: "WORKSTREAM_SUMMARIES" });
   const body = html`
     <h1>Workstreams</h1>
     <p class="sub">
-      Every Member of this Workspace sees every Workstream in it — membership grants the whole
-      deployment, never a subset.
+      Everything you have filed, and nothing anybody else has — a Workstream belongs to the
+      Principal that created it.
     </p>
     ${
       rows.length === 0
@@ -97,12 +104,13 @@ export async function workstreamListPage(db: CruxDb): Promise<{ title: string; b
 /** `/w/<slug>/problems/<id>` — one Problem and everything hanging off it. */
 export async function problemPage(
   db: CruxDb,
+  principal: Principal,
   slug: string,
   id: string,
 ): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, { kind: "WORKSTREAM_BY_SLUG", slug });
+  const ws = await ask<WorkstreamRow | null>(db, principal, { kind: "WORKSTREAM_BY_SLUG", slug });
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const detail = await ask<ProblemDetail | null>(db, { kind: "PROBLEM_DETAIL", id });
+  const detail = await ask<ProblemDetail | null>(db, principal, { kind: "PROBLEM_DETAIL", id });
   if (!detail || detail.problem.workstreamId !== ws.id) {
     throw new PageNotFound(`no Problem ${id} in ${slug}`);
   }
@@ -274,11 +282,12 @@ export async function problemPage(
  */
 export async function observationListPage(
   db: CruxDb,
+  principal: Principal,
   slug: string,
 ): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, { kind: "WORKSTREAM_BY_SLUG", slug });
+  const ws = await ask<WorkstreamRow | null>(db, principal, { kind: "WORKSTREAM_BY_SLUG", slug });
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const rows = await ask<ObservationSummary[]>(db, {
+  const rows = await ask<ObservationSummary[]>(db, principal, {
     kind: "OBSERVATION_SUMMARIES",
     workstreamId: ws.id,
   });
@@ -351,12 +360,16 @@ export async function observationListPage(
 /** `/w/<slug>/observations/<id>` — one signal and every Problem it supports. */
 export async function observationPage(
   db: CruxDb,
+  principal: Principal,
   slug: string,
   id: string,
 ): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, { kind: "WORKSTREAM_BY_SLUG", slug });
+  const ws = await ask<WorkstreamRow | null>(db, principal, { kind: "WORKSTREAM_BY_SLUG", slug });
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const detail = await ask<ObservationDetail | null>(db, { kind: "OBSERVATION_DETAIL", id });
+  const detail = await ask<ObservationDetail | null>(db, principal, {
+    kind: "OBSERVATION_DETAIL",
+    id,
+  });
   if (!detail || detail.observation.workstreamId !== ws.id) {
     throw new PageNotFound(`no Observation ${id} in ${slug}`);
   }
