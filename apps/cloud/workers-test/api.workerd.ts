@@ -295,6 +295,60 @@ describe("Attempts", () => {
       payload: { id, status: "dropped", closingNote: "The approach could not handle the load" },
     });
     expect(res.status).toBe(200);
+
+    const listed = (await (await query({ kind: "ATTEMPT_LIST", problem: problemId })).json()) as {
+      result: Array<{ status: string; closingNote: string }>;
+    };
+    expect(listed.result[0]).toMatchObject({
+      status: "dropped",
+      closingNote: "The approach could not handle the load",
+    });
+  });
+
+  test("refuses a status that is neither shipped nor dropped", async () => {
+    const problemId = await fileProblem();
+    const id = await fileAttempt(problemId);
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id, status: "reopened", closingNote: "n" },
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+  });
+
+  test("refuses an Attempt with no ref and one with no label", async () => {
+    const problemId = await fileProblem();
+    const noRef = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "  ", label: "L" },
+    });
+    expect(noRef.status).toBeGreaterThanOrEqual(400);
+    expect(await noRef.json()).toMatchObject({ error: { code: "INVARIANT_VIOLATION" } });
+
+    const noLabel = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: problemId, ref: "https://tracker.example/T-1", label: "" },
+    });
+    expect(noLabel.status).toBeGreaterThanOrEqual(400);
+    expect(await noLabel.json()).toMatchObject({ error: { code: "INVARIANT_VIOLATION" } });
+  });
+
+  test("an Attempt against a Problem that does not exist is NOT_FOUND", async () => {
+    const res = await dispatch({
+      kind: "ADD_ATTEMPT",
+      payload: { problem: 9999, ref: "https://tracker.example/T-1", label: "L" },
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+  });
+
+  test("closing an Attempt that does not exist is NOT_FOUND", async () => {
+    const res = await dispatch({
+      kind: "CLOSE_ATTEMPT",
+      payload: { id: "ATT-404", status: "dropped", closingNote: "n" },
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
   test("refuses to close an Attempt without a closing note", async () => {
