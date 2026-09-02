@@ -11,7 +11,7 @@
  * stroke tapers — heaviest on the left spine, thinnest at the two terminals
  * flanking the aperture — so the counter narrows toward the opening. That is
  * the one piece of meaning a letter mark can carry here: the corpus is a
- * narrowing, from many Observations to one Decision.
+ * narrowing, from many Observations to one Problem.
  *
  * Construction, for whoever edits it next: the C is a crescent cut by a wedge,
  * expressed as a mask. The outer circle is r=12 at (16,16); the inner circle is
@@ -59,4 +59,4 @@ export const MARK_INLINE: Html = raw(
  * tab strip and at any future size.
  */
 export const FAVICON_LINKS: Html = html`<link rel="icon" href="/favicon.ico" sizes="32x32" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />`;
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />`;

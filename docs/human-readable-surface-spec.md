@@ -18,7 +18,14 @@
 > Observation. And the verification plan's seeded corpus, which was removed
 > before the repo went public.
 >
-> The TUI half (`crux browse`) is unchanged and still accurate.
+> **Superseded again (2026-09-02).** Solution, Elimination and Decision are
+> deleted ([ADR-0012](adr/0012-crux-does-not-own-the-build.md)), so every story
+> and ordering rule below that names them describes a model that no longer
+> exists: story 4 (follow a Solution) has no page, the Solution half of stories
+> 2 and 3 is now the Problem's **Attempts**, and Outcome hangs off the Problem.
+> The Solution status ordering under **Order** goes with them.
+>
+> The TUI half (`crux browse`) is otherwise unchanged and still accurate.
 
 This doc is the authoritative spec for two parallel implementations of a human-browseable view of Crux state: a Next.js web UI under `apps/web/` and an ink-based TUI under `packages/cli/src/commands/browse.ts`. Both ship in this repo and are read-only for v1.
 

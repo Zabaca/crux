@@ -36,8 +36,7 @@ export const OkWithStatusOutput = z.object({
 export const ProblemShowOutput = z
   .object({
     id: z.union([z.string(), z.number()]),
-    solutions: z.array(z.unknown()),
-    latest_decision: z.unknown(),
+    attempts: z.array(z.unknown()),
   })
   .passthrough();
 
@@ -54,8 +53,6 @@ const DigestProblemEntry = z
     // independently of the deployment it points at, so a digest from a Worker
     // that predates Attempts must still parse.
     attempts: z.array(z.unknown()).optional(),
-    solutions: z.array(z.unknown()),
-    latest_decision: z.unknown(),
   })
   .passthrough();
 

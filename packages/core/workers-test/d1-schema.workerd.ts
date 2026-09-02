@@ -9,7 +9,7 @@ import { applyD1Schema } from "../src/db/d1/index.js";
 
 /**
  * Every table the entity model needs, written out by hand from CONTEXT.md's
- * entity list plus the three link tables the model implies. Independent of
+ * entity list plus the one link table the model implies. Independent of
  * whatever statements the implementation happens to emit — if the two drift,
  * that is the failure this test exists to catch.
  */
@@ -21,11 +21,6 @@ const EXPECTED_TABLES = [
   "problems",
   "evidence",
   "attempts",
-  "solutions",
-  "eliminations",
-  "elimination_solutions",
-  "decisions",
-  "decision_rejected_solutions",
   "abandonments",
   "outcomes",
   "outcome_follow_up_problems",

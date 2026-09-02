@@ -65,26 +65,6 @@ export const AbandonProblemAction = z.object({
   kind: z.literal("ABANDON_PROBLEM"),
   payload: z.object({ id: z.union([z.string(), z.number()]), rationale: z.string() }),
 });
-export const AddSolutionAction = z.object({
-  kind: z.literal("ADD_SOLUTION"),
-  payload: z.object({
-    problem: z.union([z.string(), z.number()]),
-    title: z.string(),
-    description: z.string().optional(),
-  }),
-});
-export const ShipSolutionAction = z.object({
-  kind: z.literal("SHIP_SOLUTION"),
-  payload: z.object({ id: z.union([z.string(), z.number()]) }),
-});
-export const EditSolutionAction = z.object({
-  kind: z.literal("EDIT_SOLUTION"),
-  payload: z.object({
-    solutionId: z.union([z.string(), z.number()]),
-    description: z.string().optional(),
-    title: z.string().optional(),
-  }),
-});
 /**
  * Filing an Attempt. `.strict()` is the load-bearing part: an Attempt has
  * nowhere to record a description of the work (ADR-0012), and a stripped-away
@@ -110,16 +90,6 @@ export const CloseAttemptAction = z.object({
       closingNote: z.string(),
     })
     .strict(),
-});
-export const AddDecisionAction = z.object({
-  kind: z.literal("ADD_DECISION"),
-  payload: z.object({
-    problem: z.union([z.string(), z.number()]),
-    chosen: z.union([z.string(), z.number()]),
-    rationale: z.string(),
-    rejected: z.array(z.union([z.string(), z.number()])).optional(),
-    context: z.string().optional(),
-  }),
 });
 export const AddOutcomeAction = z.object({
   kind: z.literal("ADD_OUTCOME"),
@@ -152,14 +122,6 @@ export const AddEvidenceAction = z.object({
     note: z.string().optional(),
   }),
 });
-export const AddEliminationAction = z.object({
-  kind: z.literal("ADD_ELIMINATION"),
-  payload: z.object({
-    solutions: z.array(z.union([z.string(), z.number()])),
-    rationale: z.string(),
-    context: z.string().optional(),
-  }),
-});
 export const AddWorkstreamAction = z.object({
   kind: z.literal("ADD_WORKSTREAM"),
   payload: z.object({ slug: z.string(), title: z.string(), description: z.string().optional() }),
@@ -183,17 +145,12 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   ScheduleProblemAction,
   UnscheduleProblemAction,
   AbandonProblemAction,
-  AddSolutionAction,
-  ShipSolutionAction,
-  EditSolutionAction,
   AddAttemptAction,
   CloseAttemptAction,
-  AddDecisionAction,
   AddOutcomeAction,
   AddObservationAction,
   ArchiveObservationAction,
   AddEvidenceAction,
-  AddEliminationAction,
   AddWorkstreamAction,
   RenameWorkstreamAction,
   RenameObservationAction,
@@ -224,17 +181,12 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "SCHEDULE_PROBLEM",
   "UNSCHEDULE_PROBLEM",
   "ABANDON_PROBLEM",
-  "ADD_SOLUTION",
-  "SHIP_SOLUTION",
-  "EDIT_SOLUTION",
   "ADD_ATTEMPT",
   "CLOSE_ATTEMPT",
-  "ADD_DECISION",
   "ADD_OUTCOME",
   "ADD_OBSERVATION",
   "ARCHIVE_OBSERVATION",
   "ADD_EVIDENCE",
-  "ADD_ELIMINATION",
   "ADD_WORKSTREAM",
   "RENAME_WORKSTREAM",
   "RENAME_OBSERVATION",
@@ -254,15 +206,10 @@ export type AddProblemPayload = z.infer<typeof AddProblemAction>["payload"];
 export type ScheduleProblemPayload = z.infer<typeof ScheduleProblemAction>["payload"];
 export type UnscheduleProblemPayload = z.infer<typeof UnscheduleProblemAction>["payload"];
 export type AbandonProblemPayload = z.infer<typeof AbandonProblemAction>["payload"];
-export type AddSolutionPayload = z.infer<typeof AddSolutionAction>["payload"];
-export type ShipSolutionPayload = z.infer<typeof ShipSolutionAction>["payload"];
-export type EditSolutionPayload = z.infer<typeof EditSolutionAction>["payload"];
 export type AddAttemptPayload = z.infer<typeof AddAttemptAction>["payload"];
 export type CloseAttemptPayload = z.infer<typeof CloseAttemptAction>["payload"];
-export type AddDecisionPayload = z.infer<typeof AddDecisionAction>["payload"];
 export type AddOutcomePayload = z.infer<typeof AddOutcomeAction>["payload"];
 export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];
-export type AddEliminationPayload = z.infer<typeof AddEliminationAction>["payload"];
 export type AddWorkstreamPayload = z.infer<typeof AddWorkstreamAction>["payload"];
 export type RenameWorkstreamPayload = z.infer<typeof RenameWorkstreamAction>["payload"];
 export type SelectWorkstreamPayload = z.infer<typeof SelectWorkstreamAction>["payload"];

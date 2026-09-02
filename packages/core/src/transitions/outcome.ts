@@ -25,10 +25,9 @@ export interface RecordOutcomeInput {
  * the Problem terminal, so the second attempt is refused before it can write.
  * The unique index on `problem_id` is the schema-level backstop.
  *
- * Follow-ups are resolved before the write, the way `createDecision` resolves
- * the Solutions it names: a follow-up that does not exist, or that belongs to
- * another Workstream, is a `REFERENTIAL_MISMATCH` rather than a raw batch
- * failure or a dangling link on the Problem page.
+ * Follow-ups are resolved before the write: a follow-up that does not exist, or
+ * that belongs to another Workstream, is a `REFERENTIAL_MISMATCH` rather than a
+ * raw batch failure or a dangling link on the Problem page.
  */
 export async function recordOutcome(input: RecordOutcomeInput, db: CruxDb): Promise<string> {
   const problem = await requireOpenProblem(input.problemId, "record an Outcome", db);

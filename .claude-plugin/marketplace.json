@@ -7,7 +7,7 @@
   "plugins": [
     {
       "name": "crux",
-      "description": "Capture problems, evidence, solutions, and decisions as typed state across Claude Code sessions.",
+      "description": "Capture problems, evidence, attempts and outcomes as typed state across Claude Code sessions.",
       "version": "0.1.0",
       "source": "./"
     }

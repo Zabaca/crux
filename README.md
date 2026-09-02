@@ -21,17 +21,14 @@ A typed entity model with workflow invariants enforced in code, fronted by a CLI
 | **Problem**                | Synthesized "there's a thing worth solving."                                    |
 | **Evidence**               | Links an Observation to a Problem with a why-note.                              |
 | **Attempt**                | A pointer to work about a Problem happening in another tracker.                 |
-| **Solution**               | An option for a specific Problem.                                               |
-| **Elimination**            | Rejects Solutions without committing to an alternative (progressive narrowing). |
-| **Decision**               | Commits to a chosen Solution, records the losers.                               |
 | **Abandonment**            | Graveyard for Problems we gave up on, with reason.                              |
 | **Outcome**                | What became of a Problem; recording one is what marks it done.                  |
 
-The entity model is the product. Workflow transitions — commit a Problem, create a Decision, eliminate a Solution, record an Outcome — are plain functions with invariant checks. You can't file a Decision against a chosen Solution. You can't eliminate a shipped one. You can't record a second Outcome against a Problem the first one closed. The rules are code, not documentation.
+The entity model is the product. Workflow transitions — schedule a Problem, file an Attempt, close one with the judgment that ended it, record an Outcome — are plain functions with invariant checks. You can't close an Attempt twice. You can't record a second Outcome against a Problem the first one closed. You can't archive an Observation that is already archived. The rules are code, not documentation.
 
 ## How it works
 
-Claude Code is the primary surface. You discuss problems and solutions in conversation, and Claude files entries inline through the `crux` CLI at natural pause points — not as end-of-session ceremony. The CLI is optimized for Claude to run and parse: `--json` on every read command, structured errors with stable codes, meaningful exit codes.
+Claude Code is the primary surface. You discuss problems and the work against them in conversation, and Claude files entries inline through the `crux` CLI at natural pause points — not as end-of-session ceremony. The CLI is optimized for Claude to run and parse: `--json` on every read command, structured errors with stable codes, meaningful exit codes.
 
 To reload context into a fresh session:
 
@@ -39,7 +36,7 @@ To reload context into a fresh session:
 crux context -w <workstream> --json
 ```
 
-That emits a model-shaped digest: open Problems (sorted by priority), their Evidence with inlined Observations, Solutions with status, latest Decision, Eliminations, Abandonment, Outcomes. Drop it into a new conversation and Claude starts warm.
+That emits a model-shaped digest: open Problems (sorted by priority), their Evidence with inlined Observations, their Attempts, Abandonment, Outcome. Drop it into a new conversation and Claude starts warm.
 
 For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt.
 
@@ -254,7 +251,7 @@ naming the broken links and orphans.
 ## Status
 
 MVP. Single-tenant cloud deployment. In the browser: sign-in, inviting and
-removing Members, minting and revoking CLI tokens, pages for Problem, Solution and Observation,
+removing Members, minting and revoking CLI tokens, pages for Problem and Observation,
 the Observation intake list at `/w/<slug>/observations` — grouped into linked,
 archived and waiting, all three read off related rows rather than a status
 column — the doc tree at `/docs`, and the write surfaces — a Workstream at `/w/<slug>`

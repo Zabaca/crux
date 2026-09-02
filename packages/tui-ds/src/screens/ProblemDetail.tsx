@@ -39,23 +39,10 @@ const evidence = [
   },
 ];
 
-const solutions = [
-  { slug: "build-crux", title: "Build Crux custom per existing design", status: "chosen" },
-  {
-    slug: "research-existing",
-    title: "Research off-the-shelf tools against requirements",
-    status: "evaluated",
-  },
-  {
-    slug: "hybrid-existing-storage",
-    title: "Notion as storage backend, custom skill",
-    status: "rejected",
-  },
-  {
-    slug: "status-quo",
-    title: "Continue with scattered docs, accept the growth cap",
-    status: "rejected",
-  },
+const attempts = [
+  { slug: "ATT-001", title: "Build the CLI and the entity model — CRUX-1", status: "shipped" },
+  { slug: "ATT-002", title: "Notion as storage backend — CRUX-4", status: "dropped" },
+  { slug: "ATT-003", title: "Roadmap board in the browser — CRUX-9", status: "open" },
 ];
 
 export function ProblemDetail(): React.ReactElement {
@@ -83,8 +70,8 @@ export function ProblemDetail(): React.ReactElement {
             ))}
           </DetailSection>
 
-          <DetailSection label={`Solutions (${solutions.length})`}>
-            {solutions.map((s) => (
+          <DetailSection label={`Attempts (${attempts.length})`}>
+            {attempts.map((s) => (
               <ListRow
                 key={s.slug}
                 slug={s.slug}
@@ -100,7 +87,7 @@ export function ProblemDetail(): React.ReactElement {
       <Box marginTop={1}>
         <KeyBar
           hints={[
-            { key: "s", label: "solution" },
+            { key: "a", label: "attempt" },
             { key: "o", label: "observation" },
             { key: "←", label: "back" },
             { key: "q", label: "quit" },

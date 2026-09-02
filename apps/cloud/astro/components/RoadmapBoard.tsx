@@ -34,8 +34,8 @@ export type BoardProblem = {
   title: string;
   stage: Stage;
   evidenceCount: number;
-  solutionCount: number;
-  decided: boolean;
+  attemptCount: number;
+  openAttemptCount: number;
 };
 
 /**
@@ -88,13 +88,13 @@ function Card({
       </a>
       <div className="bar">
         <span className={`seg ${problem.evidenceCount > 0 ? "on" : ""}`} />
-        <span className={`seg ${problem.solutionCount > 0 ? "on" : ""}`} />
-        <span className={`seg ${problem.decided ? "on g" : ""}`} />
+        <span className={`seg ${problem.attemptCount > 0 ? "on" : ""}`} />
+        <span className={`seg ${problem.openAttemptCount > 0 ? "on g" : ""}`} />
       </div>
       <div className="mm">
         <span>{problem.evidenceCount} ev</span>
-        <span>{problem.solutionCount} sol</span>
-        <span>{problem.decided ? "decided" : "open"}</span>
+        <span>{problem.attemptCount} att</span>
+        <span>{problem.openAttemptCount > 0 ? "in flight" : "idle"}</span>
       </div>
     </div>
   );

@@ -10,7 +10,7 @@
  *
  * The row may already exist. A corpus migrated from the single-machine database
  * authors its rows against `users` rows nobody has ever signed in as, and those
- * rows carry the authorship stamped on every Observation, Problem and Decision
+ * rows carry the authorship stamped on every Observation, Problem and Outcome
  * that person filed. Re-using one is the point: minting a second identity for
  * the same address would strand their history on the first.
  *

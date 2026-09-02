@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { applyD1Schema } from "@crux/core/db/d1";
-import { observations, problems, solutions, users, workstreams } from "@crux/core/db/schema";
+import { observations, problems, users, workstreams } from "@crux/core/db/schema";
 import { dispatch } from "@crux/core/actions";
 
 // Seam: the deployed request path, same as api.workerd.ts. The browser surfaces
@@ -110,8 +110,8 @@ async function dispatchAs(userId: string, action: unknown): Promise<any> {
   return dispatch(action, { db, viewStore: store as never, actor: { id: userId } });
 }
 
-/** A Problem narrowed all the way to a Decision — the shape the pages render. */
-async function seedNarrowedProblem(): Promise<number> {
+/** A Problem with its Evidence and an open Attempt — the shape the pages render. */
+async function seedWorkedProblem(): Promise<number> {
   const p = await dispatchAs("USR-james", {
     kind: "ADD_PROBLEM",
     payload: {
@@ -137,18 +137,12 @@ async function seedNarrowedProblem(): Promise<number> {
     payload: { problem: problemId, observation: observationId, note: "the cost being paid" },
   });
 
-  const s = await dispatchAs("USR-james", {
-    kind: "ADD_SOLUTION",
-    payload: { problem: problemId, title: "Structured residue layer" },
-  });
-  const solutionId = (s as { result: { id: number } }).result.id;
-
   await dispatchAs("USR-james", {
-    kind: "ADD_DECISION",
+    kind: "ADD_ATTEMPT",
     payload: {
       problem: problemId,
-      chosen: solutionId,
-      rationale: "Chosen because it reloads as structure rather than prose.",
+      ref: "https://tracker.example/CRUX-1",
+      label: "Structured residue layer",
     },
   });
   return problemId;
@@ -428,36 +422,27 @@ describe("read pages", () => {
     expect(body).toContain("Crux");
   });
 
-  test("a Problem URL resolves to the Problem, its Evidence and its Decision", async () => {
+  test("a Problem URL resolves to the Problem, its Evidence and its Attempts", async () => {
     const { cookie } = await inviteAndJoin("reader@example.com", "Reader");
 
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     const res = await get(`/w/crux/problems/${problemId}`, { headers: { cookie } });
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("Context evaporates");
     expect(body).toContain("re-explaining a decision"); // the Observation, inlined
-    expect(body).toContain("because it reloads as structure"); // the Decision rationale
-    expect(body).toContain(`/w/crux/solutions/`); // linked, not just listed
-  });
-
-  test("a Solution URL shows its Problem and the Decision that chose it", async () => {
-    const { cookie } = await inviteAndJoin("sol@example.com", "Sol Reader");
-    await seedNarrowedProblem();
-    const solutionId = (await db.select().from(solutions))[0]!.id;
-
-    const body = await (
-      await get(`/w/crux/solutions/${solutionId}`, { headers: { cookie } })
-    ).text();
-    expect(body).toContain("Structured residue");
-    expect(body).toContain("Context evaporates");
-    expect(body).toContain("because it reloads as structure");
+    expect(body).toContain("Structured residue layer"); // the Attempt's label
+    expect(body).toContain("https://tracker.example/CRUX-1"); // its ref, printed in full
+    // Solution is deleted (ADR-0012): nothing on the page links to one, and the
+    // route that used to serve one is gone.
+    expect(body).not.toContain("/w/crux/solutions/");
+    expect((await get("/w/crux/solutions/1", { headers: { cookie } })).status).toBe(404);
   });
 
   test("an Observation URL shows every Problem it supports as Evidence", async () => {
     const { cookie } = await inviteAndJoin("obs@example.com", "Obs Reader");
-    await seedNarrowedProblem();
+    await seedWorkedProblem();
     const observationId = (await db.select().from(observations))[0]!.id;
 
     const body = await (
@@ -470,7 +455,7 @@ describe("read pages", () => {
 
   test("the Observation list groups the pile by what has been done with it", async () => {
     const { cookie } = await inviteAndJoin("obslist@example.com", "Obs Lister");
-    await seedNarrowedProblem(); // files one Observation and links it as Evidence
+    await seedWorkedProblem(); // files one Observation and links it as Evidence
 
     await dispatchAs("USR-james", {
       kind: "ADD_OBSERVATION",
@@ -591,7 +576,7 @@ describe("the roadmap board", () => {
 
   test("the board renders the Problems it can move", async () => {
     const { cookie } = await inviteAndJoin("board@example.com", "Board Reader");
-    await seedNarrowedProblem();
+    await seedWorkedProblem();
     const res = await get("/w/crux", { headers: { cookie } });
     expect(res.status).toBe(200);
     const body = await res.text();
@@ -602,7 +587,7 @@ describe("the roadmap board", () => {
 
   test("dragging a Problem to a Stage persists through the API", async () => {
     const { cookie } = await inviteAndJoin("drag@example.com", "Dragger");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     const res = await dispatchFromBrowser(
       { kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } },
@@ -621,7 +606,7 @@ describe("the roadmap board", () => {
 
   test("a server-rejected transition answers with its code and message", async () => {
     const { cookie } = await inviteAndJoin("reject@example.com", "Rejected");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     await dispatchFromBrowser(
       { kind: "ABANDON_PROBLEM", payload: { id: problemId, rationale: "not worth it" } },
       cookie,
@@ -639,7 +624,7 @@ describe("the roadmap board", () => {
 
   test("a cookie-authenticated write from another origin is refused", async () => {
     const { cookie } = await inviteAndJoin("csrf@example.com", "Elsewhere");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     const res = await dispatchFromBrowser(
       { kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } },
       cookie,
@@ -655,7 +640,7 @@ describe("the roadmap board", () => {
 
   test("a Problem in a terminal Stage is shown, and is not draggable", async () => {
     const { cookie } = await inviteAndJoin("terminal@example.com", "Terminal");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     await dispatchAs("USR-james", {
       kind: "ABANDON_PROBLEM",
       payload: { id: problemId, rationale: "the cost turned out to be someone else's" },
@@ -683,7 +668,7 @@ describe("the roadmap board", () => {
 describe("live refresh", () => {
   test("a write in one session pushes to a stream open in another", async () => {
     const { cookie } = await inviteAndJoin("live@example.com", "Live");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     // Session A: the board, subscribed to this Member's view-state stream.
     const stream = await SELF.fetch(`${BASE}/v1/view/stream`, { headers: { cookie } });
@@ -718,23 +703,27 @@ describe("contextual page actions", () => {
 
   test("the Problem page offers the actions that belong to a Problem", async () => {
     const { cookie } = await inviteAndJoin("acts@example.com", "Actor");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
     expect(body).toContain("astro-island");
-    expect(body).toContain("ADD_SOLUTION");
-    expect(body).toContain("ADD_DECISION");
+    expect(body).toContain("ADD_ATTEMPT");
+    expect(body).toContain("ADD_EVIDENCE");
     // …and not the ones that belong to a Workstream.
     expect(body).not.toContain("ADD_WORKSTREAM");
   });
 
   test("filing an entity from the browser puts it on the page", async () => {
     const { cookie } = await inviteAndJoin("file@example.com", "Filer");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     const res = await browserDispatch(
       {
-        kind: "ADD_SOLUTION",
-        payload: { problem: problemId, title: "Reload as structure, not prose" },
+        kind: "ADD_ATTEMPT",
+        payload: {
+          problem: problemId,
+          ref: "https://tracker.example/CRUX-2",
+          label: "Reload as structure, not prose",
+        },
       },
       cookie,
     );
@@ -746,7 +735,7 @@ describe("contextual page actions", () => {
 
   test("an invariant refuses the transition and says which one", async () => {
     const { cookie } = await inviteAndJoin("inv@example.com", "Invariant");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     // Recording an Outcome closes the Problem, so a second one has nothing to
     // close — the transition is refused rather than silently ignored.
@@ -768,7 +757,7 @@ describe("contextual page actions", () => {
 
   test("recording an Outcome puts it, and the Problem's done state, on the page", async () => {
     const { cookie } = await inviteAndJoin("out@example.com", "Outcome Filer");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     const res = await browserDispatch(
       {
@@ -810,7 +799,7 @@ describe("Attempts on the Problem page", () => {
 
   test("an open Attempt shows its label, its ref and its status", async () => {
     const { cookie } = await inviteAndJoin("att@example.com", "Attempter");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     await dispatchAs("USR-james", {
       kind: "ADD_ATTEMPT",
       payload: {
@@ -829,7 +818,7 @@ describe("Attempts on the Problem page", () => {
 
   test("a ref that is not a URL is printed, never turned into an href", async () => {
     const { cookie } = await inviteAndJoin("xss@example.com", "Ref Author");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     // A ref is corpus text somebody typed. A tracker key is the honest case;
     // a `javascript:` scheme is the one that must not become a link.
     await dispatchAs("USR-james", {
@@ -844,7 +833,7 @@ describe("Attempts on the Problem page", () => {
 
   test("a closed Attempt shows the closing note, which is the point of keeping it", async () => {
     const { cookie } = await inviteAndJoin("closed@example.com", "Closer");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     await dispatchAs("USR-james", {
       kind: "ADD_ATTEMPT",
       payload: { problem: problemId, ref: "https://tracker.example/ENG-9", label: "First pass" },
@@ -864,7 +853,7 @@ describe("Attempts on the Problem page", () => {
 
   test("the Problem page offers filing and closing an Attempt", async () => {
     const { cookie } = await inviteAndJoin("actatt@example.com", "Attempt Actor");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
     await dispatchAs("USR-james", {
       kind: "ADD_ATTEMPT",
       payload: { problem: problemId, ref: "https://tracker.example/ENG-1", label: "In flight" },
@@ -877,7 +866,7 @@ describe("Attempts on the Problem page", () => {
 
   test("filing an Attempt from the browser puts it on the page", async () => {
     const { cookie } = await inviteAndJoin("bfile@example.com", "Browser Filer");
-    const problemId = await seedNarrowedProblem();
+    const problemId = await seedWorkedProblem();
 
     const res = await browserDispatch(
       {

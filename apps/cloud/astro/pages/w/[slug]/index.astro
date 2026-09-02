@@ -42,8 +42,8 @@ const problems: BoardProblem[] = summaries.map((p) => ({
   title: p.title,
   stage: (p.status ?? "unscheduled") as Stage,
   evidenceCount: p.evidenceCount,
-  solutionCount: p.solutionCount,
-  decided: p.decided,
+  attemptCount: p.attemptCount,
+  openAttemptCount: p.openAttemptCount,
 }));
 const open = summaries.filter((p) => p.status !== "done" && p.status !== "abandoned").length;
 
@@ -79,7 +79,7 @@ const [head, tail] = shell.split("<!--BOARD-->");
   Stage is a Problem’s place on the roadmap. A Problem starts <b>unscheduled</b>; scheduling
   places it in <b>now</b>, <b>next</b> or <b>later</b>; it ends <b>done</b> or <b>abandoned</b>.
   Drag a card between the first four — every move is a transition, and the server can refuse one.
-  The last two are reached by a Decision or an Abandonment, not by dragging. The bar on each card
-  is its narrowing: Evidence → Solutions → Decision.
+  The last two are reached by an Outcome or an Abandonment, not by dragging. The bar on each card
+  is what is behind it and what is in flight: Evidence → Attempts → an Attempt still open.
 </p>
 <Fragment set:html={tail} />

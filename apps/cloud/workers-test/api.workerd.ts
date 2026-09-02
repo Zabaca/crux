@@ -232,31 +232,62 @@ describe("POST /v1/dispatch — writes", () => {
     });
   });
 
-  test("concurrent clients cannot both ship the same Solution", async () => {
-    // One Problem, one Solution, decided — so exactly one SHIP_SOLUTION is legal
-    // and a second must be refused however the two requests interleave.
+  test("concurrent clients cannot both close the same Attempt", async () => {
+    // An Attempt closes once, carrying the judgment that made it end that way —
+    // so exactly one CLOSE_ATTEMPT is legal however the two requests interleave.
     const p = (await (
       await dispatch({
         kind: "ADD_PROBLEM",
         payload: { workstream: "WS-crux", title: "P", description: "d" },
       })
     ).json()) as { result: { id: number } };
-    const s = (await (
-      await dispatch({ kind: "ADD_SOLUTION", payload: { problem: p.result.id, title: "S" } })
-    ).json()) as { result: { id: number } };
-    await dispatch({
-      kind: "ADD_DECISION",
-      payload: { problem: p.result.id, chosen: s.result.id, rationale: "because" },
-    });
+    const a = (await (
+      await dispatch({
+        kind: "ADD_ATTEMPT",
+        payload: { problem: p.result.id, ref: "ENG-412", label: "spike" },
+      })
+    ).json()) as { result: { id: string } };
 
-    const [a, b] = await Promise.all([
-      dispatch({ kind: "SHIP_SOLUTION", payload: { id: s.result.id } }),
-      dispatch({ kind: "SHIP_SOLUTION", payload: { id: s.result.id } }),
-    ]);
+    const close = (closingNote: string) =>
+      dispatch({
+        kind: "CLOSE_ATTEMPT",
+        payload: { id: a.result.id, status: "dropped", closingNote },
+      });
+    const [first, second] = await Promise.all([close("backpressure"), close("also backpressure")]);
 
-    const statuses = [a.status, b.status].sort();
+    const statuses = [first.status, second.status].sort();
     expect(statuses[0]).toBe(200);
     expect(statuses[1]).toBeGreaterThanOrEqual(400);
+  });
+
+  test("an Observation is archived once, and the second attempt is refused", async () => {
+    const filed = (await (
+      await dispatch({
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: "WS-crux", content: "a signal we will not use" },
+      })
+    ).json()) as { result: { id: string } };
+
+    const first = await dispatch({
+      kind: "ARCHIVE_OBSERVATION",
+      payload: { id: filed.result.id, rationale: "duplicate" },
+    });
+    expect(first.status).toBe(200);
+
+    const second = await dispatch({
+      kind: "ARCHIVE_OBSERVATION",
+      payload: { id: filed.result.id, rationale: "duplicate again" },
+    });
+    expect(second.status).toBe(422);
+    expect(await second.json()).toMatchObject({
+      error: { code: "ILLEGAL_TRANSITION", message: expect.stringContaining("already archived") },
+    });
+
+    // Archiving is terminal, not a deletion: the row and its first rationale stay.
+    const shown = (await (
+      await query({ kind: "OBSERVATION_SHOW", id: filed.result.id })
+    ).json()) as { result: { archiveRationale: string } };
+    expect(shown.result.archiveRationale).toBe("duplicate");
   });
 });
 

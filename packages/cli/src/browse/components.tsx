@@ -5,12 +5,10 @@ import type { ArchiveBlock } from "./queries.js";
 
 type Color = "black" | "red" | "green" | "yellow" | "blue" | "magenta" | "cyan" | "white" | "gray";
 
-const SOLUTION_COLOR: Record<string, Color> = {
-  chosen: "green",
-  shipped: "cyan",
-  proposed: "yellow",
-  rejected: "red",
-  evaluated: "blue",
+const ATTEMPT_COLOR: Record<string, Color> = {
+  open: "yellow",
+  shipped: "green",
+  dropped: "gray",
 };
 
 const STATUS_COLOR: Record<string, Color> = {
@@ -21,8 +19,8 @@ const STATUS_COLOR: Record<string, Color> = {
   abandoned: "gray",
 };
 
-export function SolutionStatusBadge({ status }: { status: string }): React.ReactElement {
-  const color = SOLUTION_COLOR[status] ?? "white";
+export function AttemptStatusBadge({ status }: { status: string }): React.ReactElement {
+  const color = ATTEMPT_COLOR[status] ?? "white";
   return (
     <Text color={color} bold>
       [{status}]

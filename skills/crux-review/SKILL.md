@@ -1,11 +1,11 @@
 ---
 name: crux-review
-description: Synthesis pass over captured Crux state — walk unlinked Observations, link them as Evidence to existing Problems or shape new Problems. Use when the user explicitly opens a review (e.g. /crux:review, "let's review what we've captured", "promote that into a problem", "let's commit a decision"). Default intake stays in /crux.
+description: Synthesis pass over captured Crux state — walk unlinked Observations, link them as Evidence to existing Problems or shape new Problems. Use when the user explicitly opens a review (e.g. /crux:review, "let's review what we've captured", "promote that into a problem", "let's record what became of that"). Default intake stays in /crux.
 ---
 
 # Crux — review / synthesis mode
 
-Default `/crux` is intake-only: cheap capture of Observations and Ideas during conversation. This skill is the **synthesis pass** — the deliberate work of turning that intake into structured Problems, Solutions, and Decisions.
+Default `/crux` is intake-only: cheap capture of Observations during conversation. This skill is the **synthesis pass** — the deliberate work of turning that intake into structured Problems, and of recording what became of them.
 
 Run this when the user has signaled they're ready to review accumulated state and shape it. Don't run it inline with intake.
 
@@ -32,20 +32,19 @@ crux context --all
 Anchor on:
 
 - `recent_observations_unlinked[]` — primary review queue. Each one is a candidate for either Evidence-linking to an existing Problem or seeding a new Problem.
-- `unpromoted_ideas[]` — solution-space hunches waiting for a Problem to attach to. Either link (via Solution + Problem), archive, or leave.
-- `now[]`, `next[]`, `later[]`, `unscheduled[]` — open Problems by stage, with evidence counts and latest decisions. Use to find link targets.
-- `[].latest_decision`, `[].eliminations[]` — what's already been decided / ruled out. Don't re-propose ruled-out directions.
-- `done[]`, `abandoned[]` — closed Problems; scan for relevant prior decisions before filing new work.
+- `now[]`, `next[]`, `later[]`, `unscheduled[]` — open Problems by stage, with their Evidence and Attempts. Use to find link targets.
+- `[].attempts[]` — work already in flight or already tried, each with the `closing_note` saying why it ended that way. Don't re-propose a direction that was dropped for a reason still standing.
+- `done[]`, `abandoned[]` — closed Problems, each carrying the Outcome or the Abandonment rationale that closed it. Scan before filing new work.
 
 If no workstream is named and you can't infer one from cwd, ask.
 
 ## Review loop
 
-For each item in `recent_observations_unlinked` and `unpromoted_ideas`, propose one of:
+For each item in `recent_observations_unlinked`, propose one of:
 
 1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> --problem <id> --note "why this supports it"`. Preferred when fit is clear.
 2. **Promote to a new Problem** — file `crux problem add` (with the seed Observation linked as Evidence in the same review).
-3. **Archive** — terminal. `crux observation archive` / `crux idea archive` with a rationale. Use for misfiles, duplicates, evaporated relevance.
+3. **Archive** — terminal. `crux observation archive` with a rationale. Use for misfiles, duplicates, evaporated relevance.
 4. **Leave** — explicitly defer. Keep the row; no action this pass.
 
 Walk in batches. Propose-then-file: state the entity, content, fields, and links in prose; act after user approves. Don't lead with shell syntax.
@@ -64,12 +63,17 @@ Invoke the CLI once the user approves. Skip the preview only when user authorize
 
 When an Observation supports an existing Problem, file `crux evidence link` rather than rewriting the Problem statement to absorb the new weight. Evidence preserves origin trail; Problem statements stay stable.
 
-### Elimination vs Decision
+### An Attempt is a pointer, not a copy
 
-- **Elimination** rejects one or more Solutions _without_ picking a winner. Progressive narrowing: "ruled out SaaS tools, still choosing X vs Y."
-- **Decision** commits to a chosen Solution _and_ names rejected ones.
+Crux does not own the build (ADR-0012). When work about a Problem starts
+somewhere else, record it as an Attempt — `crux attempt add --problem <id> --ref
+<url-or-key> --label "..."` — and nothing more: there is no description field,
+because what the work *is* lives in the linked system and a second copy rots.
 
-A Decision where rejected Solutions aren't rows in the db is dishonest — claims comparison that never happened. Before filing a Decision, ensure every rejected alternative exists as a `proposed` Solution. If user is about to commit to A and B/C aren't recorded, file them first.
+On close, `--note` is the load-bearing half: *why* the approach ended the way it
+did. The tracker says "won't do"; it never says the approach could not handle
+the load. A `shipped` Attempt does not complete the Problem — that is a separate
+judgment, recorded as an Outcome.
 
 ### Abandonment is first-class
 
@@ -87,7 +91,7 @@ When what became of a Problem is known, `crux outcome add --problem <id>` record
 
 - Titles are one sentence. Descriptions are the paragraph.
 - Problem title: noun-phrase describing the gap — "Thinking residue gap", "Onboarding dropoff". Not questions, not feature names.
-- Solution title: descriptive approach — "Build crux", "Notion as backend". Not outcomes.
+- Attempt label: the approach being tried — "Build crux", "Notion as backend". Not outcomes.
 
 ## Priority only when genuinely felt
 
@@ -95,7 +99,7 @@ When what became of a Problem is known, `crux outcome add --problem <id>` record
 
 ## Attribution
 
-`reporter_id` / `decided_by_id` / `eliminated_by_id` come from `~/.config/crux/config.toml`. Claude is not a User — attribution always resolves to the human.
+`reporter_id` / `created_by_id` / `recorded_by_id` come from `~/.config/crux/config.toml`. Claude is not a User — attribution always resolves to the human.
 
 ## Reload mid-review
 
@@ -112,7 +116,7 @@ crux view next --json | jq '.events[].type'   # check legal events first
 
 Always use `crux view send`; never edit `view-state.json` directly.
 
-**Data mutations do not push to surfaces.** When you file evidence, problems, decisions, the open web UI won't auto-refresh — user must reload. Navigation does update live.
+**Data mutations do not push to surfaces.** When you file Evidence, Problems or Attempts, the open web UI won't auto-refresh — user must reload. Navigation does update live.
 
 ## Hand back to intake
 

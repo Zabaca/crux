@@ -9,7 +9,7 @@ The web UI and TUI shipped read-only. Two gaps remain:
 - **Live data freshness**: when the agent writes to the db, surfaces don't auto-update. User must reload or re-navigate.
 - **No agent-driven view control**: the agent has no channel to drive what the user is looking at. "As we discuss this Problem, navigate the user's view to its detail page" is impossible.
 
-Filed in-db as `PRB-agent-driven-view-control` (P2) with three candidate Solutions. This spec implements `SOL-file-based-xstate-control-bus` as a POC.
+Filed in-db as `PRB-agent-driven-view-control` (P2). This spec implements the file-based XState control bus as a POC. (It was written when Crux still kept Solutions; those are deleted — [ADR-0012](adr/0012-crux-does-not-own-the-build.md) — and the three candidates it weighed are not in the corpus any more.)
 
 ## Why XState (not flat JSON)
 
@@ -147,7 +147,7 @@ The manual check verifies the transport (file watcher + SSE bridge + router.refr
 - Hierarchical states beyond two levels.
 - Modals / overlays.
 - Undo history (XState supports it; not needed for POC).
-- Solution-detail, observation-detail, queues. Add after the bus proves itself.
+- Observation-detail and the queues. Add after the bus proves itself.
 - Cross-workstream navigation in a single session.
 - Conflict resolution if two agents write the file simultaneously. Last-writer-wins is fine for POC.
 - Authoritative-vs-advisory toggle. POC is fully authoritative.

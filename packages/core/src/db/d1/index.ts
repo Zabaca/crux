@@ -167,50 +167,6 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
   )`,
   `CREATE INDEX IF NOT EXISTS attempts_problem_id ON attempts (problem_id)`,
 
-  `CREATE TABLE IF NOT EXISTS solutions (
-    id integer PRIMARY KEY AUTOINCREMENT NOT NULL,
-    problem_id integer NOT NULL REFERENCES problems(id),
-    title text NOT NULL,
-    description text,
-    status text DEFAULT 'proposed' NOT NULL,
-    effort text,
-    created_by_id text NOT NULL REFERENCES users(id),
-    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
-    updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS eliminations (
-    id text PRIMARY KEY NOT NULL,
-    problem_id integer NOT NULL REFERENCES problems(id),
-    rationale text NOT NULL,
-    context text,
-    created_by_id text NOT NULL REFERENCES users(id),
-    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS elimination_solutions (
-    elimination_id text NOT NULL REFERENCES eliminations(id),
-    solution_id integer NOT NULL REFERENCES solutions(id),
-    PRIMARY KEY (elimination_id, solution_id)
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS decisions (
-    id text PRIMARY KEY NOT NULL,
-    problem_id integer NOT NULL REFERENCES problems(id),
-    chosen_solution_id integer NOT NULL REFERENCES solutions(id),
-    rationale text NOT NULL,
-    context text,
-    decided_by_id text NOT NULL REFERENCES users(id),
-    supersedes_decision_id text,
-    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL
-  )`,
-
-  `CREATE TABLE IF NOT EXISTS decision_rejected_solutions (
-    decision_id text NOT NULL REFERENCES decisions(id),
-    solution_id integer NOT NULL REFERENCES solutions(id),
-    PRIMARY KEY (decision_id, solution_id)
-  )`,
-
   `CREATE TABLE IF NOT EXISTS abandonments (
     id text PRIMARY KEY NOT NULL,
     problem_id integer NOT NULL REFERENCES problems(id),

@@ -3,7 +3,6 @@ import { Box, Text, useInput } from "ink";
 import SelectInput from "ink-select-input";
 import {
   getProblemDetail,
-  getSolutionDetail,
   getObservationDetail,
   listOpenProblems,
   listUnlinkedObservations,
@@ -12,16 +11,9 @@ import {
   type ObservationDetail,
   type ProblemDetail,
   type ProblemSummary,
-  type SolutionDetail,
   type Workstream,
 } from "./queries.js";
-import {
-  ArchivedTag,
-  Empty,
-  SectionTitle,
-  SolutionStatusBadge,
-  StatusBadge,
-} from "./components.js";
+import { ArchivedTag, AttemptStatusBadge, Empty, SectionTitle, StatusBadge } from "./components.js";
 import {
   Breadcrumb,
   DetailPane,
@@ -111,7 +103,7 @@ export function WorkstreamDashboard({
     slug: String(p.id),
     title: p.title,
     badges: <StatusBadge status={p.status} />,
-    meta: `ev:${p.evidenceCount} sol:${p.solutionCount}`,
+    meta: `ev:${p.evidenceCount} att:${p.openAttemptCount}/${p.attemptCount}`,
   }));
 
   const onListFocus = (_item: ScrollableListItem, index: number) => {
@@ -171,7 +163,7 @@ function DashboardDetail({ entry }: { entry: DashboardEntry | null }): React.Rea
       <Text>{p.title}</Text>
       <Box marginTop={1}>
         <Text color="gray">
-          ev:{p.evidenceCount} sol:{p.solutionCount}
+          ev:{p.evidenceCount} att:{p.openAttemptCount}/{p.attemptCount}
         </Text>
       </Box>
       {p.description ? (
@@ -193,16 +185,14 @@ function truncate(s: string, n: number): string {
 export function ProblemDetailView({
   workstream,
   problemId,
-  onOpenSolution,
   onOpenObservation,
 }: {
   workstream: Workstream;
   problemId: number;
-  onOpenSolution: (solutionId: number) => void;
   onOpenObservation: (observationId: string) => void;
 }): React.ReactElement {
   const [data, setData] = useState<ProblemDetail | null>(null);
-  const [activeSection, setActiveSection] = useState<"evidence" | "solutions">("evidence");
+  const [activeSection, setActiveSection] = useState<"evidence" | "attempts">("evidence");
 
   useEffect(() => {
     getProblemDetail(problemId).then((d) => {
@@ -213,16 +203,16 @@ export function ProblemDetailView({
   useInput((_input, key) => {
     if (!data) return;
     if (key.tab) {
-      const { evidence, solutions } = data;
-      if (evidence.length > 0 && solutions.length > 0) {
-        setActiveSection((s) => (s === "evidence" ? "solutions" : "evidence"));
+      const { evidence, attempts } = data;
+      if (evidence.length > 0 && attempts.length > 0) {
+        setActiveSection((s) => (s === "evidence" ? "attempts" : "evidence"));
       }
     }
   });
 
   if (!data) return <Text color="gray">loading problem…</Text>;
 
-  const { problem, evidence, solutions, latestDecision, eliminations, abandonment, outcome } = data;
+  const { problem, evidence, attempts, abandonment, outcome } = data;
 
   const evidenceItems: ScrollableListItem[] = evidence.map((e) => ({
     slug: e.observation?.id ?? "?",
@@ -230,10 +220,12 @@ export function ProblemDetailView({
     meta: e.observation?.archive ? "archived" : undefined,
   }));
 
-  const solutionItems: ScrollableListItem[] = solutions.map((s) => ({
-    slug: String(s.id),
-    title: s.title,
-    badges: <SolutionStatusBadge status={s.status} />,
+  // An Attempt holds no description of the work (ADR-0012), so the row shows
+  // its label and the `ref` that is authoritative about it.
+  const attemptItems: ScrollableListItem[] = attempts.map((a) => ({
+    slug: a.id,
+    title: `${a.label} — ${a.ref}`,
+    badges: <AttemptStatusBadge status={a.status} />,
   }));
 
   return (
@@ -265,37 +257,22 @@ export function ProblemDetailView({
             </DetailSection>
           )}
 
-          {solutions.length > 0 && (
-            <DetailSection label={`Solutions (${solutions.length})`}>
+          {attempts.length > 0 && (
+            <DetailSection label={`Attempts (${attempts.length})`}>
+              {/* An Attempt has no detail view of its own — the `ref` is where
+                  the work lives, so there is nothing here to open. */}
               <ScrollableList
-                items={solutionItems}
-                isFocused={activeSection === "solutions"}
-                onSelect={(_item, index) => {
-                  const s = solutions[index];
-                  if (s) onOpenSolution(s.id);
-                }}
+                items={attemptItems}
+                isFocused={activeSection === "attempts"}
+                onSelect={() => {}}
               />
-            </DetailSection>
-          )}
-
-          {latestDecision && (
-            <DetailSection label="Decision">
-              <Text>
-                chose <Text color="green">{latestDecision.chosenSolutionId}</Text>
-              </Text>
-              {latestDecision.rationale ? (
-                <Text color="gray">{latestDecision.rationale}</Text>
-              ) : null}
-            </DetailSection>
-          )}
-
-          {eliminations.length > 0 && (
-            <DetailSection label={`Eliminations (${eliminations.length})`}>
-              {eliminations.map((el) => (
-                <Text key={el.id}>
-                  {el.id} — {el.rationale}
-                </Text>
-              ))}
+              {attempts
+                .filter((a) => a.closingNote)
+                .map((a) => (
+                  <Text key={a.id} color="gray">
+                    {a.id} {a.status}: {a.closingNote}
+                  </Text>
+                ))}
             </DetailSection>
           )}
 
@@ -316,84 +293,6 @@ export function ProblemDetailView({
           )}
         </DetailPane>
       </Box>
-    </Box>
-  );
-}
-
-// ---------- Solution detail ----------
-
-export function SolutionDetailView({ solutionId }: { solutionId: number }): React.ReactElement {
-  const [data, setData] = useState<SolutionDetail | null>(null);
-
-  useEffect(() => {
-    getSolutionDetail(solutionId).then(setData);
-  }, [solutionId]);
-
-  if (!data) return <Text color="gray">loading solution…</Text>;
-
-  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy } = data;
-
-  return (
-    <Box flexDirection="column">
-      <Box>
-        <SolutionStatusBadge status={solution.status} />
-        <Text bold> {solution.id}</Text>
-        <Text> — {solution.title}</Text>
-      </Box>
-      <Box marginTop={1}>
-        <Text color="gray">
-          problem: {problem.id} ({problem.status ?? "unscheduled"})
-        </Text>
-      </Box>
-      {solution.description ? (
-        <Box marginTop={1}>
-          <Text>{solution.description}</Text>
-        </Box>
-      ) : null}
-      {solution.effort ? <Text color="gray">effort: {solution.effort}</Text> : null}
-
-      {choosingDecision ? (
-        <>
-          <SectionTitle>Chosen by {choosingDecision.id}</SectionTitle>
-          <Text>{choosingDecision.rationale}</Text>
-          {choosingDecision.context ? <Text color="gray">{choosingDecision.context}</Text> : null}
-          {choosingDecision.rejectedSolutionIds.length > 0 ? (
-            <Text color="gray">
-              also rejected: {choosingDecision.rejectedSolutionIds.join(", ")}
-            </Text>
-          ) : null}
-        </>
-      ) : null}
-
-      {rejectingDecision && rejectingDecision.id !== choosingDecision?.id ? (
-        <>
-          <SectionTitle>Rejected by {rejectingDecision.id}</SectionTitle>
-          <Text>{rejectingDecision.rationale}</Text>
-          {rejectingDecision.context ? <Text color="gray">{rejectingDecision.context}</Text> : null}
-          <Text color="gray">chose: {rejectingDecision.chosenSolutionId}</Text>
-        </>
-      ) : null}
-
-      {eliminatedBy.length > 0 ? (
-        <>
-          <SectionTitle>Eliminated</SectionTitle>
-          {eliminatedBy.map((e) => (
-            <Box key={e.id} flexDirection="column" marginBottom={1}>
-              <Text color="red" bold>
-                {e.id}
-              </Text>
-              <Text>{e.rationale}</Text>
-              {e.context ? <Text color="gray">{e.context}</Text> : null}
-            </Box>
-          ))}
-        </>
-      ) : null}
-
-      {!choosingDecision && !rejectingDecision && eliminatedBy.length === 0 ? (
-        <Box marginTop={1}>
-          <Empty label="no decision or elimination yet" />
-        </Box>
-      ) : null}
     </Box>
   );
 }
