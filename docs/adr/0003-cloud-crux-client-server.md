@@ -2,6 +2,11 @@
 
 Crux moves off a single machine. The goal is two things the local tool cannot do: read and write the corpus from anywhere, and collaborate with teammates invited into the workspace. The deployment *is* the workspace — a single tenant, no entity above Workstream, no scope added to any query. Members of a deployment see all of its Workstreams; a group that should not share a corpus gets its own deployment.
 
+> **The tenancy claim in that paragraph is amended by
+> [ADR-0013](0013-anonymous-first-adoption.md).** The tenant is now the
+> Principal, and every read is scoped to it. The rest of this ADR — the
+> client-server split, the single transition layer, no local database — stands.
+
 The architecture is pure client-server. One cloud database, and every client — the CLI and the browser alike — reaches it through the API. There is no local database in the product, and no Turso embedded replicas, despite that having been the stated plan for team mode.
 
 We chose this over local-first-with-sync because of the founding principle: transitions are code, not documentation. With replicas, each teammate's machine runs the invariant checks against a possibly-stale replica; two people can each pass locally and both write, leaving the database in a state no transition would have allowed. Client-server puts the transition layer in exactly one place, which is the only way the promise survives collaboration. Embedded replicas also require handing every teammate a full-access database token — unscopable, unrevokable in practice, and usable to write raw rows straight past the transition layer.

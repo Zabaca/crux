@@ -201,7 +201,9 @@ naming the broken links and orphans.
   [ADR-0008: Astro lands with the write surfaces](docs/adr/0008-astro-lands-with-the-write-surfaces.md),
   [ADR-0009: Astro wraps the Worker entry](docs/adr/0009-astro-wraps-the-worker-entry.md),
   [ADR-0010: sign-in is a magic link](docs/adr/0010-sign-in-is-a-magic-link.md),
-  [ADR-0011: removal revokes access, not identity](docs/adr/0011-removal-revokes-access-not-identity.md).
+  [ADR-0011: removal revokes access, not identity](docs/adr/0011-removal-revokes-access-not-identity.md),
+  [ADR-0012: Crux does not own the build](docs/adr/0012-crux-does-not-own-the-build.md),
+  [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
