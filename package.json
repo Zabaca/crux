@@ -8,6 +8,8 @@
   "type": "module",
   "scripts": {
     "seed": "bun run scripts/seed-ws-crux.ts",
+    "db:wipe": "bun run scripts/rebuild-production-db.ts wipe",
+    "db:restore-identity": "bun run scripts/rebuild-production-db.ts restore-identity",
     "lint": "oxlint -c .config/oxlint.json --ignore-pattern='**/*.astro'",
     "typecheck": "tsc --noEmit -p packages/core && tsc --noEmit -p packages/cli && tsc --noEmit -p packages/tui-ds && tsc --noEmit -p apps/cloud && tsc --noEmit -p apps/cloud/astro",
     "format": "bunx oxfmt .",
