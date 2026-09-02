@@ -38,6 +38,7 @@ try {
 const actions = problemActions(
   detail.problem.id,
   detail.solutions.map((s) => ({ id: s.id, title: s.title })),
+  detail.attempts.filter((a) => a.status === "open").map((a) => ({ id: a.id, label: a.label })),
 );
 
 const shell = page({

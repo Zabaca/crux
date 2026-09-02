@@ -44,6 +44,19 @@ const stageOf = (status: string | null): string => status ?? "unscheduled";
 
 const badge = (value: string): Html => html`<span class="badge ${value}">${value}</span>`;
 
+/**
+ * An Attempt's `ref` as a link, when it is safe to make one.
+ *
+ * The ref is corpus text a Member typed, so only `http(s)` becomes an anchor —
+ * a `javascript:` href would otherwise be script this page invited in. Anything
+ * else (a tracker key like `ENG-412`) renders as plain text; the ref is still
+ * printed in full underneath either way.
+ */
+const trackerLink = (ref: string, label: string): Html =>
+  /^https?:\/\//i.test(ref)
+    ? html`<a href="${ref}" rel="noreferrer noopener">${label}</a>`
+    : html`${label}`;
+
 const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
   html`<div class="crumb">
     ${parts.map(
@@ -95,8 +108,11 @@ export async function problemPage(
     throw new PageNotFound(`no Problem ${id} in ${slug}`);
   }
 
-  const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = detail;
+  const { problem, attempts, evidence, solutions, latestDecision, eliminations, abandonment } =
+    detail;
   const shipped = solutions.some((s) => s.status === "shipped");
+
+  const openAttempts = attempts.filter((a) => a.status === "open").length;
 
   /** Decisions and Eliminations record Solution ids; a reader wants the title. */
   const titleById = new Map(solutions.map((s) => [s.id, s.title]));
@@ -174,6 +190,33 @@ export async function problemPage(
                               >
                               · ${e.observation.source ?? "no source"} ·
                               ${e.observation.sourceType ?? "untyped"}`
+                          : ""
+                      }
+                    </div>
+                  </div>`,
+                )
+          }
+        </div>
+
+        <div class="panel">
+          <div class="hd">
+            Attempts <span class="r">${openAttempts} open of ${attempts.length}</span>
+          </div>
+          ${
+            attempts.length === 0
+              ? html`<div class="pad" style="color:var(--faint)">
+                  No Attempts — nothing is recorded as being worked on. A Problem staged as active
+                  with no open Attempt is drift.
+                </div>`
+              : attempts.map(
+                  (a) => html`<div class="sol ${a.status === "dropped" ? "out" : ""}">
+                    <div>${badge(a.status)}</div>
+                    <div class="t">
+                      ${trackerLink(a.ref, a.label)}
+                      <div class="m mono">${a.id} · ${a.ref}</div>
+                      ${
+                        a.closingNote
+                          ? html`<p class="prose" style="margin:8px 0 0">${a.closingNote}</p>`
                           : ""
                       }
                     </div>

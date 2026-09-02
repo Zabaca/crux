@@ -81,12 +81,12 @@ h2{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
 .prose{white-space:pre-wrap;color:#ccd4de}
 .badge{display:inline-block;padding:2px 9px;border-radius:999px;font-size:11px;font-weight:650;
   text-transform:uppercase;letter-spacing:.04em;border:1px solid}
-.badge.now{color:var(--now);border-color:rgba(255,166,87,.35);background:rgba(255,166,87,.1)}
+.badge.now,.badge.open{color:var(--now);border-color:rgba(255,166,87,.35);background:rgba(255,166,87,.1)}
 .badge.next,.badge.shipped{color:var(--next);border-color:rgba(121,192,255,.35);background:rgba(121,192,255,.1)}
 .badge.later,.badge.evaluated{color:var(--later);border-color:rgba(179,154,255,.35);background:rgba(179,154,255,.1)}
 .badge.done,.badge.chosen{color:var(--done);border-color:rgba(86,211,100,.35);background:rgba(86,211,100,.1)}
 .badge.proposed,.badge.unscheduled{color:var(--none);border-color:#333b45;background:#1b2028}
-.badge.rejected,.badge.abandoned{color:var(--gone);border-color:rgba(255,123,114,.35);background:rgba(255,123,114,.1)}
+.badge.rejected,.badge.abandoned,.badge.dropped{color:var(--gone);border-color:rgba(255,123,114,.35);background:rgba(255,123,114,.1)}
 .sol{display:grid;grid-template-columns:106px 1fr;gap:12px;padding:12px 16px;
   border-bottom:1px solid var(--line-2);align-items:center}
 .sol:last-child{border-bottom:0}
