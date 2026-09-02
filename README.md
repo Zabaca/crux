@@ -25,9 +25,9 @@ A typed entity model with workflow invariants enforced in code, fronted by a CLI
 | **Elimination**            | Rejects Solutions without committing to an alternative (progressive narrowing). |
 | **Decision**               | Commits to a chosen Solution, records the losers.                               |
 | **Abandonment**            | Graveyard for Problems we gave up on, with reason.                              |
-| **Outcome**                | What shipping produced; closes the loop.                                        |
+| **Outcome**                | What became of a Problem; recording one is what marks it done.                  |
 
-The entity model is the product. Workflow transitions — commit a Problem, create a Decision, eliminate a Solution, record an Outcome — are plain functions with invariant checks. You can't file a Decision against a chosen Solution. You can't eliminate a shipped one. You can't record an Outcome without a shipped Solution. The rules are code, not documentation.
+The entity model is the product. Workflow transitions — commit a Problem, create a Decision, eliminate a Solution, record an Outcome — are plain functions with invariant checks. You can't file a Decision against a chosen Solution. You can't eliminate a shipped one. You can't record a second Outcome against a Problem the first one closed. The rules are code, not documentation.
 
 ## How it works
 
@@ -261,7 +261,7 @@ column — the doc tree at `/docs`, and the write surfaces — a Workstream at `
 that *is* a drag-and-drop roadmap board, and contextual action dialogs that file
 entities and record transitions. The board shows all six Stages; the two
 terminal ones, `done` and `abandoned`, are read-only there because they are
-reached by a Decision or an Abandonment rather than by dragging. Every one of
+reached by an Outcome or an Abandonment rather than by dragging. Every one of
 those writes goes through `POST /v1/dispatch`, the CLI's endpoint, so there is
 no browser-only path where an invariant could be skipped; a refused transition
 shows its code and message rather than snapping the card back in silence. Live refresh is the ViewStateDO

@@ -748,15 +748,47 @@ describe("contextual page actions", () => {
     const { cookie } = await inviteAndJoin("inv@example.com", "Invariant");
     const problemId = await seedNarrowedProblem();
 
-    // The chosen Solution has not shipped, so the Problem cannot be done.
+    // Recording an Outcome closes the Problem, so a second one has nothing to
+    // close — the transition is refused rather than silently ignored.
+    const first = await browserDispatch(
+      { kind: "ADD_OUTCOME", payload: { problem: problemId, observedImpact: "warm starts" } },
+      cookie,
+    );
+    expect(first.status).toBe(200);
+
     const res = await browserDispatch(
-      { kind: "MARK_PROBLEM_DONE", payload: { id: problemId } },
+      { kind: "ADD_OUTCOME", payload: { problem: problemId, observedImpact: "again" } },
       cookie,
     );
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: { code: string; message: string } };
-    expect(body.error.code).toBe("INVARIANT_VIOLATION");
-    expect(body.error.message).toContain("no shipped Solution");
+    expect(body.error.code).toBe("ILLEGAL_TRANSITION");
+    expect(body.error.message).toContain("terminal (done)");
+  });
+
+  test("recording an Outcome puts it, and the Problem's done state, on the page", async () => {
+    const { cookie } = await inviteAndJoin("out@example.com", "Outcome Filer");
+    const problemId = await seedNarrowedProblem();
+
+    const res = await browserDispatch(
+      {
+        kind: "ADD_OUTCOME",
+        payload: {
+          problem: problemId,
+          observedImpact: "sessions start warm",
+          learnings: "structure beats prose",
+        },
+      },
+      cookie,
+    );
+    expect(res.status).toBe(200);
+
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(body).toContain("OUT-001");
+    expect(body).toContain("sessions start warm");
+    expect(body).toContain("structure beats prose");
+    // The rail's last step reads as reached, not as awaiting something.
+    expect(body).toContain("OUT-001 · done");
   });
 
   test("the Workstream board offers the actions that belong to a Workstream", async () => {

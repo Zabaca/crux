@@ -222,7 +222,7 @@ export function ProblemDetailView({
 
   if (!data) return <Text color="gray">loading problem…</Text>;
 
-  const { problem, evidence, solutions, latestDecision, eliminations, abandonment } = data;
+  const { problem, evidence, solutions, latestDecision, eliminations, abandonment, outcome } = data;
 
   const evidenceItems: ScrollableListItem[] = evidence.map((e) => ({
     slug: e.observation?.id ?? "?",
@@ -304,6 +304,16 @@ export function ProblemDetailView({
               <Text color="gray">{abandonment.rationale}</Text>
             </DetailSection>
           )}
+
+          {outcome && (
+            <DetailSection label={`Outcome ${outcome.id}`}>
+              <Text>observed: {outcome.observedImpact}</Text>
+              {outcome.learnings ? <Text>learnings: {outcome.learnings}</Text> : null}
+              {outcome.followUpProblemIds.length > 0 ? (
+                <Text color="gray">follow-ups: {outcome.followUpProblemIds.join(", ")}</Text>
+              ) : null}
+            </DetailSection>
+          )}
         </DetailPane>
       </Box>
     </Box>
@@ -321,7 +331,7 @@ export function SolutionDetailView({ solutionId }: { solutionId: number }): Reac
 
   if (!data) return <Text color="gray">loading solution…</Text>;
 
-  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy, outcome } = data;
+  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy } = data;
 
   return (
     <Box flexDirection="column">
@@ -379,21 +389,9 @@ export function SolutionDetailView({ solutionId }: { solutionId: number }): Reac
         </>
       ) : null}
 
-      {outcome ? (
-        <>
-          <SectionTitle>Outcome {outcome.id}</SectionTitle>
-          <Text>observed: {outcome.observedImpact}</Text>
-          {outcome.expectedImpact ? <Text>expected: {outcome.expectedImpact}</Text> : null}
-          {outcome.learnings ? <Text>learnings: {outcome.learnings}</Text> : null}
-          {outcome.followUpProblemIds.length > 0 ? (
-            <Text color="gray">follow-ups: {outcome.followUpProblemIds.join(", ")}</Text>
-          ) : null}
-        </>
-      ) : null}
-
-      {!choosingDecision && !rejectingDecision && eliminatedBy.length === 0 && !outcome ? (
+      {!choosingDecision && !rejectingDecision && eliminatedBy.length === 0 ? (
         <Box marginTop={1}>
-          <Empty label="no decision, elimination, or outcome yet" />
+          <Empty label="no decision or elimination yet" />
         </Box>
       ) : null}
     </Box>

@@ -54,10 +54,11 @@ export function getProblemById(id: number): Promise<Problem | null> {
 export type ProblemDetail = {
   problem: Problem;
   evidence: Array<Evidence & { observation: Observation | null }>;
-  solutions: Array<Solution & { outcome: Outcome | null }>;
+  solutions: Solution[];
   latestDecision: Decision | null;
   eliminations: Elimination[];
   abandonment: Abandonment | null;
+  outcome: Outcome | null;
 };
 
 export function getProblemDetail(problemId: number): Promise<ProblemDetail | null> {
@@ -70,7 +71,6 @@ export type SolutionDetail = {
   choosingDecision: Decision | null;
   rejectingDecision: Decision | null;
   eliminatedBy: Elimination[];
-  outcome: Outcome | null;
 };
 
 export function getSolutionById(id: number): Promise<Solution | null> {

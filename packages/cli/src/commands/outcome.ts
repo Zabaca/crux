@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { OkWithIdOutput } from "@crux/core/validation";
+import { OkWithStatusOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
 import type { AddOutcomePayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
@@ -15,11 +15,10 @@ function asList(v: unknown): string[] {
 }
 
 const addCmd = defineCommand({
-  meta: { name: "add", description: "Record an outcome for a shipped Solution." },
+  meta: { name: "add", description: "Record a problem's outcome, marking it done." },
   args: {
-    solution: { type: "string", required: true, description: "solution id" },
+    problem: { type: "string", required: true, description: "problem id" },
     "observed-impact": { type: "string", required: true },
-    "expected-impact": { type: "string" },
     learnings: { type: "string" },
     "follow-up-problems": { type: "string", description: "comma-separated problem ids" },
     json: { type: "boolean" },
@@ -27,14 +26,14 @@ const addCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const payload: AddOutcomePayload = {
-      solution: args.solution,
+      problem: args.problem,
       observedImpact: args["observed-impact"],
-      expectedImpact: args["expected-impact"],
       learnings: args.learnings,
       followUpProblemIds: asList(args["follow-up-problems"]),
     };
     const { result } = await api().dispatch({ kind: "ADD_OUTCOME", payload });
-    emit(result, OkWithIdOutput, `added ${(result as { id: string }).id}`);
+    const { id } = result as { id: string };
+    emit(result, OkWithStatusOutput, `added ${id} — problem ${args.problem} is done`);
   },
 });
 
@@ -57,6 +56,6 @@ const showCmd = defineCommand({
 });
 
 export const outcomeCommand = defineCommand({
-  meta: { name: "outcome", description: "Outcomes for shipped Solutions." },
+  meta: { name: "outcome", description: "Outcomes — what became of a Problem." },
   subCommands: { add: addCmd, list: listCmd, show: showCmd },
 });

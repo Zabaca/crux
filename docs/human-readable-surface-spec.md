@@ -32,8 +32,8 @@ Each is "as a maintainer" unless noted; "open" means "navigate to / drill into."
 
 1. **Workstream overview.** I can see all workstreams in one list with their slug, title, and a glance-count of open Problems.
 2. **Workstream dashboard.** I can open a workstream and see its open Problems sorted by priority (P0→P3, then null), each row showing slug, title, lifecycle status, evidence count, and solution count.
-3. **Problem detail.** I can open a Problem and see, in one view: the description; Evidence list with Observation content inlined; Solutions with status; latest Decision (rationale + context, chosen + rejected solution slugs); Eliminations (rationale + ruled-out solutions); Abandonment (rationale, if present); Outcomes (impact + learnings).
-4. **Follow a Solution.** I can open a Solution and see which Problem it belongs to, its status, the Decision that chose or rejected it (if any), and its Outcome (if shipped).
+3. **Problem detail.** I can open a Problem and see, in one view: the description; Evidence list with Observation content inlined; Solutions with status; latest Decision (rationale + context, chosen + rejected solution slugs); Eliminations (rationale + ruled-out solutions); Abandonment (rationale, if present); the Outcome (impact + learnings, if recorded).
+4. **Follow a Solution.** I can open a Solution and see which Problem it belongs to, its status, and the Decision that chose or rejected it (if any).
 5. **Follow an Observation.** I can open an Observation and see its content, source/source-type/tags, and every Problem it supports as Evidence (with the Evidence note).
 6. **Unlinked intake queue.** I can see recent Observations not linked to any Problem as Evidence — the clustering queue.
 7. **Ideas queue.** I can see unpromoted Ideas (no `originating_idea_id` reference from any Solution).

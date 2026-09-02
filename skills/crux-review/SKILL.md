@@ -81,7 +81,7 @@ Problems start unscheduled (null status). `crux problem schedule <id> --stage no
 
 ### Outcome closes the loop
 
-When a shipped Solution's impact is known, `crux outcome add` records what shipping produced. Required for closing a Problem to `done`.
+When what became of a Problem is known, `crux outcome add --problem <id>` records it. Recording one is what closes the Problem to `done`; there is no other way.
 
 ## Titles
 

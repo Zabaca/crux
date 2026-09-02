@@ -100,7 +100,11 @@ describe("POST /v1/query — reads", () => {
     const { result } = (await res.json()) as { result: Record<string, any> };
     expect(result.workstream.slug).toBe("crux");
     expect(result.unscheduled).toHaveLength(1);
-    expect(result.unscheduled[0].legal_next_transitions).toEqual(["schedule", "abandon"]);
+    expect(result.unscheduled[0].legal_next_transitions).toEqual([
+      "schedule",
+      "abandon",
+      "outcome",
+    ]);
   });
 });
 
@@ -253,6 +257,128 @@ describe("POST /v1/dispatch — writes", () => {
     const statuses = [a.status, b.status].sort();
     expect(statuses[0]).toBe(200);
     expect(statuses[1]).toBeGreaterThanOrEqual(400);
+  });
+});
+
+describe("Outcome — the door to done", () => {
+  /** A Problem filed through the API, the way a client makes one. */
+  async function fileProblem(title: string): Promise<number> {
+    const res = await dispatch({
+      kind: "ADD_PROBLEM",
+      payload: { workstream: "WS-crux", title, description: "d" },
+    });
+    return ((await res.json()) as { result: { id: number } }).result.id;
+  }
+
+  async function statusOf(id: number): Promise<string | null> {
+    const res = await query({ kind: "PROBLEM_GET", id });
+    return ((await res.json()) as { result: { status: string | null } }).result.status;
+  }
+
+  test("recording one writes the record and marks the Problem done in one step", async () => {
+    const id = await fileProblem("Context evaporates");
+
+    const res = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: { problem: id, observedImpact: "sessions start warm", learnings: "structure wins" },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { result: { id: string; status: string } };
+    expect(body.result.id).toBe("OUT-001");
+    expect(body.result.status).toBe("done");
+
+    expect(await statusOf(id)).toBe("done");
+
+    const detail = (await (await query({ kind: "PROBLEM_DETAIL", id })).json()) as {
+      result: { outcome: { id: string; observedImpact: string; learnings: string | null } | null };
+    };
+    expect(detail.result.outcome).toMatchObject({
+      id: "OUT-001",
+      observedImpact: "sessions start warm",
+      learnings: "structure wins",
+    });
+  });
+
+  test("a Problem carries at most one — the first closes it", async () => {
+    const id = await fileProblem("Only once");
+    const first = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: { problem: id, observedImpact: "a" },
+    });
+    expect(first.status).toBe(200);
+
+    const second = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: { problem: id, observedImpact: "b" },
+    });
+    expect(second.status).toBe(422);
+    expect(await second.json()).toMatchObject({
+      error: { code: "ILLEGAL_TRANSITION", message: expect.stringContaining("terminal (done)") },
+    });
+
+    const all = (await (await query({ kind: "OUTCOME_LIST" })).json()) as {
+      result: Array<{ id: string }>;
+    };
+    expect(all.result).toHaveLength(1);
+  });
+
+  test("a Problem that is already terminal refuses one", async () => {
+    const id = await fileProblem("Given up on");
+    await dispatch({ kind: "ABANDON_PROBLEM", payload: { id, rationale: "not worth it" } });
+
+    const res = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: { problem: id, observedImpact: "too late" },
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: { code: "ILLEGAL_TRANSITION" } });
+    expect(await statusOf(id)).toBe("abandoned");
+  });
+
+  test("follow-up Problems link back to it", async () => {
+    const id = await fileProblem("Spawns more work");
+    const followUp = await fileProblem("The next thing");
+
+    await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: {
+        problem: id,
+        observedImpact: "helped, and raised this",
+        followUpProblemIds: [followUp],
+      },
+    });
+
+    const shown = (await (await query({ kind: "OUTCOME_SHOW", id: "OUT-001" })).json()) as {
+      result: { problemId: number; followUpProblemIds: number[] };
+    };
+    expect(shown.result.problemId).toBe(id);
+    expect(shown.result.followUpProblemIds).toEqual([followUp]);
+    // The follow-up is its own Problem and is untouched by the Outcome.
+    expect(await statusOf(followUp)).toBeNull();
+  });
+
+  test("a follow-up that is not a Problem in this Workstream is refused, and nothing is written", async () => {
+    const id = await fileProblem("Names a stranger");
+
+    const res = await dispatch({
+      kind: "ADD_OUTCOME",
+      payload: { problem: id, observedImpact: "done", followUpProblemIds: [9999] },
+    });
+    expect(res.status).toBe(422);
+    expect(await res.json()).toMatchObject({ error: { code: "REFERENTIAL_MISMATCH" } });
+
+    // The refusal is before the write: no Outcome, and the Problem is still open.
+    const all = (await (await query({ kind: "OUTCOME_LIST" })).json()) as { result: unknown[] };
+    expect(all.result).toHaveLength(0);
+    expect(await statusOf(id)).toBeNull();
+  });
+
+  test("there is no other way to mark a Problem done", async () => {
+    const id = await fileProblem("Not closable by hand");
+
+    const res = await dispatch({ kind: "MARK_PROBLEM_DONE", payload: { id } });
+    expect(res.status).toBeGreaterThanOrEqual(400);
+    expect(await statusOf(id)).toBeNull();
   });
 });
 

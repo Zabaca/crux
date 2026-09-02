@@ -11,15 +11,6 @@ export async function hasDecisionFor(problemId: number, db: CruxDb): Promise<boo
   return row.length > 0;
 }
 
-export async function chosenSolutionIsShipped(problemId: number, db: CruxDb): Promise<boolean> {
-  const rows = await db
-    .select({ status: solutions.status })
-    .from(solutions)
-    .where(and(eq(solutions.problemId, problemId), eq(solutions.status, "shipped")))
-    .limit(1);
-  return rows.length > 0;
-}
-
 export async function solutionBelongsToProblem(
   solutionId: number,
   problemId: number,

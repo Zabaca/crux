@@ -20,8 +20,12 @@ express:
   rebuild, not an `ALTER`.
 
 Both are free against an empty database, which is why the reshaping in
-[ADR-0012](../adr/0012-crux-does-not-own-the-build.md) starts here. If a change
-is purely additive, it does *not* need this runbook — just deploy.
+[ADR-0012](../adr/0012-crux-does-not-own-the-build.md) starts here. The first
+piece of it to land is the second kind: `outcomes` now hangs off `problems`
+rather than `solutions`, so a deployment that has not been wiped keeps a table
+with the old parent and answers every Outcome read and write with `no such
+column: problem_id`. If a change is purely additive, it does *not* need this
+runbook — just deploy.
 
 ## Before you start
 

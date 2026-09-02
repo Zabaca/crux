@@ -22,7 +22,7 @@ export const RenameOutput = z.object({
   newSlug: z.string(),
 });
 
-/** { ok: true, id: string|number, status: string | null } — schedule / ship / done / abandon. */
+/** { ok: true, id: string|number, status: string | null } — schedule / ship / abandon / outcome. */
 export const OkWithStatusOutput = z.object({
   ok: z.literal(true),
   id: z.union([z.string(), z.number()]),

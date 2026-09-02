@@ -108,9 +108,16 @@ export async function problemPage(
     throw new PageNotFound(`no Problem ${id} in ${slug}`);
   }
 
-  const { problem, attempts, evidence, solutions, latestDecision, eliminations, abandonment } =
-    detail;
-  const shipped = solutions.some((s) => s.status === "shipped");
+  const {
+    problem,
+    attempts,
+    evidence,
+    solutions,
+    latestDecision,
+    eliminations,
+    abandonment,
+    outcome,
+  } = detail;
 
   const openAttempts = attempts.filter((a) => a.status === "open").length;
 
@@ -159,9 +166,15 @@ export async function problemPage(
             }</small
           >
         </div>
-        <div class="step ${shipped ? "here" : ""}">
+        <div class="step ${outcome ? "here" : ""}">
           Outcome<small
-            >${shipped ? "a Solution has shipped" : "awaiting a shipped Solution"}</small
+            >${
+              outcome
+                ? `${outcome.id} · done`
+                : problem.status === "abandoned"
+                  ? "abandoned instead"
+                  : "still open"
+            }</small
           >
         </div>
       </div>
@@ -309,6 +322,34 @@ export async function problemPage(
               </div>`
             : ""
         }
+        ${
+          outcome
+            ? html`<div class="panel">
+                <div class="hd">Outcome <span class="r mono">${outcome.id}</span></div>
+                <div class="pad">
+                  <div class="kv">
+                    <b>Observed</b>
+                    <div class="prose">${outcome.observedImpact}</div>
+                    <b>Learnings</b>
+                    <div class="prose">${outcome.learnings ?? "—"}</div>
+                    <b>Recorded</b>
+                    <div>${date(outcome.observedAt)}</div>
+                  </div>
+                  ${
+                    outcome.followUpProblemIds.length
+                      ? html`<p style="margin:14px 0 0;color:var(--faint);font-size:12px">
+                          Follow-ups:
+                          ${outcome.followUpProblemIds.map(
+                            (pid) =>
+                              html`<a href="/w/${ws.slug}/problems/${pid}">PRB-${pid}</a>&nbsp;`,
+                          )}
+                        </p>`
+                      : ""
+                  }
+                </div>
+              </div>`
+            : ""
+        }
       </div>
     </div>
   `;
@@ -327,7 +368,7 @@ export async function solutionPage(
   if (!detail || detail.problem.workstreamId !== ws.id) {
     throw new PageNotFound(`no Solution ${id} in ${slug}`);
   }
-  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy, outcome } = detail;
+  const { solution, problem, choosingDecision, rejectingDecision, eliminatedBy } = detail;
 
   const verdict = choosingDecision ?? rejectingDecision;
   const body = html`
@@ -391,26 +432,6 @@ export async function solutionPage(
           )
         : ""
     }
-
-    <div class="panel">
-      <div class="hd">Outcome</div>
-      ${
-        outcome
-          ? html`<div class="pad">
-              <div class="kv">
-                <b>Observed</b>
-                <div class="prose">${outcome.observedImpact}</div>
-                <b>Expected</b>
-                <div class="prose">${outcome.expectedImpact ?? "—"}</div>
-                <b>Learnings</b>
-                <div class="prose">${outcome.learnings ?? "—"}</div>
-              </div>
-            </div>`
-          : html`<div class="pad" style="color:var(--faint)">
-              No Outcome — one exists only once this Solution has shipped.
-            </div>`
-      }
-    </div>
   `;
   return { title: solution.title, body };
 }

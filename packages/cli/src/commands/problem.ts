@@ -5,7 +5,6 @@ import type {
   AddProblemPayload,
   ScheduleProblemPayload,
   UnscheduleProblemPayload,
-  MarkProblemDonePayload,
   AbandonProblemPayload,
 } from "@crux/core/actions";
 import { api } from "../api-client.js";
@@ -95,17 +94,6 @@ const unscheduleCmd = defineCommand({
   },
 });
 
-const doneCmd = defineCommand({
-  meta: { name: "done", description: "Mark a problem done (chosen Solution must be shipped)." },
-  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const payload: MarkProblemDonePayload = { id: args.id };
-    const { result } = await api().dispatch({ kind: "MARK_PROBLEM_DONE", payload });
-    emit(result, OkWithStatusOutput, `done ${args.id}`);
-  },
-});
-
 const abandonCmd = defineCommand({
   meta: { name: "abandon", description: "Abandon a problem (terminal)." },
   args: {
@@ -129,7 +117,6 @@ export const problemCommand = defineCommand({
     show: showCmd,
     schedule: scheduleCmd,
     unschedule: unscheduleCmd,
-    done: doneCmd,
     abandon: abandonCmd,
   },
 });

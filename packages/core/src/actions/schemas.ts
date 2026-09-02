@@ -61,10 +61,6 @@ export const UnscheduleProblemAction = z.object({
   kind: z.literal("UNSCHEDULE_PROBLEM"),
   payload: z.object({ id: z.union([z.string(), z.number()]) }),
 });
-export const MarkProblemDoneAction = z.object({
-  kind: z.literal("MARK_PROBLEM_DONE"),
-  payload: z.object({ id: z.union([z.string(), z.number()]) }),
-});
 export const AbandonProblemAction = z.object({
   kind: z.literal("ABANDON_PROBLEM"),
   payload: z.object({ id: z.union([z.string(), z.number()]), rationale: z.string() }),
@@ -128,9 +124,8 @@ export const AddDecisionAction = z.object({
 export const AddOutcomeAction = z.object({
   kind: z.literal("ADD_OUTCOME"),
   payload: z.object({
-    solution: z.union([z.string(), z.number()]),
+    problem: z.union([z.string(), z.number()]),
     observedImpact: z.string(),
-    expectedImpact: z.string().optional(),
     learnings: z.string().optional(),
     followUpProblemIds: z.array(z.union([z.string(), z.number()])).optional(),
   }),
@@ -187,7 +182,6 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddProblemAction,
   ScheduleProblemAction,
   UnscheduleProblemAction,
-  MarkProblemDoneAction,
   AbandonProblemAction,
   AddSolutionAction,
   ShipSolutionAction,
@@ -229,7 +223,6 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ADD_PROBLEM",
   "SCHEDULE_PROBLEM",
   "UNSCHEDULE_PROBLEM",
-  "MARK_PROBLEM_DONE",
   "ABANDON_PROBLEM",
   "ADD_SOLUTION",
   "SHIP_SOLUTION",
@@ -260,7 +253,6 @@ export type ArchiveObservationPayload = z.infer<typeof ArchiveObservationAction>
 export type AddProblemPayload = z.infer<typeof AddProblemAction>["payload"];
 export type ScheduleProblemPayload = z.infer<typeof ScheduleProblemAction>["payload"];
 export type UnscheduleProblemPayload = z.infer<typeof UnscheduleProblemAction>["payload"];
-export type MarkProblemDonePayload = z.infer<typeof MarkProblemDoneAction>["payload"];
 export type AbandonProblemPayload = z.infer<typeof AbandonProblemAction>["payload"];
 export type AddSolutionPayload = z.infer<typeof AddSolutionAction>["payload"];
 export type ShipSolutionPayload = z.infer<typeof ShipSolutionAction>["payload"];
