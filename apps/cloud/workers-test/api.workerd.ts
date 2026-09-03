@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { applyD1Schema } from "@crux/core/db/d1";
 import { mintToken } from "@crux/core/auth";
+import { removeMember } from "@crux/core/auth/membership";
 import { problems, users, workstreams } from "@crux/core/db/schema";
 import pkg from "../package.json" with { type: "json" };
 
@@ -83,6 +84,28 @@ describe("bearer auth on /v1", () => {
       body: JSON.stringify({ kind: "WORKSTREAM_LIST" }),
     });
     expect(res.status).toBe(401);
+  });
+
+  // Identity and scope resolve in one statement now, entered through the token
+  // row. The gate that closes on removal is inside that same statement, so this
+  // pins it where the CLI actually meets it rather than at the function.
+  test("a removed Member's token stops authenticating, without being revoked", async () => {
+    expect((await call("/v1/view")).status).toBe(200);
+    expect(await removeMember(db, { userId: "USR-james" })).toBe(true);
+    expect((await call("/v1/view")).status).toBe(401);
+  });
+
+  // The other half: still a Member, but reading through a token whose scope the
+  // collapsed query resolves in the same breath as the identity.
+  test("a token reads exactly the Workstreams its Principal owns", async () => {
+    await db.insert(users).values({ id: "USR-other", slug: "other", name: "Other" });
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-theirs", slug: "theirs", title: "Theirs", ownerId: "USR-other" });
+
+    const res = await query({ kind: "WORKSTREAM_LIST" });
+    const body = (await res.json()) as { result: Array<{ id: string }> };
+    expect(body.result.map((w) => w.id)).toEqual(["WS-crux"]);
   });
 });
 

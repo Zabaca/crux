@@ -57,7 +57,7 @@ export function signInRedirect(url: URL): Response {
 
 /**
  * Resolve the browser session to a Member, or null. This is the session half of
- * the identity story whose other half is `authenticateToken` — both land on a
+ * the identity story whose other half is `authenticateAndResolveScope` — both land on a
  * row in `users` (ADR-0007), and both refuse a row that has been removed from
  * the Workspace.
  */

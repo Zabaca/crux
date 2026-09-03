@@ -24,6 +24,12 @@ import { claims } from "@crux/core/db/auth-schema";
 import { createClaim, MAX_OUTSTANDING_CLAIMS } from "@crux/core/auth/claims";
 import { mintToken } from "@crux/core/auth";
 import { removeMember } from "@crux/core/auth/membership";
+// Statically, not `await import(...)` inside a test: better-auth is a large
+// graph and loading it takes seconds inside workerd. A dynamic import charges
+// that once, to whichever test happens to reach it first, against that test's
+// own timeout — which is a five-second budget spent on module loading and a
+// flake on a loaded CI runner. Imported here it is paid during collection.
+import { createAuth } from "@crux/core/auth/better-auth";
 
 const BASE = "https://crux.example";
 const CAP = Number(env.CRUX_OBSERVATION_CAP);
@@ -414,7 +420,6 @@ describe("after a claim names a Principal", () => {
 
     // The row has to be verified and addressable for the magic link to mint a
     // session at all — `disableSignUp` refuses an address without a row.
-    const { createAuth } = await import("@crux/core/auth/better-auth");
     let link: string | undefined;
     const auth = createAuth(db, {
       secret: "test-secret-not-used-in-production",
