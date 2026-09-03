@@ -231,7 +231,7 @@ export async function runMutation(
         workstreamId: attProb?.workstreamId ?? null,
       };
     }
-    case "ADD_OUTCOME": {
+    case "COMPLETE_PROBLEM": {
       const p = action.payload;
       const prob = await requireProblemInScope(db, p.problem, scope);
       const n = await countRows("outcomes", db);

@@ -50,7 +50,7 @@ export function requireWorkstream(explicit: string | undefined): string {
 /**
  * `details.argument` is spelled the way the *caller's* signature spells it,
  * because an agent retries on what it reads there: `evidence link` takes the
- * Problem as a positional, while `attempt add` and `outcome add` take a flag.
+ * Problem as a positional, while `attempt add` takes a flag.
  */
 export function requireProblem(explicit: string | undefined, argument: string): string {
   if (explicit) return explicit;
