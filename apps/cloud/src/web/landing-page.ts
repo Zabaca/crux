@@ -51,33 +51,20 @@ export function landingPage(opts: { observationCap: number }): {
         Your agent works out what is actually wrong all day, and the reasoning is gone by morning.
         <em>File an observation and the corpus exists</em> — no signup, no invite, no key.
       </p>
-      <p class="land-cta">
-        <a class="land-btn go" href="#start">See the command</a>
-        <a class="land-btn" href="/docs">Docs</a>
-        <a class="land-btn" href="/signin">Sign in</a>
-      </p>
 
-      <section id="start">
-        <div class="land-split">
-          <div class="land-split-say">
-            <h2>File it<span class="dot">.</span></h2>
-            <p>
-              One command, mid-conversation, at the moment the thing is noticed. There is no project
-              to create first and nothing to fill in:
-              <strong>first use mints your Principal</strong>
-              and writes it down, so the second command already knows who you are.
-            </p>
-          </div>
-          <div class="land-show">
-            ${shell([
-              {
-                cmd: `crux observation add "handlers spend a third of every\ncall on status-only queries"`,
-              },
-            ])}
-            <p class="land-under">No account · No token · No invite · The corpus is yours</p>
-          </div>
-        </div>
-      </section>
+      <div id="start" class="land-first">
+        ${shell([
+          {
+            cmd: `crux observation add "handlers spend a third of every\ncall on status-only queries"`,
+          },
+        ])}
+        <p class="land-under">No account · No token · No invite · The corpus is yours</p>
+        <p class="land-first-say">
+          There is no project to create first and nothing to fill in.
+          <strong>First use mints your Principal</strong> and writes it down, so the second command
+          already knows who you are.
+        </p>
+      </div>
 
       <section>
         <div class="land-split">
@@ -185,7 +172,7 @@ export function landingPage(opts: { observationCap: number }): {
           A Principal is a token, not a person. It lives on the machine that minted it — claiming an
           address is what makes the corpus reachable from anywhere else.
         </p>
-        <p>Crux · Open source · Run your own: <code>zbc add crux</code></p>
+        <p>Crux · Open source</p>
       </footer>
     </div>
   `;

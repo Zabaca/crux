@@ -155,12 +155,16 @@ body.land-page{
   --l-copper:#c56a3e; --l-verdi:#4e9e8b;
   --l-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
   --l-serif:Georgia,"Times New Roman",serif;
+  --l-move:160ms ease;
   background:var(--l-ground);color:var(--l-bone);font-family:var(--l-mono)}
 body.land-page header.top{background:var(--l-sunk);border-bottom-color:var(--l-rule)}
 body.land-page .top nav{color:var(--l-muted)}
 body.land-page .top nav a:hover{color:var(--l-bone)}
 body.land-page .wrap{max-width:62rem;padding:0 clamp(1.15rem,5vw,2rem) 4rem}
 .land ::selection{background:var(--l-copper);color:var(--l-sunk)}
+/* Every interactive control gets a ring. The first port of this page dropped
+   the rule and left the keyboard with nothing to follow. */
+.land :focus-visible{outline:2px solid var(--l-copper);outline-offset:3px;border-radius:1px}
 .land a{color:var(--l-verdi);text-underline-offset:3px}
 .land a:hover{color:var(--l-copper)}
 /* Visible only once focused — a keyboard user should not tab the furniture
@@ -168,6 +172,9 @@ body.land-page .wrap{max-width:62rem;padding:0 clamp(1.15rem,5vw,2rem) 4rem}
 .land-skip{position:absolute;clip-path:inset(50%);left:0;top:0;background:var(--l-copper);
   color:var(--l-sunk);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;
   padding:.8rem 1.1rem;z-index:2}
+/* Re-asserted, because the .land a rule (0,1,1) outranks .land-skip (0,1,0)
+   and was painting verdigris on copper — 1.2:1, which is no skip link at all. */
+.land a.land-skip,.land-skip:focus{color:var(--l-sunk)}
 .land-skip:focus{clip-path:none}
 .land-badge{display:inline-block;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
   color:var(--l-muted);border:1px solid var(--l-rule-2);padding:.32rem .6rem;margin:0 0 2rem}
@@ -201,7 +208,7 @@ body.land-page .wrap{max-width:62rem;padding:0 clamp(1.15rem,5vw,2rem) 4rem}
 .land-p{color:var(--l-copper);user-select:none}
 .land-out{white-space:pre-wrap;color:var(--l-muted)}
 .land-out .hi{color:var(--l-verdi)}
-.land section p.land-under{font-family:var(--l-mono);font-size:.66rem;letter-spacing:.1em;
+.land p.land-under{font-family:var(--l-mono);font-size:.66rem;letter-spacing:.1em;
   text-transform:uppercase;color:var(--l-faint);margin:.7rem 0 0;max-width:none}
 /* The rules, as terms rather than bullets: the label is the name of the rule,
    and the prose is what it costs you. */
@@ -232,14 +239,32 @@ body.land-page .wrap{max-width:62rem;padding:0 clamp(1.15rem,5vw,2rem) 4rem}
 .land-btn{display:inline-block;font-family:var(--l-mono);font-size:.78rem;letter-spacing:.06em;
   text-transform:uppercase;border:1px solid var(--l-rule-2);color:var(--l-bone);
   padding:.7rem 1.1rem;background:none}
+.land-btn{transition:border-color var(--l-move),color var(--l-move),background-color var(--l-move)}
 .land-btn:hover{border-color:var(--l-copper);color:var(--l-copper);text-decoration:none}
+.land a{transition:color var(--l-move)}
+@media (prefers-reduced-motion:reduce){
+  body.land-page *{transition-duration:0.01ms!important;animation-duration:0.01ms!important}
+}
 .land-btn.go{border-left:2px solid var(--l-copper)}
-.land-cta{display:flex;gap:.7rem;flex-wrap:wrap;margin:0}
+/* The command is the call to action, so it sits directly under the lede at
+   the hero's own width rather than behind a row of equal-weight buttons.
+   Docs and Sign in already live in the header, where a stranger looks for
+   them; repeating them here made three CTAs of the same weight and no
+   primary one. */
+.land-first{max-width:44rem;margin:0 0 1rem}
+.land-first .land-sh{font-size:.82rem}
+.land-first-say{font-family:var(--l-serif);font-size:1.08rem;line-height:1.62;
+  color:var(--l-muted);max-width:52ch;margin:1.4rem 0 0}
+.land-first-say strong{color:var(--l-bone);font-weight:400}
+@media (max-width:1024px){
+  .land-split{gap:0 1.75rem}
+  .land-road{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media (max-width:820px){
   .land-split{grid-template-columns:minmax(0,1fr);gap:2rem 0}
   .land-rules li{grid-template-columns:1fr;gap:.3rem}
   .land-road{grid-template-columns:1fr}
-  .land section p.land-under{max-width:none}
+  .land p.land-under{max-width:none}
   .land section{margin-top:3.25rem}
 }
 @media (max-width:1080px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}}
