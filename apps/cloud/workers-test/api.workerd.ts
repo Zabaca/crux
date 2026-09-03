@@ -1,5 +1,6 @@
 import { env, SELF, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, test } from "vitest";
+import { eq } from "drizzle-orm";
 
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { applyD1Schema } from "@crux/core/db/d1";
@@ -1172,36 +1173,41 @@ describe("the boundary is not an oracle", () => {
   });
 });
 
-describe("change events name the Workstream they came from", () => {
-  /**
-   * Open the push stream, run `act`, and return the first `view` frame it
-   * pushes. The subscriber is registered by the time the response resolves, so
-   * the action that follows is the one this frame reports.
-   */
-  async function frameFor(act: () => Promise<unknown>): Promise<{
-    revision: number;
-    workstreamId: string | null;
-  }> {
-    const stream = await call("/v1/view/stream");
-    const reader = stream.body!.getReader();
-    const decoder = new TextDecoder();
-    await act();
-    let buffered = "";
-    // The stream opens with a `: connected` comment; the frame we want is the
-    // next one. Bounded so a stream that never carries it fails rather than hangs.
-    for (let i = 0; i < 5; i++) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      buffered += decoder.decode(value, { stream: true });
-      const match = buffered.match(/event: view\ndata: (.*)\n\n/);
-      if (match) {
-        await reader.cancel();
-        return JSON.parse(match[1]!) as { revision: number; workstreamId: string | null };
-      }
+type ViewFrame = { revision: number; workstreamId: string | null };
+
+/**
+ * Subscribe to the push stream as `bearer`, run `act`, and return the first
+ * `view` frame that reaches *that* subscriber.
+ *
+ * The subscriber is registered by the time `/v1/view/stream` resolves, so the
+ * action that follows is the one this frame reports — which is also what makes
+ * the absence of a frame meaningful: a suite can dispatch as somebody else,
+ * then as the subscriber, and assert it heard only its own.
+ */
+async function frameOn(bearer: string, act: () => Promise<unknown>): Promise<ViewFrame> {
+  const stream = await as(bearer, "/v1/view/stream");
+  const reader = stream.body!.getReader();
+  const decoder = new TextDecoder();
+  await act();
+  let buffered = "";
+  // The stream opens with a `: connected` comment; the frame we want is the
+  // next one. Bounded so a stream that never carries it fails rather than hangs.
+  for (let i = 0; i < 5; i++) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffered += decoder.decode(value, { stream: true });
+    const match = buffered.match(/event: view\ndata: (.*)\n\n/);
+    if (match) {
+      await reader.cancel();
+      return JSON.parse(match[1]!) as ViewFrame;
     }
-    await reader.cancel();
-    throw new Error(`no view frame in stream: ${JSON.stringify(buffered)}`);
   }
+  await reader.cancel();
+  throw new Error(`no view frame in stream: ${JSON.stringify(buffered)}`);
+}
+
+describe("change events name the Workstream they came from", () => {
+  const frameFor = (act: () => Promise<unknown>) => frameOn(token, act);
 
   const lastAction = async () =>
     (
@@ -1303,5 +1309,120 @@ describe("a Workstream always has an owner", () => {
     ).rejects.toThrow(/NOT NULL/i);
 
     expect((await db.select().from(workstreams)).map((w) => w.slug)).toEqual(["crux"]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Live refresh across a linked set
+// ---------------------------------------------------------------------------
+
+/**
+ * The push stream is keyed by the *root* Principal, not by the requester.
+ *
+ * A person may hold several Principals — an agent per machine, claimed into one
+ * identity (ADR-0013) — and `idFromName` takes one id. Keying the ViewStateDO
+ * on whoever made the request put a linked agent's writes into an object the
+ * human's browser was never subscribed to: the frame was built correctly,
+ * delivered correctly, and heard by nobody.
+ *
+ * The link is written straight into `users` here. What a claim *is* — the mail,
+ * the link, the button — is pinned in `claims.workerd.ts`; what this suite needs
+ * is the shape it leaves behind.
+ */
+describe("live refresh follows the linked set, not the token", () => {
+  /** A Workstream owned by `bearer`, returning the opaque id it was given. */
+  async function workstreamAs(bearer: string, slug: string): Promise<string> {
+    const res = await dispatchAs(bearer, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug, title: slug },
+    });
+    expect(res.status).toBe(200);
+    return ((await res.json()) as { result: { id: string } }).result.id;
+  }
+
+  async function linkedPair(): Promise<{
+    root: { token: string; id: string };
+    linked: { token: string; id: string };
+  }> {
+    const root = await mintPrincipal();
+    const linked = await mintPrincipal();
+    await db
+      .update(users)
+      // Exactly the production shape: the root carries the address, the linked
+      // row carries none and points at it.
+      .set({ email: "dana@example.com" })
+      .where(eq(users.id, root.principal.id));
+    await db
+      .update(users)
+      .set({ claimedByUserId: root.principal.id, claimedAt: Date.now() })
+      .where(eq(users.id, linked.principal.id));
+    return {
+      root: { token: root.token, id: root.principal.id },
+      linked: { token: linked.token, id: linked.principal.id },
+    };
+  }
+
+  test("a write as the linked Principal reaches a subscriber on the root", async () => {
+    const { root, linked } = await linkedPair();
+    const machine = await workstreamAs(linked.token, "machine");
+
+    const frame = await frameOn(root.token, () =>
+      dispatchAs(linked.token, {
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: machine, content: "filed from the other machine" },
+      }),
+    );
+    // Named, so the page filter still has something to match on: the browser is
+    // signed in as the root and the Workstream belongs to the linked Principal.
+    expect(frame.workstreamId).toBe(machine);
+  });
+
+  test("and the reverse — a write as the root reaches a subscriber on the linked one", async () => {
+    const { root, linked } = await linkedPair();
+    const desk = await workstreamAs(root.token, "desk");
+
+    const frame = await frameOn(linked.token, () =>
+      dispatchAs(root.token, {
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: desk, content: "filed at the desk" },
+      }),
+    );
+    expect(frame.workstreamId).toBe(desk);
+  });
+
+  test("two Principals nobody linked still never hear each other", async () => {
+    const mine = await mintPrincipal();
+    const theirs = await mintPrincipal();
+    const wsMine = await workstreamAs(mine.token, "mine");
+    const wsTheirs = await workstreamAs(theirs.token, "theirs");
+
+    // A stranger writes first, then I do. Frames on one object arrive in order,
+    // so hearing mine first is proof theirs never reached me — the re-key
+    // widened the key, not the boundary.
+    const frame = await frameOn(mine.token, async () => {
+      await dispatchAs(theirs.token, {
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: wsTheirs, content: "not for you" },
+      });
+      await dispatchAs(mine.token, {
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: wsMine, content: "for me" },
+      });
+    });
+    expect(frame.workstreamId).toBe(wsMine);
+  });
+
+  test("a Principal whose root was removed falls back to its own object", async () => {
+    const { root, linked } = await linkedPair();
+    await workstreamAs(linked.token, "orphaned");
+    expect(await removeMember(db, { userId: root.id })).toBe(true);
+
+    // Scoped to nothing, so there is nothing left to file — but the object it
+    // reads is still its own rather than the dead root's, which is what keeps
+    // the fallback from being a second way into somebody else's stream.
+    const stream = await as(linked.token, "/v1/view/stream");
+    expect(stream.status).toBe(200);
+    await stream.body!.cancel();
+    expect((await as(linked.token, "/v1/view")).status).toBe(200);
   });
 });

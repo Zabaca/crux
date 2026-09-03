@@ -102,6 +102,18 @@ describe("resolving a Principal and its scope", () => {
     expect(statements).toHaveLength(1);
     expect(authed?.scope.ownerIds.sort()).toEqual(["USR-linked-a", "USR-linked-b", "USR-root"]);
     expect(authed?.scope.workstreamIds.sort()).toEqual(["WS-linked-a", "WS-linked-b", "WS-root"]);
+    // The one id in the scope that is not a set. The view-state Durable Object
+    // is addressed by `idFromName`, so a linked Principal has to resolve to the
+    // root's object or it pushes where nobody is listening (ADR-0014).
+    expect(authed?.scope.rootId).toBe(root);
+  });
+
+  test("an unclaimed Principal is its own root", async () => {
+    const id = await principal("alone");
+    const token = (await mintToken(db, { userId: id })).token;
+
+    expect((await authenticateAndResolveScope(db, token))?.scope.rootId).toBe(id);
+    expect((await resolveScope(db, { id })).rootId).toBe(id);
   });
 });
 
@@ -158,6 +170,9 @@ describe("what the collapsed query still refuses", () => {
     expect(authed?.principal.id).toBe("USR-survivor");
     expect(authed?.scope.ownerIds).toEqual([]);
     expect(authed?.scope.workstreamIds).toEqual([]);
+    // And it falls back to itself rather than to the dead root, so the object
+    // it reads view-state from is one nobody else resolves to.
+    expect(authed?.scope.rootId).toBe("USR-survivor");
   });
 
   test("a removed linked Principal drops out of the set", async () => {
@@ -178,6 +193,7 @@ describe("what the collapsed query still refuses", () => {
     const scope = await resolveScope(db, { id: "USR-never-existed" });
     expect(scope.ownerIds).toEqual([]);
     expect(scope.workstreamIds).toEqual([]);
+    expect(scope.rootId).toBe("USR-never-existed");
     expect(scope.has("WS-anything")).toBe(false);
   });
 

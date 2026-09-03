@@ -1,8 +1,14 @@
 /**
- * ViewStateDO — per-user view-state, off the filesystem (the reason this ticket
- * is ordered ahead of the UI). One Durable Object instance per user (addressed
- * by `idFromName(userId)`) owns that user's view-state blob and a push stream
- * that later live-refresh surfaces subscribe to.
+ * ViewStateDO — per-human view-state, off the filesystem (the reason this ticket
+ * is ordered ahead of the UI). One Durable Object instance per *root* Principal
+ * (addressed by `idFromName(scope.rootId)`, resolved in `api.ts`) owns that
+ * person's view-state blob and a push stream live-refresh surfaces subscribe to.
+ *
+ * Per-human rather than per-Principal because a person may hold several
+ * Principals — an agent per machine, claimed into one identity (ADR-0013) — and
+ * a frame is only useful to whoever is at the screen. Keying it on the
+ * requesting Principal split the writer and the reader across two objects the
+ * moment a claim linked them.
  *
  * The object speaks a tiny internal HTTP protocol so the Worker can wrap it as a
  * `ViewStore` (see `DurableObjectViewStore`): `GET /read`, `PUT /write`,
