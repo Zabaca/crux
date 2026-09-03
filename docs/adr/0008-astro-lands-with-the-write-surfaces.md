@@ -1,5 +1,15 @@
 # Astro lands with the write surfaces, not with the read pages
 
+> **Overtaken (2026-09-03).** The read pages moved to Astro too — the Workstream
+> list, the Problem and both Observation pages — because live refresh needs a
+> subscription and a subscription needs an island. The reasoning below still
+> holds for what it decided (*when* Astro arrives, and why not before the write
+> surfaces); what it no longer describes is the split, which now runs between
+> the pages showing corpus data and the account pages rather than between write
+> and read. The test-loop cost it names was paid once, as it predicted, and the
+> "routing change rather than a rewrite" consequence is what made the later move
+> cheap: the views are still the same functions in `apps/cloud/src/web/`.
+
 ADR-0004 chose Astro with React islands for the UI. The first browser surfaces —
 sign-in, invites, CLI tokens, and the read pages for Workstream, Problem,
 Solution and Observation — ship instead as plain server-rendered HTML from the

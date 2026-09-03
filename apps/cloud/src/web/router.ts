@@ -1,8 +1,16 @@
 /**
- * The browser half of the Worker: sign-in, invite redemption, the read pages,
- * and the Members / CLI-token screens.
+ * The browser half of the Worker: sign-in, invite redemption, claiming, the
+ * public homepage, and the Members / CLI-token screens.
  *
- * Every page except the two that exist because there is no session yet is
+ * The pages showing corpus data are not here — the Workstream list, the
+ * Problem, and the two Observation pages are Astro routes, because every one of
+ * them carries an island: the roadmap board, the action bar, or the
+ * subscription that re-reads the page when an agent writes to the Workstream it
+ * is showing. What is left is the account surface, which shows nothing an agent
+ * writes and so has nothing to subscribe to. A URL that names nothing still
+ * lands back here, as the 404 page.
+ *
+ * Every page except the ones that exist because there is no session yet is
  * gated on one. The session is the only *authentication* check in the file;
  * authorisation is not decided here either, but by `query()`, which scopes every
  * read to the Principal it is given (ADR-0013). A Workstream the viewer does not
@@ -26,12 +34,6 @@ import {
 import { html, htmlResponse, type Html } from "./html.js";
 import { workspaceName, type WebEnv } from "./session.js";
 import { page, type Viewer } from "./layout.js";
-import {
-  PageNotFound,
-  observationListPage,
-  observationPage,
-  workstreamListPage,
-} from "./read-pages.js";
 import {
   membersPage,
   tokensPage,
@@ -94,28 +96,6 @@ async function sendSignInLink(
     return "send-failed";
   }
 }
-
-/**
- * The linkable read surfaces, as pattern → loader. Each capture group becomes a
- * decoded argument, so the three of them differ only in their URL and their page
- * — which is the whole of the difference, and worth keeping visible as a table.
- */
-const READ_ROUTES: ReadonlyArray<
-  readonly [
-    RegExp,
-    (db: CruxDb, viewer: Viewer, ...params: string[]) => Promise<{ title: string; body: Html }>,
-  ]
-> = [
-  // `/w/<slug>` and `/w/<slug>/problems/<id>` are not here: both moved to Astro
-  // routes so they can carry hydrated islands — the roadmap board and the
-  // action bar. `problemPage()` below is still what the latter renders. A slug
-  // or id that names nothing still lands back here, as the 404 page.
-  [/^\/w\/([^/]+)\/observations$/, (db, viewer, slug) => observationListPage(db, viewer, slug!)],
-  [
-    /^\/w\/([^/]+)\/observations\/([^/]+)$/,
-    (db, viewer, slug, id) => observationPage(db, viewer, slug!, id!),
-  ],
-];
 
 function redirect(location: string, status = 302): Response {
   return new Response(null, { status, headers: { location } });
@@ -370,79 +350,61 @@ export async function handleWeb(
     return redirect(`${SESSION_REQUIRED}?next=${encodeURIComponent(url.pathname + url.search)}`);
   }
 
-  try {
-    if (path === "/") return render(await workstreamListPage(db, viewer));
-
-    if (path === "/members") {
-      const confirming = url.searchParams.get("confirm");
-      return render(await membersPage(db, viewer, confirming ? { confirming } : {}));
-    }
-    if (path === "/members/remove" && request.method === "POST") {
-      const form = await request.formData();
-      const id = String(form.get("id") ?? "");
-      // The id arrives from a form field, so the one rule that is not "any
-      // Member may do this" has to be enforced here rather than by the absence
-      // of a button: your own row is never removable.
-      if (id === viewer.id) {
-        return render(
-          await membersPage(db, viewer, {
-            error: "You cannot remove yourself. Sign out to leave this Workspace.",
-          }),
-          400,
-        );
-      }
-      const target = (await listMembers(db)).find((m) => m.id === id);
-      if (!target || !(await removeMember(db, { userId: id }))) {
-        return render(
-          await membersPage(db, viewer, { error: `No Member of this Workspace has id ${id}.` }),
-          404,
-        );
-      }
-      return render(await membersPage(db, viewer, { removed: target.name }));
-    }
-    if (path === "/members/invite" && request.method === "POST") {
-      const form = await request.formData();
-      const email = normalizeEmail(String(form.get("email") ?? ""));
-      if (!email.includes("@")) {
-        return render(
-          await membersPage(db, viewer, { error: "That is not an email address." }),
-          400,
-        );
-      }
-      const invite = await createInvite(db, { email, invitedById: viewer.id });
-      const link = `${url.origin}/invite?token=${invite.token}`;
-      return render(await membersPage(db, viewer, { inviteLink: link, invitedEmail: email }));
-    }
-
-    if (path === "/tokens") return render(await tokensPage(db, viewer));
-    if (path === "/tokens/mint" && request.method === "POST") {
-      const form = await request.formData();
-      const name = String(form.get("name") ?? "").trim() || null;
-      const minted = await mintToken(db, { userId: viewer.id, ...(name ? { name } : {}) });
-      return render(await tokensPage(db, viewer, { minted: minted.token }));
-    }
-    if (path === "/tokens/revoke" && request.method === "POST") {
-      const form = await request.formData();
-      const id = String(form.get("id") ?? "");
-      // Scoped to the viewer: the id comes from a form field, so an unscoped
-      // revoke would let any Member kill any other Member's token.
-      const revoked = await revokeToken(db, { tokenId: id, userId: viewer.id });
+  if (path === "/members") {
+    const confirming = url.searchParams.get("confirm");
+    return render(await membersPage(db, viewer, confirming ? { confirming } : {}));
+  }
+  if (path === "/members/remove" && request.method === "POST") {
+    const form = await request.formData();
+    const id = String(form.get("id") ?? "");
+    // The id arrives from a form field, so the one rule that is not "any
+    // Member may do this" has to be enforced here rather than by the absence
+    // of a button: your own row is never removable.
+    if (id === viewer.id) {
       return render(
-        await tokensPage(db, viewer, revoked ? { revoked: id } : { notYours: id }),
-        revoked ? 200 : 404,
+        await membersPage(db, viewer, {
+          error: "You cannot remove yourself. Sign out to leave this Workspace.",
+        }),
+        400,
       );
     }
-
-    for (const [pattern, load] of READ_ROUTES) {
-      const match = pattern.exec(path);
-      if (match) {
-        const [, ...params] = match;
-        return render(await load(db, viewer, ...params.map((p) => decodeURIComponent(p!))));
-      }
+    const target = (await listMembers(db)).find((m) => m.id === id);
+    if (!target || !(await removeMember(db, { userId: id }))) {
+      return render(
+        await membersPage(db, viewer, { error: `No Member of this Workspace has id ${id}.` }),
+        404,
+      );
     }
-  } catch (err) {
-    if (err instanceof PageNotFound) return notFoundPage(env, url, viewer);
-    throw err;
+    return render(await membersPage(db, viewer, { removed: target.name }));
+  }
+  if (path === "/members/invite" && request.method === "POST") {
+    const form = await request.formData();
+    const email = normalizeEmail(String(form.get("email") ?? ""));
+    if (!email.includes("@")) {
+      return render(await membersPage(db, viewer, { error: "That is not an email address." }), 400);
+    }
+    const invite = await createInvite(db, { email, invitedById: viewer.id });
+    const link = `${url.origin}/invite?token=${invite.token}`;
+    return render(await membersPage(db, viewer, { inviteLink: link, invitedEmail: email }));
+  }
+
+  if (path === "/tokens") return render(await tokensPage(db, viewer));
+  if (path === "/tokens/mint" && request.method === "POST") {
+    const form = await request.formData();
+    const name = String(form.get("name") ?? "").trim() || null;
+    const minted = await mintToken(db, { userId: viewer.id, ...(name ? { name } : {}) });
+    return render(await tokensPage(db, viewer, { minted: minted.token }));
+  }
+  if (path === "/tokens/revoke" && request.method === "POST") {
+    const form = await request.formData();
+    const id = String(form.get("id") ?? "");
+    // Scoped to the viewer: the id comes from a form field, so an unscoped
+    // revoke would let any Member kill any other Member's token.
+    const revoked = await revokeToken(db, { tokenId: id, userId: viewer.id });
+    return render(
+      await tokensPage(db, viewer, revoked ? { revoked: id } : { notYours: id }),
+      revoked ? 200 : 404,
+    );
   }
 
   return notFoundPage(env, url, viewer);

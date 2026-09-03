@@ -333,7 +333,10 @@ shows its code and message rather than snapping the card back in silence. Live r
 push stream, so a `crux` command in a terminal lands on the open page. Each
 frame names the Workstream the action touched — `null` when it touched none —
 so a page showing one Workstream ignores work in another rather than reloading
-on every action anywhere in the Principal's corpus.
+on every action anywhere in the Principal's corpus. Every page showing corpus
+data carries it — the Workstream list, the board, the Problem, and both
+Observation pages — which is why all five are Astro routes; the account pages
+are not, because nothing an agent writes appears on them.
 
 The site is Astro with React islands, wrapping the hand-written Worker entry
 rather than replacing it ([ADR-0009](docs/adr/0009-astro-wraps-the-worker-entry.md)).

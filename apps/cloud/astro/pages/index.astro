@@ -1,0 +1,42 @@
+---
+/**
+ * `/` — every Workstream this Principal owns.
+ *
+ * The view is still `workstreamListPage()` from `src/web/read-pages.ts`: moving
+ * the URL onto Astro is a routing change, not a rewrite. What Astro adds is the
+ * subscription, which needs an island and so needs this renderer (ADR-0009).
+ *
+ * A request this page cannot render falls through with a 404 rather than
+ * answering: `/` is the one address with two answers — the Workstream list for
+ * a Member, the public homepage for a stranger (ADR-0013) — and the second of
+ * them lives in `router.ts`, which is what the Worker tries next when Astro
+ * answers 404. That covers both refusals `pageContext` makes, the missing
+ * session and the deployment with no `BETTER_AUTH_SECRET`, because `handleWeb`
+ * has its own answer for each: the homepage, and the "Not configured" 503.
+ */
+import { env } from "cloudflare:workers";
+
+import LiveRefresh from "../components/LiveRefresh.tsx";
+import { html } from "../../src/web/html.js";
+import { page } from "../../src/web/layout.js";
+import { workstreamListPage } from "../../src/web/read-pages.js";
+import { pageContext } from "../../src/web/session.js";
+
+const ctx = await pageContext(env, Astro.request);
+if (!ctx.ok) return new Response(null, { status: 404 });
+
+const rendered = await workstreamListPage(ctx.db, ctx.viewer);
+
+const shell = page({
+  title: rendered.title,
+  viewer: ctx.viewer,
+  workspace: ctx.workspace,
+  body: html`${rendered.body}<!--LIVE-->`,
+}).value;
+const [head, tail] = shell.split("<!--LIVE-->");
+---
+<Fragment set:html={`<!doctype html>\n${head}`} />
+{/* Unfiltered: every Workstream is this page's data, so there is no one of
+    them to narrow to. A frame that names none still counts here. */}
+<LiveRefresh client:load />
+<Fragment set:html={tail} />

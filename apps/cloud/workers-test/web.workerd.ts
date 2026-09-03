@@ -8,9 +8,10 @@ import { dispatch } from "@crux/core/actions";
 import { eq } from "drizzle-orm";
 
 // Seam: the deployed request path, same as api.workerd.ts. The browser surfaces
-// — sign-in, invite, the read pages, Members and CLI tokens — are all HTTP on
-// this Worker, so `SELF.fetch` is the interface they are tested through. No page
-// module is imported and poked directly.
+// — sign-in, invite, the pages showing corpus data, Members and CLI tokens —
+// are all HTTP on this Worker, whichever of its two renderers answers, so
+// `SELF.fetch` is the interface they are tested through. No page module is
+// imported and poked directly.
 
 let db: CruxDb;
 
@@ -382,9 +383,10 @@ describe("removing a Member", () => {
         body: JSON.stringify({ kind: "WORKSTREAM_LIST" }),
       });
 
-    // Both doors open before the removal, and both renderers with them: `/` is
-    // the hand-written entry's own page, `/w/<slug>` is Astro's. They resolve
-    // the session through different functions, so a gate added to one and not
+    // Both doors open before the removal, and both renderers with them: `/w/<slug>`
+    // is Astro's page, and `/` is Astro's too until it declines, at which point
+    // the hand-written entry answers it through its own session resolution. Two
+    // functions resolve a session on this Worker, so a gate added to one and not
     // the other would leave half the site readable.
     expect((await get("/", { headers: { cookie: leaver.cookie } })).status).toBe(200);
     expect((await get("/w/crux", { headers: { cookie: leaver.cookie } })).status).toBe(200);
@@ -559,6 +561,113 @@ describe("read pages", () => {
     const body = await (await get("/w/crux", { headers: { cookie } })).text();
     expect(body).not.toContain("<script>alert(1)</script>");
     expect(body).toContain("&lt;script&gt;");
+  });
+});
+
+/**
+ * Live refresh on the pages showing corpus data.
+ *
+ * They are server-rendered documents — the island holds no copy of the corpus
+ * — so what makes them fresh is one subscription to this Member's ViewStateDO
+ * stream and a re-read of the page. On the Problem page it hydrates alongside
+ * the action bar; on the other three it is the only island there is.
+ *
+ * What is checkable through the request path is that the island is on the page
+ * and which Workstream it is listening for — the filtering itself is pinned in
+ * `astro/lib/__tests__/view-stream.test.ts`, against the same subscriber.
+ */
+describe("live refresh", () => {
+  /** The `<astro-island>` tag for one component, as the page serialized it. */
+  function island(body: string, component: string): string | null {
+    for (const tag of body.match(/<astro-island\b[^>]*>/g) ?? []) {
+      if (tag.includes(`/${component}.`)) return tag;
+    }
+    return null;
+  }
+
+  test("the Workstream list subscribes, unscoped — every Workstream is its data", async () => {
+    const { cookie } = await inviteAndJoin("live-home@example.com", "Live Home");
+    const res = await get("/", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const tag = island(await res.text(), "LiveRefresh");
+    expect(tag).not.toBeNull();
+    // No Workstream to narrow to: a filtered subscriber drops every frame that
+    // does not name its own, which on this page would be all of them.
+    expect(tag).not.toContain("WS-");
+  });
+
+  test("the Problem page subscribes to the Workstream it is showing", async () => {
+    const { cookie } = await inviteAndJoin("live-prb@example.com", "Live Problem");
+    const problemId = await seedWorkedProblem();
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(island(body, "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("the Observation list subscribes to the Workstream it is showing", async () => {
+    const { cookie } = await inviteAndJoin("live-obs@example.com", "Live Obs");
+    const res = await get("/w/crux/observations", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(island(await res.text(), "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("the Observation page subscribes to the Workstream it is showing", async () => {
+    const { cookie } = await inviteAndJoin("live-obs1@example.com", "Live Obs One");
+    await seedWorkedProblem();
+    const observationId = (await db.select().from(observations))[0]!.id;
+    const res = await get(`/w/crux/observations/${observationId}`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(island(await res.text(), "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("a moved route that names nothing still lands on the 404 page", async () => {
+    const { cookie } = await inviteAndJoin("live-404@example.com", "Live Missing");
+    // Two renderers answer these URLs between them: Astro declines with a bare
+    // 404 and the hand-written entry renders the page. A reader should not be
+    // able to tell, so what is asserted is the page, not the status alone.
+    for (const path of ["/w/nope/observations", "/w/crux/observations/OBS-999"]) {
+      const res = await get(path, { headers: { cookie } });
+      expect(res.status).toBe(404);
+      expect(await res.text()).toContain("Not found");
+    }
+  });
+
+  test("the moved routes are still behind the session gate", async () => {
+    for (const path of ["/", "/w/crux/observations", "/w/crux/observations/OBS-1"]) {
+      const res = await get(path);
+      // `/` is the exception: it answers the public homepage rather than
+      // bouncing, which is the whole reason it has two answers.
+      if (path === "/") {
+        expect(res.status).toBe(200);
+        continue;
+      }
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toContain("/signin?next=");
+    }
+  });
+
+  test("the account pages ship no client JavaScript at all", async () => {
+    const { cookie } = await inviteAndJoin("live-acct@example.com", "Live Account");
+    const { createInvite } = await import("@crux/core/auth/invites");
+    const invite = await createInvite(db, {
+      email: "invitee@example.com",
+      invitedById: corpusOwner,
+    });
+
+    for (const [path, headers] of [
+      ["/signin", {}],
+      ["/claim", {}],
+      [`/invite?token=${invite.token}`, {}],
+      ["/members", { cookie }],
+      ["/tokens", { cookie }],
+    ] as Array<[string, Record<string, string>]>) {
+      const res = await get(path, { headers });
+      expect(res.status).toBe(200);
+      const body = await res.text();
+      // Not merely island-free: these pages are the whole payload, and a
+      // subscription is the only thing that would have put script on them.
+      expect(body).not.toContain("astro-island");
+      expect(body).not.toContain("<script");
+    }
   });
 });
 

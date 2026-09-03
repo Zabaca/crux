@@ -1,0 +1,56 @@
+---
+/**
+ * `/w/<slug>/observations/<id>` — one signal and every Problem it supports,
+ * rendered by `observationPage()` and re-read when this Workstream changes.
+ *
+ * What moves under a reader here is the Evidence: an Observation acquires the
+ * Problems it supports well after it is filed, so a page that was accurate when
+ * the link was opened stops being so without anything on it being wrong.
+ *
+ * `PageNotFound` is the one 404 path — a slug that names nothing, an id that
+ * does, but in another Workstream. Astro answers it with a bare 404, which the
+ * Worker falls through to `handleWeb` and its rendered "Not found" page.
+ */
+import { env } from "cloudflare:workers";
+import { query } from "@crux/core/reads";
+import type { ObservationDetail } from "@crux/core/reads";
+
+import LiveRefresh from "../../../../components/LiveRefresh.tsx";
+import { html } from "../../../../../src/web/html.js";
+import { page } from "../../../../../src/web/layout.js";
+import { PageNotFound, observationPage } from "../../../../../src/web/read-pages.js";
+import { pageContext } from "../../../../../src/web/session.js";
+
+const ctx = await pageContext(env, Astro.request);
+if (!ctx.ok) return ctx.response;
+
+const slug = Astro.params.slug!;
+const id = Astro.params.id!;
+
+let rendered;
+let detail: ObservationDetail;
+try {
+  rendered = await observationPage(ctx.db, ctx.viewer, slug, id);
+  // The island needs the Workstream this row belongs to, and the Observation
+  // carries it — asking again by slug would be a second read for an answer
+  // `observationPage` has already refused to render without.
+  detail = (await query(
+    { kind: "OBSERVATION_DETAIL", id },
+    { db: ctx.db, principal: ctx.viewer },
+  )) as ObservationDetail;
+} catch (err) {
+  if (!(err instanceof PageNotFound)) throw err;
+  return new Response(null, { status: 404 });
+}
+
+const shell = page({
+  title: rendered.title,
+  viewer: ctx.viewer,
+  workspace: ctx.workspace,
+  body: html`${rendered.body}<!--LIVE-->`,
+}).value;
+const [head, tail] = shell.split("<!--LIVE-->");
+---
+<Fragment set:html={`<!doctype html>\n${head}`} />
+<LiveRefresh client:load workstreamId={detail.observation.workstreamId} />
+<Fragment set:html={tail} />

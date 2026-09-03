@@ -1,8 +1,11 @@
 /**
  * The read surfaces: Workstream list, Problem and Observation.
  *
- * `/w/<slug>` is not among them — it is the roadmap board, an Astro route with
- * a hydrated island, and so lives in `astro/pages/w/[slug]/index.astro`.
+ * These are views, not routes. Every one of them is rendered by an Astro page
+ * under `astro/pages/`, which wraps it in the shell and hydrates the islands it
+ * needs — the action bar, and the subscription that re-reads the page when its
+ * Workstream changes. `/w/<slug>` has no function here at all: the roadmap
+ * board is markup a React island owns.
  *
  * Every page is server-rendered from `query()` — the same named reads the CLI
  * asks for — so a `--json` shape and the page that displays it can never drift
