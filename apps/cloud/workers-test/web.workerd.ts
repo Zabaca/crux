@@ -6,6 +6,13 @@ import { applyD1Schema } from "@crux/core/db/d1";
 import { observations, problems, users, workstreams } from "@crux/core/db/schema";
 import { dispatch } from "@crux/core/actions";
 import { eq } from "drizzle-orm";
+// Statically, not `await import(...)` inside the helpers below: better-auth is
+// a large graph and loading it takes seconds inside workerd. A dynamic import
+// charges that once, to whichever test happens to reach it first, against that
+// test's own timeout — which is a five-second budget spent on module loading
+// and a flake on a loaded CI runner. Imported here it is paid during collection.
+import { createAuth } from "@crux/core/auth/better-auth";
+import { createInvite } from "@crux/core/auth/invites";
 
 // Seam: the deployed request path, same as api.workerd.ts. The browser surfaces
 // — sign-in, invite, the pages showing corpus data, Members and CLI tokens —
@@ -94,7 +101,6 @@ async function inviteAndJoin(
   cookie: string;
   userId: string;
 }> {
-  const { createInvite } = await import("@crux/core/auth/invites");
   const invite = await createInvite(db, { email, invitedById: "USR-james" });
   const res = await post("/invite/accept", { token: invite.token, name });
   expect(res.status, "redeeming an invite ends at 'check your email'").toBe(200);
@@ -110,7 +116,6 @@ async function inviteAndJoin(
 
 /** A session cookie for a Member, as clicking their sign-in link would produce. */
 async function sessionCookieFor(email: string): Promise<string> {
-  const { createAuth } = await import("@crux/core/auth/better-auth");
   let link: string | undefined;
   const auth = createAuth(db, {
     secret: "test-secret-not-used-in-production",
@@ -198,7 +203,6 @@ describe("invite", () => {
   });
 
   test("an invite is single-use", async () => {
-    const { createInvite } = await import("@crux/core/auth/invites");
     const invite = await createInvite(db, {
       email: "twice@example.com",
       invitedById: "USR-james",
@@ -647,7 +651,6 @@ describe("live refresh", () => {
 
   test("the account pages ship no client JavaScript at all", async () => {
     const { cookie } = await inviteAndJoin("live-acct@example.com", "Live Account");
-    const { createInvite } = await import("@crux/core/auth/invites");
     const invite = await createInvite(db, {
       email: "invitee@example.com",
       invitedById: corpusOwner,
