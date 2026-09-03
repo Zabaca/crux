@@ -83,9 +83,11 @@ export function onViewStateChange(
 }
 
 /**
- * A frame from a deployment that predates `workstreamId` still parses — the
- * field reads as null, which an unfiltered subscriber ignores and a filtered
- * one treats as "not mine".
+ * Total: a frame this page cannot make sense of drops rather than throwing
+ * inside an event listener, where nothing would catch it. A frame without
+ * `workstreamId` — a deployment running code older than the page — reads as
+ * null, which an unfiltered subscriber hears and a filtered one treats as
+ * "not mine".
  */
 function parseViewFrame(data: unknown): ViewStateChange | null {
   if (typeof data !== "string") return null;

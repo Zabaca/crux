@@ -23,7 +23,8 @@ export type LastAction = {
   ts: number;
   /**
    * The Workstream whose data the action touched, or null when it touched none
-   * (a Workstream-list navigation, a RESET, adding a Workstream itself).
+   * — navigating back to the Workstream list, or a RESET. Every mutation
+   * touches one, including the one that creates it.
    *
    * This is what lets a subscriber decide whether an event is theirs. Without
    * it every open page refetches on any action anywhere in the Principal's
@@ -222,6 +223,9 @@ function normalizeLastAction(raw: unknown): LastAction | null {
   if (!raw || typeof raw !== "object") return null;
   const la = raw as Record<string, unknown>;
   return {
+    // Spread first so a field a newer writer added survives the read; the
+    // three below are the ones this type promises, so they win.
+    ...la,
     kind: String(la.kind ?? ""),
     ts: typeof la.ts === "number" ? la.ts : 0,
     workstreamId: typeof la.workstreamId === "string" ? la.workstreamId : null,

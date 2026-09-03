@@ -1071,7 +1071,7 @@ describe("change events name the Workstream they came from", () => {
     for (let i = 0; i < 5; i++) {
       const { value, done } = await reader.read();
       if (done) break;
-      buffered += decoder.decode(value);
+      buffered += decoder.decode(value, { stream: true });
       const match = buffered.match(/event: view\ndata: (.*)\n\n/);
       if (match) {
         await reader.cancel();

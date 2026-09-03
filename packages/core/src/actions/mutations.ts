@@ -95,8 +95,16 @@ async function scopedFollowUps(
  *
  * `workstreamId` is the Workstream whose data moved — the change event carries
  * it so a subscriber watching one Workstream can ignore the rest. It is read
- * off the rows the scope check already resolved, so naming it costs no extra
- * query and can never name a Workstream outside the caller's scope.
+ * off the rows the scope check already resolved wherever those name a
+ * Workstream, so it can never name one outside the caller's scope. CLOSE_ATTEMPT
+ * is the exception and pays one more scoped lookup: an Attempt row names its
+ * Problem, not its Workstream.
+ *
+ * One id, not a set: a mutation that touches two Workstreams reports the one
+ * the changed row belongs to. ADD_EVIDENCE is the case — the Evidence row hangs
+ * off the Problem, so it names the Problem's Workstream, and a page showing the
+ * Observation's is not told. Carrying a set is a bigger event shape than
+ * anything measurable needs today.
  */
 export type MutationOutcome = {
   result: unknown;
