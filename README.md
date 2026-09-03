@@ -174,11 +174,11 @@ Production only — there is no preview environment.
 
 **A pull request is verified before it can merge.**
 [`pull-request.yml`](.github/workflows/pull-request.yml) runs `bun run verify` —
-lint, typecheck, `docs:check`, the suite — on every PR against `main`, and
-and once the [`main` ruleset](docs/runbooks/protect-main.md) is applied, `main`
-refuses a merge whose `Verify` has not passed. Until it is, the check is
-visible but advisory — applying it needs repository admin, which the CI token
-deliberately does not hold. The PR job holds no secrets either: it has nothing
+lint, typecheck, `docs:check`, the suite — on every PR against `main`. Once the
+[`main` ruleset](docs/runbooks/protect-main.md) is applied, `main` refuses a
+merge whose `Verify` has not passed; until it is, the check is visible but
+advisory — applying it needs repository admin, which the CI token deliberately
+does not hold. The PR job holds no secrets either: it has nothing
 to deploy, so it has no business being able to. Verifying only on the merge made
 the merge itself the first verification, which is how `main` ended up ahead of
 production once already.
