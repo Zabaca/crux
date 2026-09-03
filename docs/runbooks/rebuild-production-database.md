@@ -23,10 +23,10 @@ express:
   EXISTS` is a no-op against a table that already exists, so the stricter
   declaration reaches a fresh database and silently misses every existing one.
 
-Both are free against an empty database, which is why the reshaping in
+All three are free against an empty database, which is why the reshaping in
 [ADR-0012](../adr/0012-crux-does-not-own-the-build.md) needs this runbook. It
-does both kinds: `outcomes` now hangs off `problems` rather than the deleted
-`solutions` table, so a deployment that has not been wiped keeps a table with
+does the first two of them: `outcomes` now hangs off `problems` rather than the
+deleted `solutions` table, so a deployment that has not been wiped keeps a table with
 the old parent and answers every Outcome read and write with `no such column:
 problem_id`; and the `solutions`, `eliminations`, `decisions` and their two join
 tables are gone from the schema module, which does not drop them in a database

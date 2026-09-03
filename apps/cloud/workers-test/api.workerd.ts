@@ -1149,8 +1149,8 @@ describe("a Workstream always has an owner", () => {
   // every read, with no path back through the API — so the column carries the
   // invariant the security model rests on, and the database enforces it.
   test("ADD_WORKSTREAM stamps the calling Principal, over the deployed path", async () => {
-    const { token: minted, principal } = await mintPrincipal();
-    const res = await dispatchAs(minted, {
+    const { token, principal } = await mintPrincipal();
+    const res = await dispatchAs(token, {
       kind: "ADD_WORKSTREAM",
       payload: { slug: "owned", title: "Owned" },
     });
