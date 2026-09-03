@@ -21,6 +21,7 @@ import { applyD1Schema } from "../src/db/d1/index.js";
 import { users, workstreams } from "../src/db/schema.js";
 import { mintToken } from "../src/auth/tokens.js";
 import { authenticateAndResolveScope, resolveScope } from "../src/auth/principals.js";
+import { query } from "../src/reads/index.js";
 
 let db: CruxDb;
 
@@ -104,11 +105,43 @@ describe("resolving a Principal and its scope", () => {
   });
 });
 
+describe("the read the API actually serves", () => {
+  test("a handed-down scope is not re-resolved", async () => {
+    const id = await principal("handed-down");
+    const token = (await mintToken(db, { userId: id })).token;
+    const authed = (await authenticateAndResolveScope(db, token))!;
+
+    const { db: counted, statements } = counting(env.DB);
+    await query(
+      { kind: "WORKSTREAM_LIST" },
+      { db: counted, principal: authed.principal, scope: authed.scope },
+    );
+
+    // Only the read's own statement. The API resolves identity and scope in one
+    // statement at the edge; a `query()` that resolved its own would put the
+    // round trip straight back.
+    expect(statements).toHaveLength(1);
+  });
+
+  test("a scope belonging to somebody else is ignored, not trusted", async () => {
+    const mine = await principal("mine");
+    const theirs = await principal("theirs");
+    const stolen = await resolveScope(db, { id: theirs });
+
+    const result = (await query(
+      { kind: "WORKSTREAM_LIST" },
+      { db, principal: { id: mine }, scope: stolen },
+    )) as Array<{ id: string }>;
+
+    expect(result.map((w) => w.id)).toEqual(["WS-mine"]);
+  });
+});
+
 describe("what the collapsed query still refuses", () => {
   test("a token whose owner was removed does not authenticate at all", async () => {
     const id = await principal("gone");
     const token = (await mintToken(db, { userId: id })).token;
-    await db.update(users).set({ removedAt: Date.now() });
+    await db.update(users).set({ removedAt: Date.now() }).where(eq(users.id, id));
 
     expect(await authenticateAndResolveScope(db, token)).toBeNull();
   });
@@ -117,8 +150,7 @@ describe("what the collapsed query still refuses", () => {
     const root = await principal("dead-root");
     await principal("survivor", root);
     const token = (await mintToken(db, { userId: "USR-survivor" })).token;
-    await db.update(users).set({ removedAt: Date.now() });
-    await db.update(users).set({ removedAt: null }).where(eq(users.id, "USR-survivor"));
+    await db.update(users).set({ removedAt: Date.now() }).where(eq(users.id, root));
 
     // Still authenticated — the Principal itself is a Member — and scoped to
     // nothing, which is what keeps removal from being undone by a claim edge.

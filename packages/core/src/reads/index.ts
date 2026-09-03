@@ -42,7 +42,7 @@ import {
   problemsInScope,
   requireProblemInScope,
   requireWorkstreamInScope,
-  resolveScope,
+  scopeFor,
   type Principal,
   type Scope,
 } from "../auth/principals.js";
@@ -458,12 +458,6 @@ export async function query(
     );
   }
   return result;
-}
-
-/** The caller's scope when it is this Principal's, otherwise a fresh one. */
-async function scopeFor(db: CruxDb, principal: Principal, provided?: Scope): Promise<Scope> {
-  if (provided && provided.principalId === principal.id) return provided;
-  return resolveScope(db, principal);
 }
 
 async function recordRecentQuery(store: ViewStore, kind: string, slug: string): Promise<void> {

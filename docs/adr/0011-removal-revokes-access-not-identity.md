@@ -27,9 +27,11 @@ session record is deleted, because every door reads the same column:
   checks the cookie, and this checks whether the person is still in the
   Workspace. It is also what makes a sign-in link already sitting in an inbox
   worthless, which deleting session rows would not have done.
-- `authenticateToken` — **no CLI token authenticates**, joined in rather than
-  checked by the caller, because there is exactly one thing a resolved token is
-  for and a removed person may not do it.
+- `authenticateAndResolveScope` — **no CLI token authenticates**, joined in
+  rather than checked by the caller, because there is exactly one thing a
+  resolved token is for and a removed person may not do it. The join is an inner
+  one, alongside the left joins that resolve the scope, so removal closes the
+  door rather than merely emptying the corpus behind it.
 
 The stamp is therefore the only thing to undo, which is what makes a re-invite a
 *reinstatement*: `ensureMember` looks past a removal on purpose, clears the

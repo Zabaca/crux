@@ -103,29 +103,8 @@ export type Scope = {
 };
 
 /**
- * Who a Principal is allowed to read *for*, and what they own — in one
- * statement.
- *
- * "Every Principal claimed by me" (ADR-0013) is three lookups on `users` and a
- * lookup on `workstreams`, and every one of them was awaiting the one before
- * it. On D1 that depth is the cost: four round trips at ~60ms each, paid by
- * every read on a corpus of any size, including an empty one. They are all one
- * join apart, so they collapse:
- *
- *   self  — the row the request resolved to, which must not be removed
- *   root  — the human it answers to: itself, or whoever claimed it
- *   owner — root, plus everything else root has claimed
- *   ws    — the Workstreams those owners hold
- *
- * The joins after `self` are LEFT joins on purpose. A removed root, or a self
- * whose claim points at a row that is gone, must scope to *nothing* while
- * leaving the requester authenticated — a token whose corpus is empty is not a
- * token that failed to authenticate, and collapsing the two would turn a
- * removal into a 401 for a Principal that still exists.
- *
- * The set stays symmetric — a token linked to a human reads what that human
- * owns, and the reverse — for the reason it always did: claiming is what the
- * person did to say the two are one.
+ * The joined shape every scope resolution walks, aliased once so both doors
+ * enter the same query. See `resolveScope` for what it means.
  */
 const selfUser = alias(users, "scope_self");
 const rootUser = alias(users, "scope_root");
@@ -164,10 +143,35 @@ function isPresent(value: string | null): value is string {
 }
 
 /**
- * Resolve a scope from a Principal id — the browser door, where the identity
- * came from a Better Auth session and there is no `api_tokens` row to join
- * through (ADR-0007).
+ * Who a Principal is allowed to read *for*, and what they own — in one
+ * statement.
+ *
+ * This is the browser door, where the identity came from a Better Auth session
+ * and there is no `api_tokens` row to join through (ADR-0007);
+ * `authenticateAndResolveScope` is the same query entered through one.
+ *
+ * "Every Principal claimed by me" (ADR-0013) is three lookups on `users` and a
+ * lookup on `workstreams`, and every one of them was awaiting the one before
+ * it. On D1 that depth is the cost: four round trips at ~60ms each, paid by
+ * every read on a corpus of any size, including an empty one. They are all one
+ * join apart, so they collapse:
+ *
+ *   self  — the row the request resolved to, which must not be removed
+ *   root  — the human it answers to: itself, or whoever claimed it
+ *   owner — root, plus everything else root has claimed
+ *   ws    — the Workstreams those owners hold
+ *
+ * The joins after `self` are LEFT joins on purpose. A removed root, or a self
+ * whose claim points at a row that is gone, must scope to *nothing* while
+ * leaving the requester authenticated — a token whose corpus is empty is not a
+ * token that failed to authenticate, and collapsing the two would turn a
+ * removal into a 401 for a Principal that still exists.
+ *
+ * The set stays symmetric — a token linked to a human reads what that human
+ * owns, and the reverse — for the reason it always did: claiming is what the
+ * person did to say the two are one.
  */
+
 export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
   const rows = await db
     .select({ ownerId: ownerUser.id, workstreamId: workstreams.id })
@@ -182,7 +186,6 @@ export async function resolveScope(db: CruxDb, principal: Principal): Promise<Sc
 /** A bearer token resolved to who it acts as and what that Principal may see. */
 export type AuthenticatedScope = {
   principal: Principal;
-  tokenId: string;
   scope: Scope;
 };
 
@@ -207,7 +210,6 @@ export async function authenticateAndResolveScope(
   const hash = await hashToken(presented);
   const rows = await db
     .select({
-      tokenId: apiTokens.id,
       tokenHash: apiTokens.tokenHash,
       userId: apiTokens.userId,
       ownerId: ownerUser.id,
@@ -225,11 +227,20 @@ export async function authenticateAndResolveScope(
   const first = rows[0];
   if (!first) return null;
   if (!timingSafeEqualHex(first.tokenHash, hash)) return null;
-  return {
-    principal: { id: first.userId },
-    tokenId: first.tokenId,
-    scope: scopeFromRows(first.userId, rows),
-  };
+  return { principal: { id: first.userId }, scope: scopeFromRows(first.userId, rows) };
+}
+
+/**
+ * The scope a caller already resolved for this Principal, or a fresh one.
+ *
+ * `query()` and `dispatch()` both take an optional pre-resolved scope, and both
+ * have to ask the same question of it, so the question is asked once here. A
+ * scope carrying somebody else's `principalId` is ignored rather than trusted —
+ * the one way a handed-down scope could become a cross-tenant disclosure.
+ */
+export async function scopeFor(db: CruxDb, principal: Principal, provided?: Scope): Promise<Scope> {
+  if (provided && provided.principalId === principal.id) return provided;
+  return resolveScope(db, principal);
 }
 
 /** Who is asking. Resolved server-side from a bearer token or a session. */

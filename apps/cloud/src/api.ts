@@ -8,8 +8,12 @@
  * the caller's ViewStateDO. Reads mirror the CLI's `--json` shapes exactly.
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
-import { authenticateAndResolveScope, resolveScope, type Scope } from "@crux/core/auth/principals";
-import { mintPrincipal } from "@crux/core/auth/principals";
+import {
+  authenticateAndResolveScope,
+  mintPrincipal,
+  resolveScope,
+  type Scope,
+} from "@crux/core/auth/principals";
 import { CLAIM_TTL_MS, createClaim } from "@crux/core/auth/claims";
 import { claimLinkEmail } from "@crux/core/auth/email";
 import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
