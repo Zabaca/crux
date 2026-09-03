@@ -68,7 +68,7 @@ Its entry covers only what has landed since the seed was written.
 version is written, because it is the only package that becomes the deployment
 (ADR-0015). Every other `package.json` here is private, npm never sees it, and
 what it says is not a claim about anything — `packages/core` and `packages/cli`
-read `0.0.0`, `packages/infra` and `packages/tui-ds` read `0.0.1`. **Do not
+read `0.0.0`, `packages/infra` reads `0.0.1`. **Do not
 "fix" those to match a release**, and do not read one as the version.
 
 The shape is `MAJOR.MINOR.PATCH`, at `0.x` today:

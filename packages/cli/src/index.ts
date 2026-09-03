@@ -12,7 +12,6 @@ import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
 import { initCommand } from "./commands/init.js";
 import { claimCommand } from "./commands/claim.js";
-import { browseCommand } from "./commands/browse.js";
 import { viewCommand } from "./commands/view.js";
 
 const main = defineCommand({
@@ -33,7 +32,6 @@ const main = defineCommand({
     abandonment: abandonmentCommand,
     outcome: outcomeCommand,
     search: searchCommand,
-    browse: browseCommand,
     view: viewCommand,
   },
 });

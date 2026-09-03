@@ -34,7 +34,17 @@
 > `PROBLEM_DETAIL` to drill in, `OBSERVATION_UNLINKED` for the intake queue,
 > which is where the archive-hiding default now lives.
 >
-> The TUI half (`crux browse`) is otherwise unchanged and still accurate.
+> **Superseded again (2026-09-03).** The TUI is deleted: `crux browse`,
+> `packages/cli/src/browse/`, the `@crux/tui-ds` package and the `tui-ink` skill
+> are all gone. So the second of the two implementations this doc specifies no
+> longer exists, and neither does the first — the browser surface on the Worker
+> is the only human-readable surface now. Everything below that describes screens,
+> key bindings, terminal layout or the `browse` entry point describes nothing.
+>
+> What survives a second deletion is what survived the first: the user stories,
+> the ordering rules, the archive semantics, the empty-state requirement and the
+> anti-goals. They are surface-independent, which is why this doc is kept rather
+> than removed.
 
 This doc is the authoritative spec for two parallel implementations of a human-browseable view of Crux state: a Next.js web UI under `apps/web/` and an ink-based TUI under `packages/cli/src/commands/browse.ts`. Both ship in this repo and are read-only for v1.
 

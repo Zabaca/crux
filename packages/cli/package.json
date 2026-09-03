@@ -7,20 +7,13 @@
   },
   "type": "module",
   "scripts": {
-    "browse:dev": "CRUX_DB_URL=file:$(git rev-parse --show-toplevel)/.crux.db bun --watch src/index.ts browse",
     "test": "bun test"
   },
   "dependencies": {
     "@crux/core": "workspace:*",
-    "@crux/tui-ds": "workspace:*",
-    "citty": "^0.2.2",
-    "ink": "^7.0.1",
-    "ink-select-input": "^6.2.0",
-    "react": "^19.2.5"
+    "citty": "^0.2.2"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^5.20260724.1",
-    "@types/react": "^19.2.14",
-    "ink-testing-library": "^4.0.0"
+    "@cloudflare/workers-types": "^5.20260724.1"
   }
 }

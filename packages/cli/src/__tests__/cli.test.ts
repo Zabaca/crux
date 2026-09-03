@@ -608,10 +608,10 @@ describe("api configuration", () => {
   });
 
   /**
-   * `crux browse` fires several reads in the same tick. Each builds its own
-   * client, so without a process-wide memo each would mint a *separate*
-   * Principal and the last write would win — orphaning every row filed under
-   * the losers on a token nothing kept.
+   * Reads fired in the same tick each build their own client, so without a
+   * process-wide memo each would mint a *separate* Principal and the last write
+   * would win — orphaning every row filed under the losers on a token nothing
+   * kept.
    */
   test("concurrent first-use commands mint one Principal between them", async () => {
     setApiClient(null);
@@ -808,19 +808,21 @@ describe("view", () => {
     expect(subs.sort()).toEqual(["get", "path"]);
   });
 
-  test("only `view get` reads the view, and only the TUI moves it", () => {
+  test("only `view get` reads the view, and nothing moves it", () => {
     // Two traps, both agent-side. Reading `context.workstreamId` and using it
     // as a default reinstates the shared-Workstream collision; dispatching a
-    // view action moves the human's page. `browse/` is exempt from the second:
-    // it is the human at their own keyboard, driving their own screen.
-    const readers = cliSources().filter(
-      ([rel]) => rel !== "commands/view.ts" && !rel.startsWith("browse/"),
-    );
+    // view action moves the human's page. With the TUI gone the CLI has no
+    // human-at-a-keyboard surface left, so the second rule takes no exception:
+    // the view is read-only from here.
+    const readers = cliSources().filter(([rel]) => rel !== "commands/view.ts");
     expect(readers.filter(([, src]) => src.includes("/v1/view")).map(([rel]) => rel)).toEqual([]);
 
-    const drivers = cliSources().filter(([rel]) => !rel.startsWith("browse/"));
     const viewActions = /SELECT_WORKSTREAM|OPEN_PROBLEM|SELECT_INTAKE|"BACK"/;
-    expect(drivers.filter(([, src]) => viewActions.test(src)).map(([rel]) => rel)).toEqual([]);
+    expect(
+      cliSources()
+        .filter(([, src]) => viewActions.test(src))
+        .map(([rel]) => rel),
+    ).toEqual([]);
   });
 });
 
