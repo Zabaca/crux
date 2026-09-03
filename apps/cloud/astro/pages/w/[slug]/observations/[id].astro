@@ -12,8 +12,6 @@
  * Worker falls through to `handleWeb` and its rendered "Not found" page.
  */
 import { env } from "cloudflare:workers";
-import { query } from "@crux/core/reads";
-import type { ObservationDetail } from "@crux/core/reads";
 
 import LiveRefresh from "../../../../components/LiveRefresh.tsx";
 import { html } from "../../../../../src/web/html.js";
@@ -28,20 +26,17 @@ const slug = Astro.params.slug!;
 const id = Astro.params.id!;
 
 let rendered;
-let detail: ObservationDetail;
 try {
-  rendered = await observationPage(ctx.db, ctx.viewer, slug, id);
   // The island needs the Workstream this row belongs to, and the Observation
   // carries it — asking again by slug would be a second read for an answer
-  // `observationPage` has already refused to render without.
-  detail = (await query(
-    { kind: "OBSERVATION_DETAIL", id },
-    { db: ctx.db, principal: ctx.viewer },
-  )) as ObservationDetail;
+  // `observationPage` has already refused to render without, so it hands the
+  // detail back instead.
+  rendered = await observationPage(ctx.read, slug, id);
 } catch (err) {
   if (!(err instanceof PageNotFound)) throw err;
   return new Response(null, { status: 404 });
 }
+const detail = rendered.detail;
 
 const shell = page({
   title: rendered.title,

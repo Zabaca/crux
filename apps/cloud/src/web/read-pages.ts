@@ -23,8 +23,7 @@ import type {
   WorkstreamRow,
   WorkstreamSummary,
 } from "@crux/core/reads";
-import type { CruxDb } from "@crux/core/db";
-import type { Principal } from "@crux/core/auth/principals";
+import type { ReadContext } from "@crux/core/reads";
 
 import { html, isoDate as date, type Html } from "./html.js";
 
@@ -37,9 +36,11 @@ export class PageNotFound extends Error {}
  * Those types are derived from the reads themselves and asserted there with
  * `satisfies`, so a shape that changes upstream breaks this file's typecheck
  * instead of silently rendering nothing.
+ *
+ * The `ReadContext` carries the scope the page resolved once, so a page that
+ * asks three questions pays for the boundary once rather than three times.
  */
-const ask = <T>(db: CruxDb, principal: Principal, q: unknown): Promise<T> =>
-  query(q, { db, principal }) as Promise<T>;
+const ask = <T>(read: ReadContext, q: unknown): Promise<T> => query(q, read) as Promise<T>;
 
 // ---------------------------------------------------------------------------
 // Shared fragments
@@ -77,10 +78,9 @@ const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
 
 /** `/` — every Workstream this Principal owns. */
 export async function workstreamListPage(
-  db: CruxDb,
-  principal: Principal,
+  read: ReadContext,
 ): Promise<{ title: string; body: Html }> {
-  const rows = await ask<WorkstreamSummary[]>(db, principal, { kind: "WORKSTREAM_SUMMARIES" });
+  const rows = await ask<WorkstreamSummary[]>(read, { kind: "WORKSTREAM_SUMMARIES" });
   const body = html`
     <h1>Workstreams</h1>
     <p class="sub">
@@ -106,14 +106,19 @@ export async function workstreamListPage(
 
 /** `/w/<slug>/problems/<id>` — one Problem and everything hanging off it. */
 export async function problemPage(
-  db: CruxDb,
-  principal: Principal,
+  read: ReadContext,
   slug: string,
   id: string,
-): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, principal, { kind: "WORKSTREAM_BY_SLUG", slug });
+): Promise<{ title: string; body: Html; detail: ProblemDetail }> {
+  // Independent: the Problem is resolved by id inside the scope, and the
+  // Workstream by slug. The slug check below is what makes an id from another
+  // Workstream a 404, and it needs both — but neither read needs the other's
+  // answer to start.
+  const [ws, detail] = await Promise.all([
+    ask<WorkstreamRow | null>(read, { kind: "WORKSTREAM_BY_SLUG", slug }),
+    ask<ProblemDetail | null>(read, { kind: "PROBLEM_DETAIL", id }),
+  ]);
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const detail = await ask<ProblemDetail | null>(db, principal, { kind: "PROBLEM_DETAIL", id });
   if (!detail || detail.problem.workstreamId !== ws.id) {
     throw new PageNotFound(`no Problem ${id} in ${slug}`);
   }
@@ -266,7 +271,7 @@ export async function problemPage(
       </div>
     </div>
   `;
-  return { title: problem.title, body };
+  return { title: problem.title, body, detail };
 }
 
 /**
@@ -284,13 +289,12 @@ export async function problemPage(
  * left over is the queue.
  */
 export async function observationListPage(
-  db: CruxDb,
-  principal: Principal,
+  read: ReadContext,
   slug: string,
-): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, principal, { kind: "WORKSTREAM_BY_SLUG", slug });
+): Promise<{ title: string; body: Html; workstream: WorkstreamRow }> {
+  const ws = await ask<WorkstreamRow | null>(read, { kind: "WORKSTREAM_BY_SLUG", slug });
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const rows = await ask<ObservationSummary[]>(db, principal, {
+  const rows = await ask<ObservationSummary[]>(read, {
     kind: "OBSERVATION_SUMMARIES",
     workstreamId: ws.id,
   });
@@ -357,22 +361,22 @@ export async function observationListPage(
       be.
     </p>
   `;
-  return { title: `Observations · ${ws.title}`, body };
+  return { title: `Observations · ${ws.title}`, body, workstream: ws };
 }
 
 /** `/w/<slug>/observations/<id>` — one signal and every Problem it supports. */
 export async function observationPage(
-  db: CruxDb,
-  principal: Principal,
+  read: ReadContext,
   slug: string,
   id: string,
-): Promise<{ title: string; body: Html }> {
-  const ws = await ask<WorkstreamRow | null>(db, principal, { kind: "WORKSTREAM_BY_SLUG", slug });
+): Promise<{ title: string; body: Html; detail: ObservationDetail }> {
+  // Same shape as `problemPage`: the slug and the id are resolved against the
+  // same scope and neither answer feeds the other, so they go together.
+  const [ws, detail] = await Promise.all([
+    ask<WorkstreamRow | null>(read, { kind: "WORKSTREAM_BY_SLUG", slug }),
+    ask<ObservationDetail | null>(read, { kind: "OBSERVATION_DETAIL", id }),
+  ]);
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
-  const detail = await ask<ObservationDetail | null>(db, principal, {
-    kind: "OBSERVATION_DETAIL",
-    id,
-  });
   if (!detail || detail.observation.workstreamId !== ws.id) {
     throw new PageNotFound(`no Observation ${id} in ${slug}`);
   }
@@ -447,5 +451,5 @@ export async function observationPage(
       </div>
     </div>
   `;
-  return { title: observation.id, body };
+  return { title: observation.id, body, detail };
 }

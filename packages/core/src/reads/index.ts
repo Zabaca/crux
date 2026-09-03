@@ -418,6 +418,22 @@ async function unlinkedObservations(
 // ---------------------------------------------------------------------------
 
 /**
+ * Everything a read needs: the corpus, who is asking, and what they may see.
+ *
+ * A caller that resolves a Principal's scope once and then performs several
+ * reads carries this rather than the three separately — passing it to `query()`
+ * is what keeps the scope from being resolved again per read. It exists as a
+ * type so a page cannot hold the first two and forget the third: leaving the
+ * scope out is safe but is a round trip, and this makes the omission visible at
+ * the call site rather than invisible in the latency.
+ */
+export type ReadContext = {
+  db: CruxDb;
+  principal: Principal;
+  scope: Scope;
+};
+
+/**
  * Run a named read, scoped to the Principal that asked for it.
  *
  * `principal` is required, not optional: an optional scope is one a caller can
@@ -650,15 +666,25 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       const problemId = numeric(q.id);
       const p = await findProblemInScope(db, problemId, scope);
       if (!p) return null;
-      const abandonRow = (
-        await db.select().from(abandonments).where(eq(abandonments.problemId, problemId)).limit(1)
-      )[0];
+      // Everything below needs only `problemId`, which the scope check above
+      // already established. Awaiting them one at a time — which is what
+      // building the object literal in order did — spent four sequential round
+      // trips on four independent reads. Two of them still contain a necessary
+      // second hop of their own (Observations behind Evidence, the Problem an
+      // Outcome hands off to), so the floor here is the depth of the deepest
+      // one, not the sum of all four.
+      const [attemptRows, evidenceRows, abandonRows, outcome] = await Promise.all([
+        attemptsFor(db, problemId),
+        evidenceWithObservations(db, problemId, true),
+        db.select().from(abandonments).where(eq(abandonments.problemId, problemId)).limit(1),
+        outcomeFor(db, problemId),
+      ]);
       return {
         problem: p,
-        attempts: await attemptsFor(db, problemId),
-        evidence: await evidenceWithObservations(db, problemId, true),
-        abandonment: abandonRow ?? null,
-        outcome: await outcomeFor(db, problemId),
+        attempts: attemptRows,
+        evidence: evidenceRows,
+        abandonment: abandonRows[0] ?? null,
+        outcome,
       } satisfies ProblemDetail;
     }
 

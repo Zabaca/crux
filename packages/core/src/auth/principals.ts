@@ -144,7 +144,7 @@ function isPresent(value: string | null): value is string {
 
 /**
  * Who a Principal is allowed to read *for*, and what they own — in one
- * statement.
+ * statement — plus whether they are still a Member at all.
  *
  * This is the browser door, where the identity came from a Better Auth session
  * and there is no `api_tokens` row to join through (ADR-0007);
@@ -170,9 +170,18 @@ function isPresent(value: string | null): value is string {
  * The set stays symmetric — a token linked to a human reads what that human
  * owns, and the reverse — for the reason it always did: claiming is what the
  * person did to say the two are one.
+ *
+ * `null` is the answer to the *membership* half: the `where` matched nothing,
+ * because the row is removed or was never there. That is a different answer
+ * from a Member who owns nothing, which arrives as one row with a null
+ * `ownerId` through the left joins, and the two must stay different — one is a
+ * redirect to `/signin`, the other is an empty page. Because the predicate
+ * `isActiveMember` asks for (`id = ? and removed_at is null`) is already this
+ * query's `where` clause, a caller that needs both gets both for one round
+ * trip, and ADR-0011's rule that membership is checked on *every* request is
+ * kept rather than weakened.
  */
-
-export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
+export async function resolveActiveScope(db: CruxDb, principal: Principal): Promise<Scope | null> {
   const rows = await db
     .select({ ownerId: ownerUser.id, workstreamId: workstreams.id })
     .from(selfUser)
@@ -180,7 +189,17 @@ export async function resolveScope(db: CruxDb, principal: Principal): Promise<Sc
     .leftJoin(ownerUser, ownerJoin)
     .leftJoin(workstreams, eq(workstreams.ownerId, ownerUser.id))
     .where(and(eq(selfUser.id, principal.id), isNull(selfUser.removedAt)));
+  if (rows.length === 0) return null;
   return scopeFromRows(principal.id, rows);
+}
+
+/**
+ * The same resolution for callers that have already decided the requester may
+ * be here — `query()` and `dispatch()` — where "not a Member" and "owns
+ * nothing" are the same empty corpus.
+ */
+export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
+  return (await resolveActiveScope(db, principal)) ?? scopeFromRows(principal.id, []);
 }
 
 /** A bearer token resolved to who it acts as and what that Principal may see. */

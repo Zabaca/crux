@@ -10,8 +10,6 @@
  * page when this Workstream changes under it.
  */
 import { env } from "cloudflare:workers";
-import { query } from "@crux/core/reads";
-import type { ProblemDetail } from "@crux/core/reads";
 
 import ActionBar from "../../../../components/ActionBar.tsx";
 import LiveRefresh from "../../../../components/LiveRefresh.tsx";
@@ -28,14 +26,17 @@ const slug = Astro.params.slug!;
 const id = Astro.params.id!;
 
 let rendered;
-let detail: ProblemDetail;
 try {
-  rendered = await problemPage(ctx.db, ctx.viewer, slug, id);
-  detail = (await query({ kind: "PROBLEM_DETAIL", id: Number(id) }, { db: ctx.db, principal: ctx.viewer })) as ProblemDetail;
+  // The islands need the Problem the view just rendered — its open Attempts for
+  // the action bar, its Workstream for the subscription. `problemPage` hands
+  // back the detail it read rather than making the page ask for it a second
+  // time, which was a whole `PROBLEM_DETAIL` read for an answer already in hand.
+  rendered = await problemPage(ctx.read, slug, id);
 } catch (err) {
   if (!(err instanceof PageNotFound)) throw err;
   return new Response(null, { status: 404 });
 }
+const detail = rendered.detail;
 
 const actions = problemActions(
   detail.problem.id,
