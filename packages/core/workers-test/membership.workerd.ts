@@ -125,7 +125,9 @@ describe("removal", () => {
   });
 
   test("re-inviting a removed address reinstates that row, not a second identity", async () => {
-    await db.insert(workstreams).values({ id: "WS-x", slug: "x", title: "X" });
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-x", slug: "x", title: "X", ownerId: "USR-james" });
     await db.insert(problems).values({
       workstreamId: "WS-x",
       title: "filed before they left",
@@ -156,7 +158,9 @@ describe("removal", () => {
 
 describe("joining", () => {
   test("re-uses a migrated row, keeping its authorship", async () => {
-    await db.insert(workstreams).values({ id: "WS-x", slug: "x", title: "X" });
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-x", slug: "x", title: "X", ownerId: "USR-james" });
     await db.insert(problems).values({
       workstreamId: "WS-x",
       title: "something worth solving",

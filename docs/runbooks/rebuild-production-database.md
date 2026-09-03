@@ -11,13 +11,17 @@ long as that window lasts, but nothing in this procedure captures a copy.
 
 The cloud schema is an end state applied as purely additive DDL
 ([ADR-0006](../adr/0006-workerd-tests-and-d1-schema.md)): `CREATE TABLE IF NOT
-EXISTS` plus a list of `ALTER TABLE … ADD COLUMN`. Two things that list cannot
+EXISTS` plus a list of `ALTER TABLE … ADD COLUMN`. Three things that list cannot
 express:
 
 - **Removing** a table. Deleting it from `D1_SCHEMA_STATEMENTS` stops creating
   it on a fresh database and leaves it standing forever on an existing one.
 - **Repointing** a column at a different parent. In SQLite that is a table
   rebuild, not an `ALTER`.
+- **Tightening** an existing column — nullable to `NOT NULL`, or a new
+  constraint over one. Also a table rebuild in SQLite, and `CREATE TABLE IF NOT
+  EXISTS` is a no-op against a table that already exists, so the stricter
+  declaration reaches a fresh database and silently misses every existing one.
 
 Both are free against an empty database, which is why the reshaping in
 [ADR-0012](../adr/0012-crux-does-not-own-the-build.md) needs this runbook. It
@@ -28,6 +32,14 @@ problem_id`; and the `solutions`, `eliminations`, `decisions` and their two join
 tables are gone from the schema module, which does not drop them in a database
 that already has them. If a change is purely additive, it does *not* need this
 runbook — just deploy.
+
+`workstreams.owner_id` becoming `NOT NULL` is the third kind. Tenancy resolves
+entirely through that column — the scope filter matches a Workstream only when
+its owner is one of the Principals visible to the caller
+([ADR-0013](../adr/0013-anonymous-first-adoption.md)) — so a NULL owner matches
+nobody and is unreachable through every read. A database that has not been
+rebuilt keeps the nullable column and stops enforcing that at the storage layer,
+which is exactly the gap the tightening closes.
 
 ## Before you start
 

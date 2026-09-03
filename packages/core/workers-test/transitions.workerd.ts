@@ -60,7 +60,9 @@ describe("Workstream rename", () => {
 
   test("refuses a slug that is already taken, changing nothing", async () => {
     await seedProblem();
-    await db.insert(workstreams).values({ id: "WS-taken", slug: "taken", title: "Taken" });
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-taken", slug: "taken", title: "Taken", ownerId: "USR-t" });
 
     await expect(renameWorkstream("t", "taken", {}, db)).rejects.toMatchObject({
       code: "ILLEGAL_TRANSITION",

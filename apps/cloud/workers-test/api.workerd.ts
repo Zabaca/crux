@@ -1137,3 +1137,36 @@ describe("change events name the Workstream they came from", () => {
     expect(frame.revision).toBeGreaterThan(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Workstream ownership
+// ---------------------------------------------------------------------------
+
+describe("a Workstream always has an owner", () => {
+  // Tenancy resolves entirely through `workstreams.owner_id`: the scope filter
+  // matches a Workstream only when its owner is one of the Principals visible
+  // to the caller. A NULL owner therefore matches nobody — invisible through
+  // every read, with no path back through the API — so the column carries the
+  // invariant the security model rests on, and the database enforces it.
+  test("ADD_WORKSTREAM stamps the calling Principal, over the deployed path", async () => {
+    const { token: minted, principal } = await mintPrincipal();
+    const res = await dispatchAs(minted, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "owned", title: "Owned" },
+    });
+    expect(res.status).toBe(200);
+
+    const row = (await db.select().from(workstreams)).find((w) => w.slug === "owned");
+    expect(row?.ownerId).toBe(principal.id);
+  });
+
+  test("the schema refuses an ownerless row, not just the write path", async () => {
+    await expect(
+      env.DB.prepare("INSERT INTO workstreams (id, slug, title) VALUES (?, ?, ?)")
+        .bind("WS-orphan", "orphan", "Orphan")
+        .run(),
+    ).rejects.toThrow(/NOT NULL/i);
+
+    expect((await db.select().from(workstreams)).map((w) => w.slug)).toEqual(["crux"]);
+  });
+});

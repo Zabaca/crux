@@ -262,8 +262,9 @@ is what the runbook below uses.
 **Schema application only ever adds.** The DDL is an end state of
 `CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a table from
 the schema module does not drop it in production, and repointing a column at a
-different parent is a table rebuild that cannot be expressed at all. The escape
-hatch is to start the database over:
+different parent — or tightening a nullable one to `NOT NULL`, as
+`workstreams.owner_id` is — is a table rebuild that cannot be expressed at all.
+The escape hatch is to start the database over:
 [the rebuild runbook](docs/runbooks/rebuild-production-database.md) covers the
 wipe (`bun run db:wipe`, which is a dry run until it is handed the database's
 own name), the deploy that reapplies the schema, and restoring the one identity
