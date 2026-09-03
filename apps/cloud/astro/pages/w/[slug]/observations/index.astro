@@ -1,0 +1,50 @@
+---
+/**
+ * `/w/<slug>/observations` — the intake pile, rendered by
+ * `observationListPage()` and re-read when the pile changes.
+ *
+ * Observations are filed faster than they are read, so this is the page most
+ * likely to go stale while somebody is looking at it: an agent files one mid
+ * conversation and the reader is holding a list that no longer matches the
+ * corpus. The subscription is scoped to this Workstream — work in another one
+ * is not this page's data.
+ *
+ * The view is unchanged; moving the URL onto Astro is what makes an island
+ * possible (ADR-0009), and the island is the whole point.
+ */
+import { env } from "cloudflare:workers";
+import { query } from "@crux/core/reads";
+import type { WorkstreamRow } from "@crux/core/reads";
+
+import LiveRefresh from "../../../../components/LiveRefresh.tsx";
+import { html } from "../../../../../src/web/html.js";
+import { page } from "../../../../../src/web/layout.js";
+import { observationListPage } from "../../../../../src/web/read-pages.js";
+import { pageContext } from "../../../../../src/web/session.js";
+
+const ctx = await pageContext(env, Astro.request);
+if (!ctx.ok) return ctx.response;
+
+const slug = Astro.params.slug!;
+
+// Resolved here as well as inside the page, because the island needs the
+// Workstream's id and a slug that names nothing has to 404 before either.
+const ws = (await query(
+  { kind: "WORKSTREAM_BY_SLUG", slug },
+  { db: ctx.db, principal: ctx.viewer },
+)) as WorkstreamRow | null;
+if (!ws) return new Response(null, { status: 404 });
+
+const rendered = await observationListPage(ctx.db, ctx.viewer, slug);
+
+const shell = page({
+  title: rendered.title,
+  viewer: ctx.viewer,
+  workspace: ctx.workspace,
+  body: html`${rendered.body}<!--LIVE-->`,
+}).value;
+const [head, tail] = shell.split("<!--LIVE-->");
+---
+<Fragment set:html={`<!doctype html>\n${head}`} />
+<LiveRefresh client:load workstreamId={ws.id} />
+<Fragment set:html={tail} />

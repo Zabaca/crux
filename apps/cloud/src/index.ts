@@ -66,8 +66,14 @@ async function health(env: Env): Promise<Response> {
 }
 
 /**
- * The paths Astro answers for: the docs section, the two Workstream pages that
- * carry islands, and its own hydration payloads under `/_astro/`.
+ * The paths Astro answers for: the docs section, the five pages showing corpus
+ * data — every one of which carries an island, whether the board, an action bar
+ * or just the subscription that keeps it fresh — and Astro's own hydration
+ * payloads under `/_astro/`.
+ *
+ * The account pages are deliberately not here. They show nothing an agent
+ * writes, so they have nothing to subscribe to, and two of them (sign-in,
+ * claim) are reached without a session at all.
  *
  * The delegation is an explicit list rather than "hand Astro everything and
  * fall through on a 404". Astro answers an unrouted POST with 403 (its CSRF
@@ -75,13 +81,37 @@ async function health(env: Env): Promise<Response> {
  * posts — sign-in, invite, tokens — before they ever reached `handleWeb`. A
  * table of what Astro owns is also the honest description of a Worker that has
  * two renderers in it.
+ *
+ * `/` is the exception that proves the list: Astro renders the Workstream list
+ * there for a Member and answers 404 for anybody else, which falls through to
+ * the public homepage in `handleWeb` (ADR-0013). It is also the one path in the
+ * list that a POST reaches, so `astroOwns` hands it over for a GET only — see
+ * there.
  */
 const ASTRO_PATHS = [
   /^\/_astro\//,
   /^\/docs(\/|$)/,
+  /^\/$/,
   /^\/w\/[^/]+$/,
   /^\/w\/[^/]+\/problems\/[^/]+$/,
+  /^\/w\/[^/]+\/observations$/,
+  /^\/w\/[^/]+\/observations\/[^/]+$/,
 ];
+
+/**
+ * Whether Astro answers for this request, rather than `handleWeb`.
+ *
+ * Path is nearly the whole of it. The method matters at `/` alone: it is the
+ * only address in `ASTRO_PATHS` that anything ever POSTs to, and Astro answers
+ * an unrouted POST with its CSRF 403 rather than a 404 — which would not fall
+ * through, and would replace the answer `handleWeb` gives that request today.
+ * Reading a page is a GET; nothing here is written by posting to `/`.
+ */
+function astroOwns(pathname: string, method: string): boolean {
+  if (!ASTRO_PATHS.some((p) => p.test(pathname))) return false;
+  if (pathname === "/") return method === "GET" || method === "HEAD";
+  return true;
+}
 
 /**
  * The order is the contract.
@@ -118,7 +148,7 @@ export default {
     const api = await handleApi(request, env);
     if (api) return api;
 
-    if (ASTRO_PATHS.some((p) => p.test(pathname))) {
+    if (astroOwns(pathname, request.method)) {
       const rendered = await astro.fetch(request, env, ctx);
       if (rendered.status !== 404) return rendered;
     }

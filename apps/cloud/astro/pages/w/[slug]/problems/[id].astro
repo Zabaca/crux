@@ -6,13 +6,15 @@
  * The view itself is still `problemPage()` from `src/web/read-pages.ts`: moving
  * this URL onto Astro is a routing change, not a rewrite. What Astro adds is the
  * one thing the hand-written entry cannot do — hydrate an island next to the
- * server-rendered page.
+ * server-rendered page: the action bar, and the subscription that re-reads the
+ * page when this Workstream changes under it.
  */
 import { env } from "cloudflare:workers";
 import { query } from "@crux/core/reads";
 import type { ProblemDetail } from "@crux/core/reads";
 
 import ActionBar from "../../../../components/ActionBar.tsx";
+import LiveRefresh from "../../../../components/LiveRefresh.tsx";
 import { problemActions } from "../../../../lib/page-actions.js";
 import { html } from "../../../../../src/web/html.js";
 import { page } from "../../../../../src/web/layout.js";
@@ -50,4 +52,5 @@ const [head, tail] = shell.split("<!--ACTIONS-->");
 ---
 <Fragment set:html={`<!doctype html>\n${head}`} />
 <ActionBar client:load actions={actions} />
+<LiveRefresh client:load workstreamId={detail.problem.workstreamId} />
 <Fragment set:html={tail} />

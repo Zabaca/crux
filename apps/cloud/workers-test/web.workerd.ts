@@ -562,6 +562,85 @@ describe("read pages", () => {
   });
 });
 
+/**
+ * Live refresh on the pages showing corpus data.
+ *
+ * The four of them are server-rendered documents with nothing else to hydrate,
+ * so what makes them fresh is one island subscribing to this Member's
+ * ViewStateDO stream and re-reading the page. What is checkable through the
+ * request path is that the island is on the page and which Workstream it is
+ * listening for — the filtering itself is pinned in
+ * `astro/lib/__tests__/view-stream.test.ts`, against the same subscriber.
+ */
+describe("live refresh", () => {
+  /** The `<astro-island>` tag for one component, as the page serialized it. */
+  function island(body: string, component: string): string | null {
+    for (const tag of body.match(/<astro-island\b[^>]*>/g) ?? []) {
+      if (tag.includes(`/${component}.`)) return tag;
+    }
+    return null;
+  }
+
+  test("the Workstream list subscribes, unscoped — every Workstream is its data", async () => {
+    const { cookie } = await inviteAndJoin("live-home@example.com", "Live Home");
+    const res = await get("/", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const tag = island(await res.text(), "LiveRefresh");
+    expect(tag).not.toBeNull();
+    // No Workstream to narrow to: a filtered subscriber drops every frame that
+    // does not name its own, which on this page would be all of them.
+    expect(tag).not.toContain("WS-");
+  });
+
+  test("the Problem page subscribes to the Workstream it is showing", async () => {
+    const { cookie } = await inviteAndJoin("live-prb@example.com", "Live Problem");
+    const problemId = await seedWorkedProblem();
+    const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(island(body, "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("the Observation list subscribes to the Workstream it is showing", async () => {
+    const { cookie } = await inviteAndJoin("live-obs@example.com", "Live Obs");
+    const res = await get("/w/crux/observations", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(island(await res.text(), "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("the Observation page subscribes to the Workstream it is showing", async () => {
+    const { cookie } = await inviteAndJoin("live-obs1@example.com", "Live Obs One");
+    await seedWorkedProblem();
+    const observationId = (await db.select().from(observations))[0]!.id;
+    const res = await get(`/w/crux/observations/${observationId}`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(island(await res.text(), "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("the account pages ship no client JavaScript at all", async () => {
+    const { cookie } = await inviteAndJoin("live-acct@example.com", "Live Account");
+    const { createInvite } = await import("@crux/core/auth/invites");
+    const invite = await createInvite(db, {
+      email: "invitee@example.com",
+      invitedById: corpusOwner,
+    });
+
+    for (const [path, headers] of [
+      ["/signin", {}],
+      ["/claim", {}],
+      [`/invite?token=${invite.token}`, {}],
+      ["/members", { cookie }],
+      ["/tokens", { cookie }],
+    ] as Array<[string, Record<string, string>]>) {
+      const res = await get(path, { headers });
+      expect(res.status).toBe(200);
+      const body = await res.text();
+      // Not merely island-free: these pages are the whole payload, and a
+      // subscription is the only thing that would have put script on them.
+      expect(body).not.toContain("astro-island");
+      expect(body).not.toContain("<script");
+    }
+  });
+});
+
 describe("docs", () => {
   test("/docs is README, rendered", async () => {
     const { cookie } = await inviteAndJoin("docs@example.com", "Docs Reader");
