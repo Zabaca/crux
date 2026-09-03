@@ -165,8 +165,9 @@ export async function ensureMember(
   return { userId, created: true };
 }
 
-/** `users.slug` is unique; add a suffix until it is. */
-async function uniqueSlug(db: CruxDb, base: string): Promise<string> {
+/** `users.slug` is unique; add a suffix until it is. Exported because claiming
+ * names a Principal from an address the same way joining does. */
+export async function uniqueSlug(db: CruxDb, base: string): Promise<string> {
   const rows = await db.select({ slug: authUsers.slug }).from(authUsers);
   const taken = new Set(rows.map((r) => r.slug));
   if (!taken.has(base)) return base;

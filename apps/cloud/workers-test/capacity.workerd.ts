@@ -190,8 +190,9 @@ describe("the cap's edges", () => {
   test("a claimed Principal is uncapped", async () => {
     const p = await principalWithWorkstream("claimed");
     await fileObservations(p.token, p.slug, CAP);
-    // Claiming is what attaches an email (CRUX-VIZW40); its presence is the
-    // whole test, so the row is stamped directly here.
+    // Claiming is what attaches an email; its presence is the whole test, so
+    // the row is stamped directly here rather than walked through the mail —
+    // `claims.workerd.ts` covers the walk.
     await db.update(users).set({ email: "dana@example.com" }).where(eq(users.id, p.id));
 
     const res = await dispatchAs(p.token, {

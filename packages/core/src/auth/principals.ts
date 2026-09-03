@@ -10,11 +10,11 @@
  * two answers to keep in agreement forever.
  *
  * The only thing that distinguishes an anonymous Principal from a Member is
- * that it has no email. Claiming attaches one (CRUX-VIZW40); until then the row
+ * that it has no email. Claiming attaches one (`auth/claims.ts`); until then the row
  * is nameless in the human sense and reachable only by the token it was minted
  * with.
  */
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { CruxDb } from "../db/client.js";
 import { attempts, observations, problems, users, workstreams } from "../db/schema.js";
@@ -75,22 +75,48 @@ function randomSuffix(): string {
  * The Principals whose corpus `principalId` may read — the scoping set every
  * read is filtered through.
  *
- * Today that is exactly the requesting Principal. It is a function and not an
- * inlined `eq()` because claiming widens it: an email arriving on a Principal
- * links rather than merges (ADR-0013), so tenancy becomes "every Principal
- * claimed by me" and that is a change to this one answer rather than to twenty
- * reads. Returning the set — not a predicate — keeps the widening a matter of
- * adding ids.
+ * "Every Principal claimed by me" (ADR-0013), resolved in two hops: find the
+ * human this Principal answers to — itself, unless a claim linked it to someone
+ * — then everything else that human has claimed. An unclaimed Principal has no
+ * edges either way, so the set is the singleton it always was.
+ *
+ * The set is deliberately symmetric. A token linked to a human reads what that
+ * human owns, exactly as the human's browser session reads what the token
+ * filed; the alternative — a human who can read a machine's corpus but not the
+ * reverse — would make "which of my machines filed this" a question the product
+ * could not answer, and claiming is what the person did to say the two are one.
+ *
+ * Returning the set rather than a predicate is what kept this a change to one
+ * answer instead of to twenty reads.
  */
 export async function visiblePrincipalIds(db: CruxDb, principalId: string): Promise<string[]> {
   // Cheap existence check, so a token naming a row that has since been deleted
   // scopes to nothing rather than to a set containing a dangling id.
   const rows = await db
+    .select({ id: users.id, claimedByUserId: users.claimedByUserId })
+    .from(users)
+    .where(and(eq(users.id, principalId), isNull(users.removedAt)))
+    .limit(1);
+  const self = rows[0];
+  if (!self) return [];
+
+  // The root's removal takes the whole set with it, and a removed linked row is
+  // dropped from it. ADR-0011 makes removal the one column every way in reads;
+  // a claim edge that outlived it would be a way in it did not close.
+  const rootId = self.claimedByUserId ?? self.id;
+  const root = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.id, principalId))
+    .where(and(eq(users.id, rootId), isNull(users.removedAt)))
     .limit(1);
-  return rows.length ? [principalId] : [];
+  if (!root.length) return [];
+  const linked = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(and(eq(users.claimedByUserId, rootId), isNull(users.removedAt)));
+  // A Set, because the requester is either the root or one of the linked rows,
+  // and both paths must produce the same corpus.
+  return [...new Set([rootId, ...linked.map((r) => r.id)])];
 }
 
 // ---------------------------------------------------------------------------

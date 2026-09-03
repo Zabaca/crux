@@ -27,6 +27,7 @@
     "./auth/membership": "./src/auth/membership.ts",
     "./auth/principals": "./src/auth/principals.ts",
     "./auth/capacity": "./src/auth/capacity.ts",
+    "./auth/claims": "./src/auth/claims.ts",
     "./auth/email": "./src/auth/email.ts"
   },
   "scripts": {

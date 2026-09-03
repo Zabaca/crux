@@ -33,6 +33,13 @@ export const authUsers = sqliteTable("users", {
   /** Kept as epoch ms rather than a Date: Better Auth never reads this column,
    * and every gate that does is corpus code. See `auth/membership.ts`. */
   removedAt: integer("removed_at"),
+  /** The human this Principal was claimed by, and when — see `users` in
+   * `./schema.ts`, whose declaration these two must stay in step with. Better
+   * Auth never reads either; they are here so a claim can be written through
+   * this lens in one statement, alongside the `email_verified` only this lens
+   * has. */
+  claimedByUserId: text("claimed_by_user_id"),
+  claimedAt: integer("claimed_at"),
 });
 
 export const authSessions = sqliteTable("auth_sessions", {
@@ -101,4 +108,40 @@ export const invites = sqliteTable(
     acceptedUserId: text("accepted_user_id").references(() => authUsers.id),
   },
   (t) => ({ tokenHashUnique: uniqueIndex("invites_token_hash_unique").on(t.tokenHash) }),
+);
+
+/**
+ * A pending claim: an address someone asked to attach to a Principal
+ * (ADR-0013), not yet proved.
+ *
+ * It sits beside `invites` because it is the same shape of thing — a hashed,
+ * expiring, single-use token mailed to an address — and deliberately *not* the
+ * same table, because it grants something different. An invite creates a
+ * Member; a claim attaches an existing Principal to a human and widens what
+ * that human can read.
+ *
+ * The row is what makes "prove the address before writing the edge" possible.
+ * Writing `users.claimed_by_user_id` when the claim is *requested* would let
+ * anyone type a stranger's address and be linked to them the moment that
+ * stranger claimed anything of their own — a cross-tenant disclosure through a
+ * form field. So the request records intent, and only the click applies it.
+ */
+export const claims = sqliteTable(
+  "claims",
+  {
+    id: text("id").primaryKey(), // CLM-<random>
+    /** The Principal being claimed. */
+    principalId: text("principal_id")
+      .notNull()
+      .references(() => authUsers.id),
+    email: text("email").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    expiresAt: integer("expires_at").notNull(),
+    /** Spent, not deleted — so a second click is refused rather than replayed. */
+    claimedAt: integer("claimed_at"),
+  },
+  (t) => ({ tokenHashUnique: uniqueIndex("claims_token_hash_unique").on(t.tokenHash) }),
 );

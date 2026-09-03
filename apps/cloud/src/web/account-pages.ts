@@ -105,6 +105,106 @@ export function invitePage(
 }
 
 /**
+ * `/claim` with no token — where a capped Principal is sent (ADR-0013).
+ *
+ * There is nothing to fill in here, and that is deliberate: the browser has no
+ * way to know *which* Principal is asking, and a form that took one would take
+ * it from whoever typed it. The token that has been filing is the thing that
+ * knows, so claiming starts where that token lives.
+ */
+export function claimStartPage(): { title: string; body: Html } {
+  const body = html`
+    <h1>Claim your Principal</h1>
+    <p class="sub">
+      A Principal is the identity your agent files under — a token, not a person. Claiming attaches
+      your address to it, which lifts the free allowance and lets one person hold many Principals.
+    </p>
+    <p>Run this where crux is installed:</p>
+    <p class="mono"><code>crux claim you@example.com</code></p>
+    <p class="sub">
+      That mails a link to the address you name. Opening it is what attaches the address — nothing
+      is written until you do. If the address already has an identity here, the Principal is linked
+      to it rather than merged, so everything either one filed stays where it is.
+    </p>
+    <p><a href="/signin">Already claimed? Sign in</a></p>
+  `;
+  return { title: "Claim", body };
+}
+
+/** `/claim?token=…` — the confirmation the mailed link lands on. */
+export function claimPage(
+  opts: {
+    email?: string;
+    principalId?: string;
+    token?: string;
+    error?: string;
+    invalid?: string;
+  } = {},
+): { title: string; body: Html } {
+  if (opts.invalid) {
+    return {
+      title: "Claim",
+      body: html`<h1>Claim</h1>
+        <div class="notice bad">${opts.invalid}</div>
+        <p><a href="/claim">How claiming works</a></p>`,
+    };
+  }
+  const body = html`
+    <h1>Claim this Principal</h1>
+    <p class="sub">
+      Attach <b>${opts.email}</b> to Principal <span class="mono">${opts.principalId}</span>. What
+      it has filed stays exactly as it is — claiming links, it never rewrites.
+    </p>
+    <div class="notice bad">
+      Only claim a Principal you asked to claim. Linking is mutual: whoever holds this Principal's
+      token will read everything this address owns, as you will read everything it filed. If this
+      link arrived unasked, close the page — nothing is written until you press the button.
+    </div>
+    ${opts.error ? html`<div class="notice bad">${opts.error}</div>` : ""}
+    <form class="form" method="post" action="/claim/accept">
+      <input type="hidden" name="token" value="${opts.token ?? ""}" />
+      <label for="name">Your name</label>
+      <input id="name" name="name" type="text" autocomplete="name" autofocus />
+      <p><button class="btn" type="submit">Claim</button></p>
+      <p style="color:var(--faint);font-size:12px">
+        The name is used only if this address is new here. If it already has an identity, this
+        Principal is linked to it and that identity keeps its name.
+      </p>
+    </form>
+  `;
+  return { title: "Claim", body };
+}
+
+/** The page a completed claim lands on — which of the two things happened. */
+export function claimedPage(opts: {
+  kind: "named" | "linked";
+  email: string;
+  principalId: string;
+}): {
+  title: string;
+  body: Html;
+} {
+  const body = html`
+    <h1>Claimed</h1>
+    <div class="notice">
+      Principal <span class="mono">${opts.principalId}</span>
+      ${
+        opts.kind === "named"
+          ? html`is yours now, as <b>${opts.email}</b>.`
+          : html`is linked to <b>${opts.email}</b>, alongside everything else that address owns.`
+      }
+      The free allowance no longer applies to it.
+    </div>
+    <p class="sub">
+      Nothing it filed was moved or rewritten. Sign in to read every Workstream across every
+      Principal you own.
+    </p>
+    <p><a href="/signin">Sign in</a></p>
+  `;
+  return { title: "Claimed", body };
+}
+
+/**
  * `/members` — who is in the Workspace, and who has been invited.
  *
  * Removal is the two-step the Tokens page uses for revoking, rendered without

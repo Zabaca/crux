@@ -1,4 +1,11 @@
-import { sqliteTable, text, integer, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
+import {
+  sqliteTable,
+  text,
+  integer,
+  uniqueIndex,
+  primaryKey,
+  type AnySQLiteColumn,
+} from "drizzle-orm/sqlite-core";
 import { sql } from "drizzle-orm";
 
 /**
@@ -22,6 +29,19 @@ export const users = sqliteTable("users", {
   /** When this Member was removed from the Workspace; null means active. The
    * row is never deleted, because every entity below cites it as its author. */
   removedAt: integer("removed_at"),
+  /**
+   * The human this Principal was claimed by, when the address it was claimed
+   * with already belonged to someone (ADR-0013).
+   *
+   * An edge, not a merge: nothing this Principal authored is repointed, so a
+   * person may own many Principals and each keeps its own authorship. Null on
+   * an unclaimed Principal and on a row that *is* the human — one claimed with
+   * an address nobody had carries its own `email` instead, which is why the two
+   * cases never chain.
+   */
+  claimedByUserId: text("claimed_by_user_id").references((): AnySQLiteColumn => users.id),
+  /** When the claim landed; null on an unclaimed Principal. */
+  claimedAt: integer("claimed_at"),
 });
 
 /**
