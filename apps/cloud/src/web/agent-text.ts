@@ -83,13 +83,17 @@ GET IT
 
 FILE SOMETHING
   crux workstream add --slug <slug> --title "<title>"
-  crux observation add --content "<what you noticed>"
+  crux observation add -w <slug> --content "<what you noticed>"
+
+  Every command that acts on a Workstream takes -w. There is no current
+  one to inherit: agents run in parallel, and a shared default is how two
+  of them file into each other's. crux workstream list shows the slugs.
 
 RELOAD IT INTO A FRESH SESSION
-  crux workstream select <slug>    # every command below reads this
-  crux problem list --status now   # the active Problems, one line each
-  crux problem show <id>           # drill into the two or three that matter
-  crux observation list --unlinked # intake nobody has synthesized yet
+  crux workstream list                        # the slugs you can pass to -w
+  crux problem list -w <slug> --status now    # the active Problems, one line each
+  crux problem show <id>                      # drill into the two or three that matter
+  crux observation list -w <slug> --unlinked  # intake nobody has synthesized yet
 
 BEFORE YOU FILE A PROBLEM
   crux search "<a few distinctive words>"
@@ -158,19 +162,19 @@ signup step and nothing to configure. Point it somewhere else with
     crux workstream list
     crux workstream select crux
 
-    crux observation add --content "handlers spend a third of every call on status"
-    crux observation add --content "..." --source "where you saw it" \\
+    crux observation add -w crux --content "handlers spend a third of every call on status"
+    crux observation add -w crux --content "..." --source "where you saw it" \\
         --source-type internal --tag cli,performance
 
     crux search "status only queries"
 
-    crux problem list
-    crux problem list --status now
+    crux problem list -w crux
+    crux problem list -w crux --status now
     crux problem show 42
     crux evidence list 42
     crux attempt list 42
 
-    crux observation list --unlinked
+    crux observation list -w crux --unlinked
 
     crux claim you@example.com
 
@@ -179,6 +183,15 @@ last value.
 
 \`--source-type\` is one of: internal, competitive, external, analysis,
 customer_report, metric_signal.
+
+## Which Workstream, and why you always name it
+
+Anything that acts on a Workstream takes \`-w <slug>\`, and refuses without it
+rather than picking one for you. There is no "current" Workstream: your token
+is a Principal, several agents may hold the same one, and a shared default is
+exactly how two of them end up filing into each other's corpus with
+\`ok: true\` returned both times. Run \`crux workstream list\` — it is one query,
+already scoped to you — and pass what you find.
 
 ## Identity, and why it matters to you
 
@@ -198,8 +211,8 @@ An unclaimed Principal may file ${cap} Observations. After that every corpus
 
     { "error": { "code": "CAPACITY_EXCEEDED", "details": { "claimUrl": "${claimUrl}" } } }
 
-Exit code 27. **Reads are never blocked** — \`crux problem list\` and every other
-read keep working, so you can still reload everything already filed.
+Exit code 27. **Reads are never blocked** — \`crux problem list -w <slug>\` and
+every other read keep working, so you can still reload everything already filed.
 
 Lifting it needs a human, and the command must run on the machine holding the
 token, because that token is the only thing that knows which Principal is

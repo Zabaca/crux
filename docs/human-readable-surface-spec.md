@@ -60,7 +60,7 @@ Each is "as a maintainer" unless noted; "open" means "navigate to / drill into."
 - **Data source.** Read directly from the libSQL file via `@crux/core` schema and `getDb()`. Do NOT shell out to the CLI or parse `crux context --json`.
 - **Workstream-scoped.** All views except the overview live under a workstream slug.
 - **Read-only.** No mutations. Both surfaces are inspection-only for v1.
-- **Archive semantics.** Match `crux context`: archived hidden from `recent_observations_unlinked` and `unpromoted_ideas` by default; archived Observations linked as Evidence remain visible under their Problem with archive metadata inline.
+- **Archive semantics.** Match `crux context -w <slug>`: archived hidden from `recent_observations_unlinked` and `unpromoted_ideas` by default; archived Observations linked as Evidence remain visible under their Problem with archive metadata inline.
 - **Empty states.** Every list view must render a sensible empty state ("no open problems," "no unlinked observations," etc.) — not a blank panel.
 - **Order.** Problems sorted by roadmap `status` (`now` → `next` → `later` → null/unscheduled → `done` → `abandoned`) then `createdAt` ascending. Evidence sorted by `createdAt` ascending. Solutions sorted by status (`chosen`, `shipped`, `evaluated`, `proposed`, `rejected`) then `createdAt`.
 
@@ -86,7 +86,7 @@ Each is "as a maintainer" unless noted; "open" means "navigate to / drill into."
 ### TUI (`packages/cli/src/commands/browse.ts`)
 
 - Stack: ink (React reconciler for terminal). `ink-select-input` for list nav, `ink-text-input` if any filter input is added.
-- Entry point: `crux browse [-w <slug>]`. With `-w`, opens the workstream dashboard. Without, opens the workstream picker.
+- Entry point: `crux browse`, which takes no arguments — it opens on whatever the human's view-state points at, the workstream picker included. (Written when it took `-w`; the flag is on the commands that *act*, and this surface only follows.)
 - Layout: two-pane (list left, detail right) for dashboards and detail views; full-pane for picker. Keyboard nav: arrow keys to move, enter to drill in, escape/backspace to go back, `a` to toggle archived, `q` to quit.
 - Color: status badges via ink's `Text color` props. Conventions: chosen=green, shipped=cyan, proposed=yellow, rejected=red, evaluated=blue, archived=gray.
 - Don't try to build a panel-stack history — a single back-step (escape) is enough for v1.

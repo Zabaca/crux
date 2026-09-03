@@ -55,11 +55,22 @@ export class ViewStateDO {
     return json({ error: "not_found" }, 404);
   }
 
-  /** Push the new revision to every open SSE subscriber. */
+  /**
+   * Push the new revision to every open SSE subscriber, naming the Workstream
+   * the action touched.
+   *
+   * `workstreamId` is what makes the stream filterable: a page showing one
+   * Workstream can drop a frame from another instead of refetching. It is null
+   * when the action touched no Workstream, and is read off `lastAction`, which
+   * dispatch stamps on the same write that triggered this broadcast.
+   */
   private broadcast(blob: ViewBlob): void {
     const revision = typeof blob.revision === "number" ? blob.revision : 0;
+    const lastAction = blob.lastAction as { workstreamId?: unknown } | null | undefined;
+    const workstreamId =
+      lastAction && typeof lastAction.workstreamId === "string" ? lastAction.workstreamId : null;
     const bytes = new TextEncoder().encode(
-      `event: view\ndata: ${JSON.stringify({ revision })}\n\n`,
+      `event: view\ndata: ${JSON.stringify({ revision, workstreamId })}\n\n`,
     );
     for (const controller of this.streams) {
       try {

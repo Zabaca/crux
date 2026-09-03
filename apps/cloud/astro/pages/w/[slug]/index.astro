@@ -74,7 +74,7 @@ const [head, tail] = shell.split("<!--BOARD-->");
   {ws.description ?? ""}
 </p>
 <ActionBar client:load actions={workstreamActions(slug)} />
-<RoadmapBoard client:load slug={slug} problems={problems} />
+<RoadmapBoard client:load slug={slug} workstreamId={ws.id} problems={problems} />
 <p class="legend">
   Stage is a Problem’s place on the roadmap. A Problem starts <b>unscheduled</b>; scheduling
   places it in <b>now</b>, <b>next</b> or <b>later</b>; it ends <b>done</b> or <b>abandoned</b>.

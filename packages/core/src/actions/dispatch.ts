@@ -106,6 +106,10 @@ export async function dispatch(
   const nextRevision = (meta.revision ?? 0) + 1;
   let result: unknown = undefined;
   let viewState: unknown = undefined;
+  // The Workstream whose data this action touched. Null is a real answer — a
+  // navigation back to the Workstream list touches none — and subscribers read
+  // it to decide whether the change is in the Workstream they are showing.
+  let workstreamId: string | null = null;
 
   // One scope for the whole dispatch. The view branch needs it as much as the
   // mutation branch does: its guards ask "does this Workstream exist", and an
@@ -117,6 +121,7 @@ export async function dispatch(
     const event = { type: action.kind, ...(action.payload ?? {}) } as ViewEvent;
     const snap = await sendViewEventWithStore(event, { db: options.db, store, scope });
     viewState = snap.value;
+    workstreamId = snap.context.workstreamId ?? null;
 
     // Update meta with new value
     meta.value = snap.value;
@@ -131,14 +136,16 @@ export async function dispatch(
     // by construction rather than by remembering.
     await assertWriteCapacity(options.db, scope, options.capacity);
     // Route through mutation runner
-    result = await runMutation(action, options.db, options.actor, scope);
+    const outcome = await runMutation(action, options.db, options.actor, scope);
+    result = outcome.result;
+    workstreamId = outcome.workstreamId;
   }
 
   // Persist sidecar fields (re-read: a view action already wrote the snapshot).
   const updatedMeta: ViewMeta = {
     ...meta,
     revision: nextRevision,
-    lastAction: { kind: action.kind, ts: Date.now() },
+    lastAction: { kind: action.kind, ts: Date.now(), workstreamId },
   };
   await store.write(computeSaveViewMetaBlob(await store.read(), updatedMeta));
 

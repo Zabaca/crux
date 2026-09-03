@@ -55,7 +55,7 @@ export function landingPage(opts: { observationCap: number }): {
       <div id="start" class="land-first">
         ${shell([
           {
-            cmd: `crux observation add "handlers spend a third of every\ncall on status-only queries"`,
+            cmd: `crux observation add -w crux --content "handlers spend\na third of every call on status-only queries"`,
           },
         ])}
         <p class="land-under">No account · No token · No invite · The corpus is yours</p>
@@ -82,7 +82,7 @@ export function landingPage(opts: { observationCap: number }): {
           </div>
           <div class="land-show">
             ${shell([
-              { cmd: "crux problem list --status now" },
+              { cmd: "crux problem list -w crux --status now" },
               {
                 out: raw(
                   '<span class="hi">41</span>  now  handlers spend a third of every call on status\n' +
@@ -132,7 +132,9 @@ export function landingPage(opts: { observationCap: number }): {
           <li>
             <span class="k">The agent files. A Principal appears.</span>
             ${shell([
-              { cmd: `crux observation add --content "handlers spend a third of every call"` },
+              {
+                cmd: `crux observation add -w crux --content "handlers spend a third of every call"`,
+              },
               { out: raw('{ "ok": true, "id": <span class="hi">"OBS-001"</span> }') },
             ])}
             <p class="land-under">
@@ -189,8 +191,8 @@ export function landingPage(opts: { observationCap: number }): {
           ${rule(
             `${cap} free`,
             html`<b>An unclaimed Principal files ${cap} Observations.</b> Then writes pause and
-              reads keep working — <code>crux problem list</code> never stops. Claim it with an
-              email to carry on.`,
+              reads keep working — <code>crux problem list -w &lt;slug&gt;</code> never stops. Claim
+              it with an email to carry on.`,
           )}
           ${rule(
             "Yours alone",

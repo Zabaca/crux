@@ -1,17 +1,17 @@
 import { defineCommand } from "citty";
 import { emit, setJsonMode } from "../output.js";
 import { api } from "../api-client.js";
-import { wsArg, hintCtx } from "../ctx-defaults.js";
+import { requireWorkstream, workstreamArg } from "../require-args.js";
 
 const listCmd = defineCommand({
   meta: { name: "list", description: "List abandonments in a workstream." },
   args: {
+    ...workstreamArg(),
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = await wsArg();
-    hintCtx(wsVal);
+    const wsVal = requireWorkstream(args.workstream);
     emit(await api().query({ kind: "ABANDONMENT_LIST", workstream: wsVal }));
   },
 });

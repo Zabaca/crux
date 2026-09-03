@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { emit, setJsonMode } from "../output.js";
 import type { AddObservationPayload, ArchiveObservationPayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
-import { wsArg, hintCtx } from "../ctx-defaults.js";
+import { requireWorkstream, workstreamArg } from "../require-args.js";
 
 type ObservationRow = { id: string; content: string };
 
@@ -19,6 +19,7 @@ function asTags(v: unknown): string[] {
 const addCmd = defineCommand({
   meta: { name: "add", description: "Record a new observation." },
   args: {
+    ...workstreamArg(),
     content: { type: "string", required: true },
     source: { type: "string" },
     "source-type": {
@@ -30,8 +31,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = await wsArg();
-    hintCtx(wsVal);
+    const wsVal = requireWorkstream(args.workstream);
     const payload: AddObservationPayload = {
       workstream: wsVal,
       content: args.content,
@@ -47,6 +47,7 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List observations in a workstream." },
   args: {
+    ...workstreamArg(),
     unlinked: {
       type: "boolean",
       description:
@@ -61,8 +62,7 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = await wsArg();
-    hintCtx(wsVal);
+    const wsVal = requireWorkstream(args.workstream);
     const rows = await api().query<ObservationRow[]>(
       args.unlinked
         ? {

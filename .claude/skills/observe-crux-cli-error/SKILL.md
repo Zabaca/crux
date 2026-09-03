@@ -41,16 +41,13 @@ Report archived at <report_file>
 
 Use short ISO date (YYYY-MM-DD) for the dates in header.
 
-### 4. Ensure WS-crux selected
+### 4. File observation
+
+The Workstream is named on the command; there is no selection step and no
+current Workstream to inherit.
 
 ```sh
-crux workstream select crux
-```
-
-### 5. File observation
-
-```sh
-crux observation add \
+crux observation add -w crux \
   --content "<composed content>" \
   --source "claude-code session logs" \
   --source-type metric_signal \
@@ -58,6 +55,6 @@ crux observation add \
   --json
 ```
 
-### 6. Print observation ID
+### 5. Print observation ID
 
 Print the `id` field from the JSON output (e.g. `OBS-042`).

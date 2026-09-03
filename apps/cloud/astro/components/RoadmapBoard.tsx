@@ -136,9 +136,13 @@ function Lane({
 
 export default function RoadmapBoard({
   slug,
+  workstreamId,
   problems: initial,
 }: {
   slug: string;
+  /** Handed down rather than spelled `WS-${slug}` here: how a Workstream id is
+   * built is core's rule, and the page has already read the row. */
+  workstreamId: string;
   problems: BoardProblem[];
 }) {
   const [problems, setProblems] = useState(initial);
@@ -148,7 +152,14 @@ export default function RoadmapBoard({
   // Another session of this Member — a second tab, or `crux` in a terminal —
   // moves the same corpus. The DO tells us the revision changed; the page is
   // server-rendered, so re-reading it is the whole of the refresh.
-  useEffect(() => onViewStateChange(() => location.reload()), []);
+  //
+  // Filtered to this board's Workstream: agents work several in parallel, and a
+  // reload triggered by work in a Workstream this page is not showing is
+  // interruption, not freshness. The one thing this filter costs is a rename:
+  // that frame names the *new* id, so a board left open on the old slug no
+  // longer reloads into its 404. It was already showing a Workstream that had
+  // moved out from under it.
+  useEffect(() => onViewStateChange(() => location.reload(), { workstreamId }), [workstreamId]);
 
   async function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;

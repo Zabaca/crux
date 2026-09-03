@@ -12,12 +12,20 @@ Crux is a product-thinking residue tool. This skill is the **default intake mode
 `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux problem list --status now
+${CLAUDE_PLUGIN_ROOT}/bin/crux problem list -w <slug> --status now
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
 
-**`-w` flag has been removed.** All commands infer workstream from view-state. If no workstream is in view-state, commands fail with a clear error — run `crux view send SELECT_WORKSTREAM --payload '{"id":"WS-<slug>"}'` first.
+**Every command that acts on a Workstream takes `-w <slug>`.** There is no current Workstream to inherit and no view-state fallback: agents run in parallel against one Principal, so a shared default is how two of them silently file into each other's corpus. Omitting `-w` refuses with `VALIDATION_ERROR` (exit 24) rather than picking one.
+
+Discovery is a read, and it is cheap:
+
+```sh
+${CLAUDE_PLUGIN_ROOT}/bin/crux workstream list
+```
+
+Problem ids resolve the same way — pass them explicitly; `crux problem list -w <slug>` shows them.
 
 The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
 
@@ -27,12 +35,12 @@ When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-stat
 
 **Per-view allowed mutations:**
 
-| View | Allowed mutations |
-|---|---|
-| `workstream_list` | ADD_WORKSTREAM, RENAME_WORKSTREAM |
-| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION |
-| `problem_detail` | ADD_ATTEMPT, CLOSE_ATTEMPT, ADD_EVIDENCE, ADD_OUTCOME, SCHEDULE_PROBLEM, UNSCHEDULE_PROBLEM, ABANDON_PROBLEM |
-| `intake_queue` | ARCHIVE_OBSERVATION, ADD_OBSERVATION |
+| View                   | Allowed mutations                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `workstream_list`      | ADD_WORKSTREAM, RENAME_WORKSTREAM                                                                            |
+| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION                                                                                 |
+| `problem_detail`       | ADD_ATTEMPT, CLOSE_ATTEMPT, ADD_EVIDENCE, ADD_OUTCOME, SCHEDULE_PROBLEM, UNSCHEDULE_PROBLEM, ABANDON_PROBLEM |
+| `intake_queue`         | ARCHIVE_OBSERVATION, ADD_OBSERVATION                                                                         |
 
 **Global (always allowed):** ADD_OBSERVATION, BACK.
 
@@ -47,8 +55,8 @@ When CRUX_COLLAB is absent (default), all commands fall through to direct mode w
 
 ## When to invoke (intake)
 
-- User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add`.
-- An existing Observation was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."`. Terminal.
+- User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add -w <slug> --content "..."`.
+- An existing Observation was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."`. Terminal — and it takes no `-w`, since the id already names the row.
 
 That's the full intake surface.
 
@@ -60,7 +68,7 @@ signal. Duplication among Problems is the failure this rule exists to prevent: a
 near-twin splits the Evidence for one thing across two rows, and neither reads as
 load-bearing afterwards.
 
-So before `crux problem add`, run:
+So before `crux problem add -w <slug>`, run:
 
 ```sh
 ${CLAUDE_PLUGIN_ROOT}/bin/crux search "<a few distinctive words>"
@@ -134,14 +142,10 @@ filed, which inverts the point. Walk the cheap reads instead, and stop as soon
 as you know enough. Each is flat in the size of the corpus.
 
 ```sh
-crux workstream list                  # which corpora exist
-crux workstream select <slug>         # every later command reads this
-crux problem list --status now        # the field: id, stage, title per line
-crux problem show 42                  # one Problem, with its Attempts and Outcome
+crux workstream list                       # which corpora exist, by slug
+crux problem list -w <slug> --status now   # the field: id, stage, title per line
+crux problem show 42                       # one Problem, with its Attempts and Outcome
 ```
-
-`workstream select` is not optional: every command below resolves its Workstream
-out of view state, and without it they refuse with *no workstream selected*.
 
 `--status` takes one of `now`, `next`, `later`, `unscheduled`, `done`,
 `abandoned`; omit it for every Problem in the Workstream. For intake mode
@@ -156,11 +160,11 @@ crux attempt list 42                  # work on it happening in another tracker
 crux observation show OBS-17          # one Observation, in full
 ```
 
-`crux observation list` is every Observation in the Workstream;
-`crux observation list --unlinked` narrows it to the ones not yet linked to a
-Problem, which is the queue `/crux:review` works from.
+`crux observation list -w <slug>` is every Observation in the Workstream;
+`crux observation list -w <slug> --unlinked` narrows it to the ones not yet
+linked to a Problem, which is the queue `/crux:review` works from.
 
-If no workstream is in context and you can't infer one from cwd, ask before inventing.
+If you do not know which slug to pass, run `crux workstream list` and choose one. Never guess, and never fall back to "the last one" — there is no such thing any more, which is the point.
 
 ## Attempts (work happening elsewhere)
 
@@ -171,13 +175,13 @@ Crux does not own the build. When work about a Problem starts in another tracker
 crux attempt add --problem 42 --ref https://tracker/ENG-412 --label "Batch the writes"
 crux attempt list 42
 crux attempt close ATT-001 --status shipped --note "Landed, but backpressure is still unsolved"
-crux attempt drift            # active Problems with no open Attempt
+crux attempt drift -w <slug>  # active Problems with no open Attempt
 ```
 
 - **Never describe the work here.** There is no description field and the server
-  refuses a payload carrying one — what the work *is* lives in the system `--ref`
+  refuses a payload carrying one — what the work _is_ lives in the system `--ref`
   points at, and a second copy would rot.
-- `--note` on close is the one thing the tracker never keeps: *why* the approach
+- `--note` on close is the one thing the tracker never keeps: _why_ the approach
   ended the way it did. A closed ticket says "won't do"; it never says the
   approach could not handle the load.
 - Closing an Attempt as `shipped` does **not** complete the Problem. Something
@@ -251,4 +255,4 @@ crux view path
 
 ## Browse (TUI fallback)
 
-When web UI isn't running, `crux browse -w <slug>` opens an interactive terminal UI. Same view-state machine.
+When web UI isn't running, `crux browse` opens an interactive terminal UI. It follows the human's view-state — it is the one surface that does.

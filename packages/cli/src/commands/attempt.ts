@@ -3,7 +3,7 @@ import { OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
 import type { AddAttemptPayload, CloseAttemptPayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
-import { problemArg, wsArg, hintCtx } from "../ctx-defaults.js";
+import { requireProblem, requireWorkstream, workstreamArg } from "../require-args.js";
 
 type AttemptRow = {
   id: string;
@@ -26,15 +26,18 @@ const addCmd = defineCommand({
     description: "Record that work about a Problem is happening in another tracker.",
   },
   args: {
-    problem: { type: "string", required: false, description: "problem id" },
+    problem: {
+      type: "string",
+      required: false,
+      description: "Required. Problem id — `crux problem list -w <slug>` shows them.",
+    },
     ref: { type: "string", required: true, description: "where the work actually lives" },
     label: { type: "string", required: true, description: "a short label" },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const prVal = await problemArg(args.problem);
-    hintCtx(undefined, prVal);
+    const prVal = requireProblem(args.problem, "--problem <id>");
     const payload: AddAttemptPayload = { problem: prVal, ref: args.ref, label: args.label };
     const { result } = await api().dispatch({ kind: "ADD_ATTEMPT", payload });
     emit(result, OkWithIdOutput, `recorded ${(result as { id: string }).id}`);
@@ -92,6 +95,7 @@ const driftCmd = defineCommand({
     description: "Problems staged as active with no open Attempt against them.",
   },
   args: {
+    ...workstreamArg(),
     stage: {
       type: "string",
       description: "comma-separated stages to treat as active (default: now)",
@@ -100,8 +104,7 @@ const driftCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = await wsArg();
-    hintCtx(wsVal);
+    const wsVal = requireWorkstream(args.workstream);
     const stages = args.stage
       ? args.stage
           .split(",")
