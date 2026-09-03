@@ -53,8 +53,12 @@ async function principalWithWorkstream(slug: string) {
     token: string;
     principal: { id: string };
   };
-  await dispatchAs(token, { kind: "ADD_WORKSTREAM", payload: { slug, title: slug } });
-  return { token, id: principal.id, slug };
+  const added = (await (
+    await dispatchAs(token, { kind: "ADD_WORKSTREAM", payload: { slug, title: slug } })
+  ).json()) as { result: { id: string } };
+  // Read back rather than spelled `WS-${slug}`: a Workstream id is opaque, so
+  // that a slug can be unique to its owner rather than to the deployment.
+  return { token, id: principal.id, slug, workstreamId: added.result.id };
 }
 
 /** File `n` Observations, asserting each one is accepted. */
@@ -164,7 +168,7 @@ describe("an unclaimed Principal at its cap", () => {
 
     const res = await dispatchAs(p.token, {
       kind: "SELECT_WORKSTREAM",
-      payload: { id: `WS-${p.slug}` },
+      payload: { id: p.workstreamId },
     });
     expect(res.status).toBe(200);
     expect(((await res.json()) as { viewState: unknown }).viewState).toEqual({

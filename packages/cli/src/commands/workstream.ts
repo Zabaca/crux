@@ -56,7 +56,7 @@ const showCmd = defineCommand({
 const renameCmd = defineCommand({
   meta: {
     name: "rename",
-    description: "Rename a workstream slug (cascades to all FK referrers).",
+    description: "Rename a workstream slug.",
   },
   args: {
     oldSlug: { type: "positional", required: true, description: "Current slug" },
@@ -74,11 +74,8 @@ const renameCmd = defineCommand({
       description: args.description,
     };
     const { result } = await api().dispatch({ kind: "RENAME_WORKSTREAM", payload });
-    emit(
-      result,
-      RenameOutput,
-      `renamed ${(result as { oldId: string; newId: string }).oldId} → ${(result as { oldId: string; newId: string }).newId}`,
-    );
+    const renamed = result as { oldSlug: string; newSlug: string };
+    emit(result, RenameOutput, `renamed ${renamed.oldSlug} → ${renamed.newSlug}`);
   },
 });
 

@@ -38,6 +38,7 @@ import {
 import { NotFoundError, ValidationError } from "../transitions/errors.js";
 import {
   findProblemInScope,
+  findWorkstreamBySlugInScope,
   problemsInScope,
   requireProblemInScope,
   requireWorkstreamInScope,
@@ -480,9 +481,10 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
     }
 
     case "WORKSTREAM_BY_SLUG": {
-      const rows = await db.select().from(workstreams).where(eq(workstreams.slug, q.slug)).limit(1);
-      const row = rows[0];
-      return row && scope.has(row.id) ? row : null;
+      // Scoped before the row is picked, not after: slugs are unique per owner,
+      // so an unscoped lookup could answer with a stranger's row — or answer
+      // null while the caller's own Workstream of that name sits behind it.
+      return (await findWorkstreamBySlugInScope(db, q.slug, scope)) ?? null;
     }
 
     case "WORKSTREAM_SUMMARIES": {

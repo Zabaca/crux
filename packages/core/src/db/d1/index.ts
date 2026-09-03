@@ -128,7 +128,12 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
     updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
     archived_at integer
   )`,
-  `CREATE UNIQUE INDEX IF NOT EXISTS workstreams_slug_unique ON workstreams (slug)`,
+  // Per owner, not per deployment: a globally unique slug turned every refusal
+  // into an oracle for what other tenants have named their areas, and let one
+  // Principal squat a name for everybody. The old global index is dropped
+  // rather than left in place — it would still enforce what this replaces.
+  `DROP INDEX IF EXISTS workstreams_slug_unique`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS workstreams_owner_slug_unique ON workstreams (owner_id, slug)`,
 
   `CREATE TABLE IF NOT EXISTS observations (
     id text PRIMARY KEY NOT NULL,

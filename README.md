@@ -293,10 +293,10 @@ freshly wiped deployment reaches its own browser without a row written by hand �
 `bun run db:restore-identity` remains for restoring a _specific_ identity, which
 is what the runbook below uses.
 
-**Schema application only ever adds.** The DDL is an end state of
-`CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a table from
-the schema module does not drop it in production, and repointing a column at a
-different parent — or tightening a nullable one to `NOT NULL`, as
+**Schema application only ever adds — with one stated exception.** The DDL is an
+end state of `CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a
+table from the schema module does not drop it in production, and repointing a
+column at a different parent — or tightening a nullable one to `NOT NULL`, as
 `workstreams.owner_id` is — is a table rebuild that cannot be expressed at all.
 The escape hatch is to start the database over:
 [the rebuild runbook](docs/runbooks/rebuild-production-database.md) covers the
@@ -304,6 +304,13 @@ wipe (`bun run db:wipe`, which is a dry run until it is handed the database's
 own name), the deploy that reapplies the schema, and restoring the one identity
 that makes the browser reachable again. It is destructive and human-gated;
 nothing in CI runs it.
+
+The exception is an index, which holds no rows and can be replaced in place:
+`DROP INDEX IF EXISTS workstreams_slug_unique` runs on every apply, because
+narrowing that slug index to `(owner_id, slug)`
+([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)) means nothing while
+the index it replaces is still enforcing the old rule. Dropping anything that
+holds rows stays out of the schema module and behind the runbook.
 
 `GET /health` is the deployment's liveness check, and the answer to *what is
 live*. It round-trips the D1 binding rather than answering from memory, so a
@@ -359,7 +366,8 @@ naming the broken links and orphans.
   [ADR-0012: Crux does not own the build](docs/adr/0012-crux-does-not-own-the-build.md),
   [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md),
   [ADR-0014: view-state belongs to whoever is looking at it](docs/adr/0014-view-state-is-the-humans.md),
-  [ADR-0015: a release is a command, not a merge](docs/adr/0015-a-release-is-a-command-not-a-merge.md).
+  [ADR-0015: a release is a command, not a merge](docs/adr/0015-a-release-is-a-command-not-a-merge.md),
+  [ADR-0016: a slug belongs to its owner](docs/adr/0016-a-slug-belongs-to-its-owner.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md) (superseded by ADR-0014).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -375,7 +383,7 @@ naming the broken links and orphans.
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
 - **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded, and owner-only: it holds a bearer token the deployment cannot reissue.
 - **One corpus, reached over HTTP.** No local database, no replicas — the transition layer runs in exactly one place ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)).
-- **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
+- **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Workstream slugs are unique per owner, so a refusal never reports what another tenant holds ([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)).
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.
 - **Claude is a tool, not an actor.** The agent holds a Principal; a human owns Principals, and every attribution resolves to one ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
