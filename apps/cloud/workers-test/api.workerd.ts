@@ -1050,3 +1050,104 @@ describe("the boundary is not an oracle", () => {
     expect(body.error.message).toContain("taken on this deployment");
   });
 });
+
+describe("change events name the Workstream they came from", () => {
+  /**
+   * Open the push stream, run `act`, and return the first `view` frame it
+   * pushes. The subscriber is registered by the time the response resolves, so
+   * the action that follows is the one this frame reports.
+   */
+  async function frameFor(act: () => Promise<unknown>): Promise<{
+    revision: number;
+    workstreamId: string | null;
+  }> {
+    const stream = await call("/v1/view/stream");
+    const reader = stream.body!.getReader();
+    const decoder = new TextDecoder();
+    await act();
+    let buffered = "";
+    // The stream opens with a `: connected` comment; the frame we want is the
+    // next one. Bounded so a stream that never carries it fails rather than hangs.
+    for (let i = 0; i < 5; i++) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffered += decoder.decode(value);
+      const match = buffered.match(/event: view\ndata: (.*)\n\n/);
+      if (match) {
+        await reader.cancel();
+        return JSON.parse(match[1]!) as { revision: number; workstreamId: string | null };
+      }
+    }
+    await reader.cancel();
+    throw new Error(`no view frame in stream: ${JSON.stringify(buffered)}`);
+  }
+
+  const lastAction = async () =>
+    (
+      (await (await call("/v1/view")).json()) as {
+        lastAction: { kind: string; ts: number; workstreamId: string | null };
+      }
+    ).lastAction;
+
+  test("a mutation's lastAction names the Workstream whose data moved", async () => {
+    await dispatch({
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "WS-crux", content: "the token expired mid-demo" },
+    });
+    expect(await lastAction()).toMatchObject({
+      kind: "ADD_OBSERVATION",
+      workstreamId: "WS-crux",
+    });
+  });
+
+  test("a mutation in another Workstream names that one instead", async () => {
+    await db
+      .insert(workstreams)
+      .values({ id: "WS-farm", slug: "farm", title: "Farm", ownerId: "USR-james" });
+    const filed = (await (
+      await dispatch({
+        kind: "ADD_PROBLEM",
+        payload: { workstream: "WS-farm", title: "P", description: "d" },
+      })
+    ).json()) as { result: { id: number } };
+    expect(await lastAction()).toMatchObject({ workstreamId: "WS-farm" });
+
+    // And a transition reached through the Problem, not the Workstream, still
+    // resolves back to it — the row the scope check already read names it.
+    await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: filed.result.id, stage: "now" } });
+    expect(await lastAction()).toMatchObject({
+      kind: "SCHEDULE_PROBLEM",
+      workstreamId: "WS-farm",
+    });
+  });
+
+  test("an action that touches no Workstream is still well-formed", async () => {
+    await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });
+    expect(await lastAction()).toMatchObject({ workstreamId: "WS-crux" });
+
+    // BACK to the Workstream list points at nothing, and says so.
+    await dispatch({ kind: "BACK" });
+    expect(await lastAction()).toEqual({
+      kind: "BACK",
+      ts: expect.any(Number),
+      workstreamId: null,
+    });
+  });
+
+  test("the push frame carries the Workstream beside the revision", async () => {
+    const frame = await frameFor(() =>
+      dispatch({
+        kind: "ADD_OBSERVATION",
+        payload: { workstream: "WS-crux", content: "filed from a terminal" },
+      }),
+    );
+    expect(frame).toEqual({ revision: 1, workstreamId: "WS-crux" });
+  });
+
+  test("a frame from an action touching no Workstream carries null", async () => {
+    await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });
+    const frame = await frameFor(() => dispatch({ kind: "BACK" }));
+    expect(frame.workstreamId).toBeNull();
+    expect(frame.revision).toBeGreaterThan(0);
+  });
+});

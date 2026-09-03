@@ -90,12 +90,25 @@ async function scopedFollowUps(
   );
 }
 
+/**
+ * What a mutation did, plus where it did it.
+ *
+ * `workstreamId` is the Workstream whose data moved — the change event carries
+ * it so a subscriber watching one Workstream can ignore the rest. It is read
+ * off the rows the scope check already resolved, so naming it costs no extra
+ * query and can never name a Workstream outside the caller's scope.
+ */
+export type MutationOutcome = {
+  result: unknown;
+  workstreamId: string | null;
+};
+
 export async function runMutation(
   action: MutationAction,
   db: CruxDb,
   actor: Actor,
   scope: Scope,
-): Promise<unknown> {
+): Promise<MutationOutcome> {
   const user = actor;
 
   switch (action.kind) {
@@ -125,7 +138,7 @@ export async function runMutation(
         description: p.description,
         ownerId: user.id,
       });
-      return { ok: true, id };
+      return { result: { ok: true, id }, workstreamId: id };
     }
     case "RENAME_WORKSTREAM": {
       const p = action.payload;
@@ -136,7 +149,7 @@ export async function runMutation(
         { title: p.title, description: p.description },
         db,
       );
-      return { ok: true, ...r };
+      return { result: { ok: true, ...r }, workstreamId: r.newId };
     }
     case "ADD_PROBLEM": {
       const p = action.payload;
@@ -151,25 +164,31 @@ export async function runMutation(
         })
         .returning({ id: problems.id });
       const id = result[0]!.id;
-      return { ok: true, id };
+      return { result: { ok: true, id }, workstreamId: ws.id };
     }
     case "SCHEDULE_PROBLEM": {
       const p = action.payload;
       const prob = await requireProblemInScope(db, p.id, scope);
       await scheduleProblem(prob.id, p.stage as RoadmapStage, db);
-      return { ok: true, id: prob.id, status: p.stage };
+      return {
+        result: { ok: true, id: prob.id, status: p.stage },
+        workstreamId: prob.workstreamId,
+      };
     }
     case "UNSCHEDULE_PROBLEM": {
       const p = action.payload;
       const prob = await requireProblemInScope(db, p.id, scope);
       await unscheduleProblem(prob.id, db);
-      return { ok: true, id: prob.id, status: null };
+      return { result: { ok: true, id: prob.id, status: null }, workstreamId: prob.workstreamId };
     }
     case "ABANDON_PROBLEM": {
       const p = action.payload;
       const prob = await requireProblemInScope(db, p.id, scope);
       await abandonProblem(prob.id, p.rationale, user.id, db);
-      return { ok: true, id: prob.id, status: "abandoned" };
+      return {
+        result: { ok: true, id: prob.id, status: "abandoned" },
+        workstreamId: prob.workstreamId,
+      };
     }
     case "ADD_ATTEMPT": {
       const p = action.payload;
@@ -180,13 +199,20 @@ export async function runMutation(
         { id, problemId: prob.id, ref: p.ref, label: p.label, createdById: user.id },
         db,
       );
-      return { ok: true, id };
+      return { result: { ok: true, id }, workstreamId: prob.workstreamId };
     }
     case "CLOSE_ATTEMPT": {
       const p = action.payload;
-      await requireAttemptInScope(db, p.id, scope);
+      const att = await requireAttemptInScope(db, p.id, scope);
       await closeAttempt({ id: p.id, status: p.status, closingNote: p.closingNote }, db);
-      return { ok: true, id: p.id, status: p.status };
+      // The Attempt row names its Problem, not its Workstream. The lookup is
+      // scoped like every other, so a Problem that has gone missing under it
+      // leaves the event Workstream-less rather than guessing.
+      const attProb = await findProblemInScope(db, att.problemId, scope);
+      return {
+        result: { ok: true, id: p.id, status: p.status },
+        workstreamId: attProb?.workstreamId ?? null,
+      };
     }
     case "ADD_OUTCOME": {
       const p = action.payload;
@@ -210,7 +236,7 @@ export async function runMutation(
         },
         db,
       );
-      return { ok: true, id, status: "done" };
+      return { result: { ok: true, id, status: "done" }, workstreamId: prob.workstreamId };
     }
     case "ADD_OBSERVATION": {
       const p = action.payload;
@@ -226,13 +252,13 @@ export async function runMutation(
         sourceType: p.sourceType,
         tags: p.tags && p.tags.length ? JSON.stringify(p.tags) : null,
       });
-      return { ok: true, id };
+      return { result: { ok: true, id }, workstreamId: ws.id };
     }
     case "ARCHIVE_OBSERVATION": {
       const p = action.payload;
-      await requireObservationInScope(db, p.id, scope);
+      const obs = await requireObservationInScope(db, p.id, scope);
       await archiveObservation(p.id, p.rationale ?? "", user.id, db);
-      return { ok: true, id: p.id };
+      return { result: { ok: true, id: p.id }, workstreamId: obs.workstreamId };
     }
     case "ADD_EVIDENCE": {
       const p = action.payload;
@@ -252,13 +278,13 @@ export async function runMutation(
         note: p.note,
         createdById: user.id,
       });
-      return { ok: true, id };
+      return { result: { ok: true, id }, workstreamId: prob.workstreamId };
     }
     case "RENAME_OBSERVATION": {
       const p = action.payload;
-      await requireObservationInScope(db, p.id, scope);
+      const obs = await requireObservationInScope(db, p.id, scope);
       await db.update(observations).set({ content: p.content }).where(eq(observations.id, p.id));
-      return { ok: true, id: p.id };
+      return { result: { ok: true, id: p.id }, workstreamId: obs.workstreamId };
     }
     default: {
       const _exhaustive: never = action;

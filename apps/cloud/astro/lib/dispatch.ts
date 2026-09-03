@@ -50,13 +50,52 @@ export async function dispatchAction(kind: string, payload: unknown): Promise<Di
   };
 }
 
+/** What the `view` frame carries: the revision, and where the change happened. */
+export type ViewStateChange = {
+  revision: number;
+  /** The Workstream the action touched, or null when it touched none. */
+  workstreamId: string | null;
+};
+
 /**
  * Call `onChange` whenever this Member's view-state revision moves — the push
  * stream from their ViewStateDO. That is what makes a second tab, or a `crux`
  * command in a terminal, land on the page without a manual refresh.
+ *
+ * Pass `opts.workstreamId` to hear only about that Workstream. Agents work
+ * several in parallel, so an unfiltered subscription on a page showing one of
+ * them is interruption rather than freshness. A frame with no Workstream (a
+ * navigation, a RESET) is dropped by a filtered subscriber: it changed nothing
+ * the page is showing.
  */
-export function onViewStateChange(onChange: () => void): () => void {
+export function onViewStateChange(
+  onChange: (change: ViewStateChange) => void,
+  opts: { workstreamId?: string } = {},
+): () => void {
   const source = new EventSource("/v1/view/stream");
-  source.addEventListener("view", onChange);
+  source.addEventListener("view", (event) => {
+    const change = parseViewFrame((event as MessageEvent).data);
+    if (!change) return;
+    if (opts.workstreamId && change.workstreamId !== opts.workstreamId) return;
+    onChange(change);
+  });
   return () => source.close();
+}
+
+/**
+ * A frame from a deployment that predates `workstreamId` still parses — the
+ * field reads as null, which an unfiltered subscriber ignores and a filtered
+ * one treats as "not mine".
+ */
+function parseViewFrame(data: unknown): ViewStateChange | null {
+  if (typeof data !== "string") return null;
+  try {
+    const parsed = JSON.parse(data) as { revision?: unknown; workstreamId?: unknown };
+    return {
+      revision: typeof parsed.revision === "number" ? parsed.revision : 0,
+      workstreamId: typeof parsed.workstreamId === "string" ? parsed.workstreamId : null,
+    };
+  } catch {
+    return null;
+  }
 }

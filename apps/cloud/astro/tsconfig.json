@@ -8,7 +8,9 @@
     // separate project. `cloudflare:workers` is imported only by `.astro`
     // frontmatter, which tsc does not read.
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["react", "react-dom"]
+    // `bun` is here for the island tests under `lib/__tests__`, which run on
+    // the bun runner alongside the rest of `bun run test`.
+    "types": ["react", "react-dom", "bun"]
   },
   "include": ["**/*.ts", "**/*.tsx"]
 }

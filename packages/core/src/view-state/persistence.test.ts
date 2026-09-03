@@ -36,7 +36,7 @@ describe("persistence merge: computeSaveViewMetaBlob preserves XState fields", (
       value: { viewing: "workstream_list" },
       context: { workstreamId: null, problemId: null },
       revision: 1,
-      lastAction: { kind: "ADD_PROBLEM", ts: 1234567890 },
+      lastAction: { kind: "ADD_PROBLEM", ts: 1234567890, workstreamId: null },
       recentQueries: [],
     });
 
@@ -46,7 +46,7 @@ describe("persistence merge: computeSaveViewMetaBlob preserves XState fields", (
     expect(after.historyValue).toEqual({});
     expect(after.children).toEqual({});
     expect(after.revision).toBe(1);
-    expect(after.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 1234567890 });
+    expect(after.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 1234567890, workstreamId: null });
     expect(after.recentQueries).toEqual([]);
   });
 
@@ -61,14 +61,14 @@ describe("persistence merge: computeSaveViewMetaBlob preserves XState fields", (
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 1,
-      lastAction: { kind: "ADD_ATTEMPT", ts: 1 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1, workstreamId: null },
       recentQueries: [],
     });
     blob = computeSaveViewMetaBlob(blob, {
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 2,
-      lastAction: { kind: "CLOSE_ATTEMPT", ts: 2 },
+      lastAction: { kind: "CLOSE_ATTEMPT", ts: 2, workstreamId: null },
       recentQueries: [{ kind: "PROBLEM_SHOW", slug: "42", ts: 5 }],
     });
 
@@ -89,21 +89,21 @@ describe("persistence merge: loadViewMetaFromBlob returns merged shape", () => {
       historyValue: {},
       children: {},
       revision: 7,
-      lastAction: { kind: "ADD_ATTEMPT", ts: 1700 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1700, workstreamId: null },
       recentQueries: [{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }],
     });
 
     expect(meta.value).toEqual({ viewing: "problem_detail" });
     expect(meta.context).toEqual({ workstreamId: "WS-crux", problemId: "42" });
     expect(meta.revision).toBe(7);
-    expect(meta.lastAction).toEqual({ kind: "ADD_ATTEMPT", ts: 1700 });
+    expect(meta.lastAction).toEqual({ kind: "ADD_ATTEMPT", ts: 1700, workstreamId: null });
     expect(meta.recentQueries).toEqual([{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }]);
   });
 
   test("a sidecar-only blob (no XState fields) returns defaults for value/context", () => {
     const meta = loadViewMetaFromBlob({
       revision: 3,
-      lastAction: { kind: "X", ts: 1 },
+      lastAction: { kind: "X", ts: 1, workstreamId: null },
       recentQueries: [],
     });
     expect(meta.value).toEqual({ viewing: "workstream_list" });
@@ -117,7 +117,7 @@ describe("persistence merge: computeSaveStateBlob preserves sidecar fields", () 
     const after = computeSaveStateBlob(
       {
         revision: 5,
-        lastAction: { kind: "ADD_PROBLEM", ts: 1000 },
+        lastAction: { kind: "ADD_PROBLEM", ts: 1000, workstreamId: null },
         recentQueries: [{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 999 }],
       },
       makeSnap(),
@@ -127,7 +127,7 @@ describe("persistence merge: computeSaveStateBlob preserves sidecar fields", () 
     expect(after.context).toBeDefined();
     expect(after.status).toBe("active");
     expect(after.revision).toBe(5);
-    expect(after.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 1000 });
+    expect(after.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 1000, workstreamId: null });
     expect(after.recentQueries).toEqual([{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 999 }]);
   });
 
@@ -142,7 +142,7 @@ describe("persistence merge: computeSaveStateBlob preserves sidecar fields", () 
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 1,
-      lastAction: { kind: "ADD_WORKSTREAM", ts: 2000 },
+      lastAction: { kind: "ADD_WORKSTREAM", ts: 2000, workstreamId: null },
       recentQueries: [],
     });
     expect(afterStep2.value).toEqual(afterStep1.value);
@@ -175,7 +175,7 @@ describe("computeSaveStateBlob lastActionKind option: stamps lastAction + bumps 
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 2,
-      lastAction: { kind: "ADD_ATTEMPT", ts: 5000 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 5000, workstreamId: null },
       recentQueries: [],
     });
 
@@ -191,7 +191,7 @@ describe("computeSaveStateBlob lastActionKind option: stamps lastAction + bumps 
       value: {} as unknown,
       context: { workstreamId: null, problemId: null },
       revision: 1,
-      lastAction: { kind: "ADD_ATTEMPT", ts: 1000 },
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1000, workstreamId: null },
       recentQueries: [],
     });
     expect((afterMutation.lastAction as { kind: string }).kind).toBe("ADD_ATTEMPT");
@@ -211,12 +211,43 @@ describe("computeSaveStateBlob lastActionKind option: stamps lastAction + bumps 
         value: {} as unknown,
         context: { workstreamId: null, problemId: null },
         revision: 7,
-        lastAction: { kind: "ADD_PROBLEM", ts: 99 },
+        lastAction: { kind: "ADD_PROBLEM", ts: 99, workstreamId: null },
         recentQueries: [],
       },
     );
     const after = computeSaveStateBlob(existing, snap);
     expect(after.revision).toBe(7);
     expect((after.lastAction as { kind: string }).kind).toBe("ADD_PROBLEM");
+  });
+});
+
+describe("lastAction names the Workstream the action touched", () => {
+  test("computeSaveStateBlob stamps the Workstream it is given", () => {
+    const after = computeSaveStateBlob({}, makeSnap(), {
+      lastActionKind: "SELECT_WORKSTREAM",
+      lastActionWorkstreamId: "WS-crux",
+    });
+    expect(after.lastAction).toMatchObject({
+      kind: "SELECT_WORKSTREAM",
+      workstreamId: "WS-crux",
+    });
+  });
+
+  test("without one, the stamp says null rather than omitting the field", () => {
+    const after = computeSaveStateBlob({}, makeSnap(), { lastActionKind: "BACK" });
+    expect((after.lastAction as { workstreamId: string | null }).workstreamId).toBeNull();
+  });
+
+  test("a blob written before the field existed loads with workstreamId null", () => {
+    const meta = loadViewMetaFromBlob({
+      revision: 4,
+      lastAction: { kind: "ADD_ATTEMPT", ts: 1700 },
+      recentQueries: [],
+    });
+    expect(meta.lastAction).toEqual({ kind: "ADD_ATTEMPT", ts: 1700, workstreamId: null });
+  });
+
+  test("a corrupt lastAction reads as absent rather than throwing", () => {
+    expect(loadViewMetaFromBlob({ revision: 1, lastAction: "nonsense" }).lastAction).toBeNull();
   });
 });

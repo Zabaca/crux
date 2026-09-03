@@ -148,7 +148,14 @@ export default function RoadmapBoard({
   // Another session of this Member — a second tab, or `crux` in a terminal —
   // moves the same corpus. The DO tells us the revision changed; the page is
   // server-rendered, so re-reading it is the whole of the refresh.
-  useEffect(() => onViewStateChange(() => location.reload()), []);
+  //
+  // Filtered to this board's Workstream: agents work several in parallel, and a
+  // reload triggered by work in a Workstream this page is not showing is
+  // interruption, not freshness.
+  useEffect(
+    () => onViewStateChange(() => location.reload(), { workstreamId: `WS-${slug}` }),
+    [slug],
+  );
 
   async function onDragEnd(event: DragEndEvent) {
     const { active, over } = event;
