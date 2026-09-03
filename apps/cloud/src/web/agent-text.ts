@@ -160,7 +160,6 @@ signup step and nothing to configure. Point it somewhere else with
 
     crux workstream add --slug crux --title "Crux"
     crux workstream list
-    crux workstream select crux
 
     crux observation add -w crux --content "handlers spend a third of every call on status"
     crux observation add -w crux --content "..." --source "where you saw it" \\
