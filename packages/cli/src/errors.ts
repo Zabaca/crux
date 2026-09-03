@@ -16,8 +16,12 @@ export const EXIT_CODES: Record<string, number> = {
   // The free allowance is spent (ADR-0013). Its own code so a script can tell
   // "claim this Principal" apart from a corpus rejection.
   CAPACITY_EXCEEDED: 27,
-  // A deployment that was never configured is a setup mistake, not a corpus one.
+  // A deployment that was never configured is a setup mistake, not a corpus one,
+  // and so is one that cannot send the mail claiming depends on.
   NO_API_CONFIG: 2,
+  EMAIL_NOT_CONFIGURED: 2,
+  // Resend refused or could not be reached: worth retrying, unlike the above.
+  EMAIL_SEND_FAILED: 28,
   USAGE: 2,
   UNKNOWN: 1,
 };

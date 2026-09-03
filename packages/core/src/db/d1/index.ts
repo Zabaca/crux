@@ -32,7 +32,9 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
     email_verified integer DEFAULT 0 NOT NULL,
     image text,
     updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
-    removed_at integer
+    removed_at integer,
+    claimed_by_user_id text REFERENCES users(id),
+    claimed_at integer
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS users_slug_unique ON users (slug)`,
   // Partial, because `users.email` is nullable and predates Better Auth: rows
@@ -92,6 +94,19 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
     accepted_user_id text REFERENCES users(id)
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS invites_token_hash_unique ON invites (token_hash)`,
+
+  // A pending claim: an address asked for, not yet proved. The edge it will
+  // write lands only when the mailed token comes back (ADR-0013).
+  `CREATE TABLE IF NOT EXISTS claims (
+    id text PRIMARY KEY NOT NULL,
+    principal_id text NOT NULL REFERENCES users(id),
+    email text NOT NULL,
+    token_hash text NOT NULL,
+    created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
+    expires_at integer NOT NULL,
+    claimed_at integer
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS claims_token_hash_unique ON claims (token_hash)`,
 
   `CREATE TABLE IF NOT EXISTS api_tokens (
     id text PRIMARY KEY NOT NULL,
@@ -219,6 +234,11 @@ export const D1_ADD_COLUMNS: readonly string[] = [
   `ALTER TABLE users ADD COLUMN updated_at integer DEFAULT 0 NOT NULL`,
   `UPDATE users SET updated_at = created_at WHERE updated_at = 0`,
   `ALTER TABLE users ADD COLUMN removed_at integer`,
+  // No `REFERENCES` clause: SQLite's ADD COLUMN accepts one only with a NULL
+  // default, and the constraint it would add is unenforceable on the rows that
+  // already exist. The `CREATE TABLE` above carries it on a fresh database.
+  `ALTER TABLE users ADD COLUMN claimed_by_user_id text`,
+  `ALTER TABLE users ADD COLUMN claimed_at integer`,
 ];
 
 /**

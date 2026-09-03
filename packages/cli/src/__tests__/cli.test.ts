@@ -27,6 +27,7 @@ import { attemptCommand } from "../commands/attempt.js";
 import { viewCommand } from "../commands/view.js";
 import { searchCommand } from "../commands/search.js";
 import { outcomeCommand } from "../commands/outcome.js";
+import { claimCommand } from "../commands/claim.js";
 
 type AnyCmd = {
   run?: (ctx: { args: Record<string, unknown>; rawArgs?: string[] }) => Promise<void>;
@@ -636,5 +637,57 @@ describe("view", () => {
     await capture(() => runCmd(viewCommand as AnyCmd, "reset", { json: true }));
     expect(calls[0]!.method).toBe("POST");
     expect(calls[0]!.url).toBe("https://crux.test/v1/view/reset");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Claiming
+// ---------------------------------------------------------------------------
+
+describe("claim", () => {
+  test("names the address to the deployment and says where the link went", async () => {
+    const calls = stubServer({
+      "POST /v1/claims": {
+        ok: true,
+        email: "dana@example.com",
+        principalId: "USR-abc",
+        expiresAt: 1_700_000_900_000,
+      },
+    });
+
+    const out = await capture(() =>
+      runCmd(claimCommand as AnyCmd, "run", { email: "dana@example.com", json: true }),
+    );
+
+    expect(calls[0]!.method).toBe("POST");
+    expect(calls[0]!.url).toBe("https://crux.test/v1/claims");
+    // The Principal is never named by the client: the token is what says which
+    // one is asking, so a body carrying an id would be an id to get wrong.
+    expect(calls[0]!.body).toEqual({ email: "dana@example.com" });
+    expect(out).toEqual({
+      ok: true,
+      email: "dana@example.com",
+      principalId: "USR-abc",
+      expiresAt: 1_700_000_900_000,
+    });
+  });
+
+  test("a deployment that cannot send mail is a setup mistake, not a corpus one", async () => {
+    stubServer({
+      "POST /v1/claims": envelope(
+        503,
+        "EMAIL_NOT_CONFIGURED",
+        "this deployment cannot send email, so it cannot issue claim links.",
+      ),
+    });
+
+    const err = (await runCmd(claimCommand as AnyCmd, "run", {
+      email: "dana@example.com",
+      json: true,
+    }).catch((e) => e)) as ApiError;
+
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.code).toBe("EMAIL_NOT_CONFIGURED");
+    expect(EXIT_CODES[err.code]).toBe(2);
   });
 });

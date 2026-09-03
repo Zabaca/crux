@@ -2,11 +2,13 @@
  * Outbound email — one message shape, one transport, and the messages the
  * deployment actually sends.
  *
- * The Worker sends email for exactly one reason: a magic link is the only way a
- * browser session is ever created (ADR-0007). That makes the sender a hard
- * dependency of signing in rather than a nice-to-have, which is why it is a
- * parameter of `createAuth` and not something a call site reaches for globally
- * — a test passes a capturing sender and never touches the network.
+ * The Worker sends email for two reasons, and both are a link somebody has to
+ * open: a magic link is the only way a browser session is ever created
+ * (ADR-0007), and a claim link is the only way an address is attached to a
+ * Principal (ADR-0013). That makes the sender a hard dependency of both rather
+ * than a nice-to-have, which is why it is a parameter rather than something a
+ * call site reaches for globally — a test passes a capturing sender and never
+ * touches the network.
  *
  * `EmailSender` is a function, not a class, because the only thing any caller
  * needs is "deliver this message or throw". Swapping Resend for anything else
@@ -107,20 +109,74 @@ export function magicLinkEmail(opts: {
   workspace: string;
   expiresInMinutes: number;
 }): Omit<EmailMessage, "to"> {
-  const { url, workspace, expiresInMinutes } = opts;
-  const subject = `Sign in to ${workspace}`;
+  return linkMessage({
+    subject: `Sign in to ${opts.workspace}`,
+    heading: `Sign in to ${opts.workspace}`,
+    lead: "Open this link to sign in:",
+    button: "Sign in",
+    disclaimer:
+      "If you did not ask to sign in, ignore this message — nothing happens until the link is opened.",
+    url: opts.url,
+    expiresInMinutes: opts.expiresInMinutes,
+  });
+}
+
+/**
+ * The claim link message.
+ *
+ * Same shape as the sign-in mail and for the same reason, but it is not the
+ * same mail: this link attaches an address to a Principal rather than opening a
+ * session, and somebody who receives one unasked needs to be told which of the
+ * two happened. The Principal is named so the mail is checkable against the
+ * terminal the claim was asked for in.
+ */
+export function claimLinkEmail(opts: {
+  url: string;
+  workspace: string;
+  principalId: string;
+  expiresInMinutes: number;
+}): Omit<EmailMessage, "to"> {
+  return linkMessage({
+    subject: `Claim your Principal on ${opts.workspace}`,
+    heading: `Claim your Principal on ${opts.workspace}`,
+    lead: `Open this link to attach this address to Principal ${opts.principalId}, so what it has already filed becomes yours:`,
+    button: "Claim this Principal",
+    disclaimer:
+      "Only claim a Principal you asked to claim: linking is mutual, so whoever holds that Principal's token will be able to read everything this address owns. If you did not ask for this, ignore the message — nothing happens until the link is opened.",
+    url: opts.url,
+    expiresInMinutes: opts.expiresInMinutes,
+  });
+}
+
+/**
+ * One mailed link, rendered.
+ *
+ * Both messages this deployment sends are the same object — a heading, a
+ * sentence, a URL shown as text as well as a button, and an expiry — so they
+ * are rendered once. What differs between them is words, and words are the
+ * argument.
+ */
+function linkMessage(opts: {
+  subject: string;
+  heading: string;
+  lead: string;
+  button: string;
+  disclaimer: string;
+  url: string;
+  expiresInMinutes: number;
+}): Omit<EmailMessage, "to"> {
+  const { subject, heading, lead, button, disclaimer, url, expiresInMinutes } = opts;
   const text = [
-    `Sign in to ${workspace}`,
+    heading,
     "",
-    "Open this link to sign in:",
+    lead,
     url,
     "",
     `The link expires in ${expiresInMinutes} minutes and can be used once.`,
-    "If you did not ask to sign in, ignore this message — nothing happens until the link is opened.",
+    disclaimer,
   ].join("\n");
 
   const safeUrl = escapeHtml(url);
-  const safeWorkspace = escapeHtml(workspace);
   const html = `<!doctype html>
 <html lang="en">
 <body style="margin:0;padding:32px 16px;background:#f6f6f7;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;color:#1a1a1a;">
@@ -128,17 +184,17 @@ export function magicLinkEmail(opts: {
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border:1px solid #e5e5e5;border-radius:8px;">
         <tr><td style="padding:32px;font-size:15px;line-height:1.6;">
-          <h1 style="margin:0 0 16px;font-size:18px;font-weight:600;">Sign in to ${safeWorkspace}</h1>
-          <p style="margin:0 0 24px;">Open this link to sign in:</p>
+          <h1 style="margin:0 0 16px;font-size:18px;font-weight:600;">${escapeHtml(heading)}</h1>
+          <p style="margin:0 0 24px;">${escapeHtml(lead)}</p>
           <p style="margin:0 0 24px;">
-            <a href="${safeUrl}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:500;">Sign in</a>
+            <a href="${safeUrl}" style="display:inline-block;padding:10px 18px;background:#1a1a1a;color:#ffffff;text-decoration:none;border-radius:6px;font-weight:500;">${escapeHtml(button)}</a>
           </p>
           <p style="margin:0 0 24px;font-size:13px;color:#666;word-break:break-all;">${safeUrl}</p>
           <p style="margin:0 0 8px;font-size:13px;color:#666;">
             The link expires in ${expiresInMinutes} minutes and can be used once.
           </p>
           <p style="margin:0;font-size:13px;color:#666;">
-            If you did not ask to sign in, ignore this message — nothing happens until the link is opened.
+            ${escapeHtml(disclaimer)}
           </p>
         </td></tr>
       </table>

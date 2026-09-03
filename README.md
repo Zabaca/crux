@@ -77,10 +77,27 @@ read is scoped to that Principal, so what you see is what you filed.
 An unclaimed Principal files against a free allowance — two hundred
 Observations on the public deployment. Past it, a write refuses with
 `CAPACITY_EXCEEDED`, whose `details` carry the URL to claim the Principal and
-lift the cap; claiming it (CRUX-VIZW40) is what removes the wall. **Reads are
-never gated by it**: reloading context into a fresh session keeps working with
-the allowance spent, because refusing to show somebody the notes they already
-captured is the one refusal this product cannot make.
+lift the cap. **Reads are never gated by it**: reloading context into a fresh
+session keeps working with the allowance spent, because refusing to show
+somebody the notes they already captured is the one refusal this product cannot
+make.
+
+Claiming is what removes the wall, and it is one command:
+
+```sh
+crux claim you@example.com
+```
+
+That mails a link to the address you name; opening it is what attaches the
+address, so nothing is written until you do. An address nobody here has *names*
+the Principal — the row it already is becomes you. An address that already has
+an identity here **links** the Principal to it rather than merging the two, so
+an agent on a second machine joins the first without a single authored row being
+rewritten, and one person may hold many Principals
+([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Once claimed, every
+read resolves to "every Principal claimed by me" — one person, every corpus they
+own — and the allowance is metered over that whole set, so claiming cannot be
+used to pool free allowances.
 
 The only check Claude still runs is the Bun runtime — `command -v bun`. If it is
 not installed, Claude surfaces the install command for your platform
@@ -201,12 +218,12 @@ that answered.
 The first-identity chicken-and-egg is closed: `POST /v1/principals` is
 unauthenticated and mints a `users` row plus a token, so a deployment with no
 rows creates its own on first contact
-([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). What that does *not*
-give you is a **browser** session — signing in mails a link only to an address
-that already has a row, an invite is what attaches one, and invites are issued
-by a Member. Until claiming lands, `bun run db:restore-identity` is still how a
-freshly wiped deployment gets its first addressable Member back; see the runbook
-below.
+([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). A **browser** session
+follows from claiming one: `crux claim <email>` attaches an address to that
+Principal, and signing in mails a link to an address that has a row. So a
+freshly wiped deployment reaches its own browser without a row written by hand —
+`bun run db:restore-identity` remains for restoring a *specific* identity, which
+is what the runbook below uses.
 
 **Schema application only ever adds.** The DDL is an end state of
 `CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a table from
@@ -284,8 +301,9 @@ MVP. One cloud deployment, many tenants: adoption is anonymous-first and the
 Principal is the boundary, so first use mints an identity and every read is
 scoped to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). The
 Observation cap that makes claiming worth doing is enforced — writes refuse with
-`CAPACITY_EXCEEDED` and reads keep answering — but claiming a Principal by email,
-which is what lifts it, is not built yet. In the browser: sign-in, inviting and
+`CAPACITY_EXCEEDED` and reads keep answering — and `crux claim <email>` lifts it,
+by mail: the link names a new address onto the Principal or links it to a human
+who already exists, never merging the two. In the browser: sign-in, inviting and
 removing Members, minting and revoking CLI tokens, pages for Problem and Observation,
 the Observation intake list at `/w/<slug>/observations` — grouped into linked,
 archived and waiting, all three read off related rows rather than a status

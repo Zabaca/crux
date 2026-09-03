@@ -10,6 +10,8 @@
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { authenticateToken } from "@crux/core/auth";
 import { mintPrincipal } from "@crux/core/auth/principals";
+import { CLAIM_TTL_MS, createClaim } from "@crux/core/auth/claims";
+import { claimLinkEmail } from "@crux/core/auth/email";
 import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
 import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
 import {
@@ -25,7 +27,7 @@ import { query } from "@crux/core/reads";
 import { CruxError } from "@crux/core/transitions";
 import { ZodError } from "zod";
 import { DurableObjectViewStore } from "./view-state-do.js";
-import { viewerFor } from "./web/session.js";
+import { emailSenderFor, viewerFor, workspaceName } from "./web/session.js";
 
 export interface Env {
   DB: D1Database;
@@ -43,7 +45,7 @@ export interface Env {
    * absent or unparseable means core's default. */
   CRUX_OBSERVATION_CAP?: string;
   /** Where a capped Principal is sent to claim itself. Defaults to `/claim` on
-   * this deployment, which is where claiming lands (CRUX-VIZW40). */
+   * this deployment, which is where claiming lands. */
   CRUX_CLAIM_URL?: string;
 }
 
@@ -78,6 +80,11 @@ const STATUS_BY_CODE: Record<string, number> = {
   CAPACITY_EXCEEDED: 429,
   INVARIANT_VIOLATION: 422,
   REFERENTIAL_MISMATCH: 422,
+  // The deployment cannot send the mail claiming depends on, or could not. One
+  // is an operator's missing binding, the other is Resend having a bad day;
+  // neither is the caller's request being wrong.
+  EMAIL_NOT_CONFIGURED: 503,
+  EMAIL_SEND_FAILED: 502,
   UNKNOWN: 500,
 };
 
@@ -197,6 +204,49 @@ export async function handleApi(
   const authed = await authenticate(request, env, db, url);
   if (!authed) {
     return errorBody("UNAUTHENTICATED", "missing or invalid bearer token");
+  }
+
+  // POST /v1/claims — ask to attach an address to the calling Principal
+  // (ADR-0013). This only *records* the ask and mails a link; the edge is
+  // written when that link comes back, because the address is not proved until
+  // it does. Authenticated as the Principal being claimed, so there is no id in
+  // the body to get wrong or to guess.
+  if (pathname === "/v1/claims" && request.method === "POST") {
+    try {
+      const body = (await request.json()) as { email?: unknown };
+      const email = typeof body.email === "string" ? body.email : "";
+      const sendEmail = emailSenderFor(env);
+      if (!sendEmail) {
+        return errorBody(
+          "EMAIL_NOT_CONFIGURED",
+          "this deployment cannot send email, so it cannot issue claim links. An operator needs to set RESEND_API_KEY and EMAIL_FROM.",
+        );
+      }
+      const claim = await createClaim(db, { principalId: authed.userId, email });
+      const link = `${url.origin}/claim?token=${claim.token}`;
+      try {
+        await sendEmail({
+          to: claim.email,
+          ...claimLinkEmail({
+            url: link,
+            workspace: workspaceName(env, url),
+            principalId: authed.userId,
+            expiresInMinutes: CLAIM_TTL_MS / 60_000,
+          }),
+        });
+      } catch (err) {
+        return errorBody(
+          "EMAIL_SEND_FAILED",
+          `the claim link could not be sent: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+      return json(
+        { ok: true, email: claim.email, expiresAt: claim.expiresAt, principalId: authed.userId },
+        202,
+      );
+    } catch (err) {
+      return toErrorResponse(err);
+    }
   }
 
   // POST /v1/dispatch — every write, straight through dispatch().

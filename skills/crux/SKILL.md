@@ -198,10 +198,21 @@ paused; every read still works, so context reloads are unaffected. The refusal's
 `details` carry `cap`, `observations` and `claimUrl`.
 
 Say so in the conversation where it happened — this is the moment the wall
-matters — and offer the fix: claim the Principal at the `claimUrl` from the
-error. Do not retry the command, do not mint a fresh Principal to route around
-it, and do not silently drop what the user asked to file: tell them it was not
-filed, and hold the content so it can be filed once the cap is lifted.
+matters — and offer the fix, which is one command:
+
+```sh
+crux claim <their-email>
+```
+
+That mails a link to the address; opening it lifts the cap. Ask for the address
+rather than guessing one, and say what the link does: an address nobody has
+names this Principal, an address that already has an identity here links this
+Principal to it, and neither rewrites anything already filed. The `claimUrl` in
+the error explains the same thing in the browser.
+
+Do not retry the command, do not mint a fresh Principal to route around it, and
+do not silently drop what the user asked to file: tell them it was not filed,
+and hold the content so it can be filed once the cap is lifted.
 
 ## View control bus
 

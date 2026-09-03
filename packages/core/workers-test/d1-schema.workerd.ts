@@ -24,6 +24,9 @@ const EXPECTED_TABLES = [
   "abandonments",
   "outcomes",
   "outcome_follow_up_problems",
+  // Not an entity: the pending half of claiming, which is what makes proving an
+  // address before writing its edge possible at all (ADR-0013).
+  "claims",
 ] as const;
 
 beforeEach(async () => {
@@ -78,11 +81,21 @@ describe("applyD1Schema", () => {
 
     await applyD1Schema(env.DB);
 
-    const row = await env.DB.prepare(`select name, removed_at, updated_at from users where id = ?`)
+    const row = await env.DB.prepare(
+      `select name, removed_at, updated_at, claimed_by_user_id from users where id = ?`,
+    )
       .bind("USR-james")
-      .first<{ name: string; removed_at: number | null; updated_at: number }>();
+      .first<{
+        name: string;
+        removed_at: number | null;
+        updated_at: number;
+        claimed_by_user_id: string | null;
+      }>();
     expect(row?.name).toBe("James Lee");
     expect(row?.removed_at).toBeNull();
+    // Claiming's edge (ADR-0013) reaches an old database the same way: an
+    // additive column, unset, which reads as "this Principal is its own human".
+    expect(row?.claimed_by_user_id).toBeNull();
     // The pre-existing row is still there and still a Member — an added column
     // must not read as "removed" for everyone who was there before it existed.
     expect(row?.updated_at).toBe(1_700_000_000_000);

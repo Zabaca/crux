@@ -66,10 +66,12 @@ export function observationCapFrom(raw: string | undefined): number {
  * Principal alone, so that once claiming links Principals rather than merging
  * them, one claimed Principal lifts the cap for everything linked to it.
  *
- * Claimed means uncapped here, which is narrower than ADR-0013's eventual
- * "the cap applies to the human across all linked Principals": what a claimed
- * human is allowed is a pricing question the ADR leaves open, and this cap
- * exists to create the claim moment rather than to price what follows it.
+ * Claimed means uncapped here: what a claimed human is *allowed* is a pricing
+ * question ADR-0013 leaves open, and this cap exists to create the claim moment
+ * rather than to price what follows it. The other half of the ADR's sentence —
+ * "the cap applies to the human across all linked Principals" — is structural
+ * rather than a number: the meter below runs over the whole owner set, so two
+ * Principals one person owns are one allowance and never two.
  *
  * Asked first, so a claimed Principal — every browser Member — never pays for
  * the count below.

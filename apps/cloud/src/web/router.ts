@@ -32,7 +32,17 @@ import {
   observationPage,
   workstreamListPage,
 } from "./read-pages.js";
-import { membersPage, tokensPage, signInPage, invitePage, linkSentPage } from "./account-pages.js";
+import {
+  membersPage,
+  tokensPage,
+  signInPage,
+  invitePage,
+  linkSentPage,
+  claimStartPage,
+  claimPage,
+  claimedPage,
+} from "./account-pages.js";
+import { applyClaim, findPendingClaim, ClaimError } from "@crux/core/auth/claims";
 import {
   ensureMember,
   findMemberByEmail,
@@ -169,6 +179,72 @@ export async function handleWeb(
   if (board) return redirect(`/w/${board[1]}`, 301);
 
   const db = deps.db ?? createD1Db(env.DB);
+
+  /** A page rendered for somebody with no session, and no way to have one yet. */
+  const renderPlain = (r: { title: string; body: Html }, status = 200): Response =>
+    htmlResponse(
+      page({ title: r.title, viewer: null, workspace: workspaceName(env, url), body: r.body }),
+      status,
+    );
+
+  // Claiming (ADR-0013). Ahead of the session gate *and* of the
+  // BETTER_AUTH_SECRET check, because it needs neither: the person opening this
+  // link has no session — that is the whole point — and a deployment that
+  // cannot issue sessions can still mail a claim link, so a claim page that
+  // 503'd would strand the one address that could ever sign in to it.
+  if (path === "/claim" && request.method === "GET") {
+    const token = url.searchParams.get("token");
+    if (!token) return renderPlain(claimStartPage());
+    const claim = await findPendingClaim(db, token);
+    if (!claim) {
+      return renderPlain(
+        claimPage({
+          invalid: "This claim link is not valid — it may have been used already, or expired.",
+        }),
+        410,
+      );
+    }
+    return renderPlain(claimPage({ email: claim.email, principalId: claim.principalId, token }));
+  }
+
+  if (path === "/claim/accept" && request.method === "POST") {
+    const form = await request.formData();
+    const token = String(form.get("token") ?? "");
+    const name = String(form.get("name") ?? "").trim();
+    const claim = await findPendingClaim(db, token);
+    if (!claim) {
+      return renderPlain(
+        claimPage({
+          invalid: "This claim link is not valid — it may have been used already, or expired.",
+        }),
+        410,
+      );
+    }
+    try {
+      const outcome = await applyClaim(db, { claim, ...(name ? { name } : {}) });
+      return renderPlain(
+        claimedPage({
+          kind: outcome.kind,
+          email: outcome.email,
+          principalId: outcome.principalId,
+        }),
+      );
+    } catch (err) {
+      if (err instanceof ClaimError) {
+        return renderPlain(
+          claimPage({
+            email: claim.email,
+            principalId: claim.principalId,
+            token,
+            error: err.message,
+          }),
+          409,
+        );
+      }
+      throw err;
+    }
+  }
+
   const secret = env.BETTER_AUTH_SECRET;
   if (!secret) {
     return htmlResponse(
