@@ -95,20 +95,15 @@ describe("POST /v1/query — reads", () => {
     expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 
-  test("the context digest is served whole, over one request", async () => {
+  test("a filtered PROBLEM_LIST answers with only that stage's Problems", async () => {
     await dispatch({
       kind: "ADD_PROBLEM",
       payload: { workstream: "WS-crux", title: "P", description: "d" },
     });
-    const res = await query({ kind: "CONTEXT", workstream: "crux", stages: ["unscheduled"] });
-    const { result } = (await res.json()) as { result: Record<string, any> };
-    expect(result.workstream.slug).toBe("crux");
-    expect(result.unscheduled).toHaveLength(1);
-    expect(result.unscheduled[0].legal_next_transitions).toEqual([
-      "schedule",
-      "abandon",
-      "outcome",
-    ]);
+    const res = await query({ kind: "PROBLEM_LIST", workstream: "crux", status: "unscheduled" });
+    const { result } = (await res.json()) as { result: Array<{ title: string; status: null }> };
+    expect(result.map((p) => p.title)).toEqual(["P"]);
+    expect(result[0]!.status).toBeNull();
   });
 });
 
@@ -714,7 +709,7 @@ describe("Attempts", () => {
     expect(shown.result.status).toBe("now");
   });
 
-  test("Attempts hang off the Problem in PROBLEM_DETAIL and the context digest", async () => {
+  test("Attempts hang off the Problem in PROBLEM_DETAIL", async () => {
     const problemId = await fileProblem();
     await dispatch({ kind: "SCHEDULE_PROBLEM", payload: { id: problemId, stage: "now" } });
     await fileAttempt(problemId, "https://tracker.example/T-7", "Batch the writes");
@@ -728,11 +723,6 @@ describe("Attempts", () => {
       label: "Batch the writes",
       ref: "https://tracker.example/T-7",
     });
-
-    const digest = (await (
-      await query({ kind: "CONTEXT", workstream: "crux", stages: ["now"] })
-    ).json()) as { result: { now: Array<{ attempts: Array<{ id: string }> }> } };
-    expect(digest.result.now[0]!.attempts.map((a) => a.id)).toEqual(["ATT-001"]);
   });
 
   describe("the drift query", () => {
@@ -910,9 +900,9 @@ describe("tenancy over HTTP — the boundary is the credential", () => {
     // Named directly, A's rows are *missing*, not forbidden.
     expect((await queryAs(b.token, { kind: "PROBLEM_SHOW", id: a.problemId })).status).toBe(404);
     expect((await queryAs(b.token, { kind: "OBSERVATION_SHOW", id: a.obsId })).status).toBe(404);
-    expect(
-      (await queryAs(b.token, { kind: "CONTEXT", workstream: "alpha", stages: ["now"] })).status,
-    ).toBe(404);
+    expect((await queryAs(b.token, { kind: "PROBLEM_LIST", workstream: "alpha" })).status).toBe(
+      404,
+    );
 
     const search = (await (await queryAs(b.token, { kind: "SEARCH", q: "private" })).json()) as {
       result: { problems: unknown[]; observations: unknown[] };

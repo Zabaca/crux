@@ -1030,11 +1030,16 @@ describe("the agent-facing text", () => {
     expect(long).toContain("crux observation add -w crux --content");
     expect(long).not.toMatch(/observation add "/);
     // And the Workstream is an argument, never a shared default — quoting a
-    // bare `crux context` would teach the collision this exists to close.
-    expect(long).toContain("crux context -w crux");
-    // Every occurrence, not just a bare one at end of line: `crux context --all`
-    // would teach the same collision as `crux context`.
-    expect(long).not.toMatch(/crux context(?! -w)/);
+    // bare `crux problem list` would teach the collision this exists to close.
+    expect(long).toContain("crux problem list -w crux");
+    expect(long).toContain("crux observation list -w crux");
+    // Every occurrence, not just a bare one at end of line: a `--status` or
+    // `--unlinked` before the `-w` would teach the same collision.
+    expect(long).not.toMatch(/crux problem list(?! -w)/);
+    expect(long).not.toMatch(/crux observation list(?! -w)/);
+    // `crux context` is deleted; quoting it at all would send an agent at a
+    // command that exits 1 as an unknown subcommand.
+    expect(long).not.toContain("crux context");
     // Tags are comma-separated; the repeatable form drops all but the last.
     expect(long).toContain("--tag cli,performance");
   });

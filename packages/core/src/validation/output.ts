@@ -44,36 +44,6 @@ export const ProblemShowOutput = z
   .passthrough();
 
 // ---------------------------------------------------------------------------
-// Bespoke: context
-// ---------------------------------------------------------------------------
-
-const DigestProblemEntry = z
-  .object({
-    id: z.union([z.string(), z.number()]),
-    title: z.string(),
-    status: z.string().nullable(),
-    // Optional, not required: the CLI ships as a plugin and is updated
-    // independently of the deployment it points at, so a digest from a Worker
-    // that predates Attempts must still parse.
-    attempts: z.array(z.unknown()).optional(),
-  })
-  .passthrough();
-
-export const ContextOutput = z
-  .object({
-    workstream: z.object({ slug: z.string() }).passthrough(),
-    now: z.array(DigestProblemEntry).optional(),
-    next: z.array(DigestProblemEntry).optional(),
-    later: z.array(DigestProblemEntry).optional(),
-    unscheduled: z.array(DigestProblemEntry).optional(),
-    done: z.array(DigestProblemEntry).optional(),
-    abandoned: z.array(DigestProblemEntry).optional(),
-    recent_observations_unlinked: z.array(z.unknown()).optional(),
-    seed_version: z.string(),
-  })
-  .passthrough();
-
-// ---------------------------------------------------------------------------
 // View state (5 sites)
 // ---------------------------------------------------------------------------
 

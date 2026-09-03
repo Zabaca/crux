@@ -22,7 +22,6 @@ import { ActionNotAllowedError } from "@crux/core/actions";
 import { workstreamCommand } from "../commands/workstream.js";
 import { problemCommand } from "../commands/problem.js";
 import { observationCommand } from "../commands/observation.js";
-import { contextCommand } from "../commands/context.js";
 import { attemptCommand } from "../commands/attempt.js";
 import { viewCommand } from "../commands/view.js";
 import { searchCommand } from "../commands/search.js";
@@ -91,13 +90,6 @@ function envelope(
       status,
     });
 }
-
-/** The smallest digest `ContextOutput` accepts — the stub's stand-in corpus. */
-const DIGEST = {
-  workstream: { id: "WS-smoke", slug: "smoke", title: "Smoke WS" },
-  seed_version: "2026-04-21",
-  now: [],
-};
 
 /** A `/v1/view` body — what `crux view get` renders. No corpus command reads it. */
 const VIEW_WITH_WS = {
@@ -224,51 +216,32 @@ describe("reads", () => {
     });
   });
 
-  test("context defaults to the `now` bucket and --all opens every one", async () => {
+  test("observation list switches read on --unlinked, and only then", async () => {
     const calls = stubServer({
-      "POST /v1/query": { result: DIGEST },
+      "POST /v1/query": { result: [] },
     });
 
     await capture(() =>
-      runCmd(contextCommand as AnyCmd, "run", { workstream: "WS-smoke", json: true }),
+      runCmd(observationCommand as AnyCmd, "list", { workstream: "WS-smoke", json: true }),
     );
-    expect(calls.at(-1)!.body).toEqual({
-      kind: "CONTEXT",
+    expect(calls.map((c) => c.body).at(-1)).toEqual({
+      kind: "OBSERVATION_LIST",
       workstream: "WS-smoke",
-      stages: ["now"],
-      includeExtras: false,
-      showArchived: false,
     });
 
     await capture(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
+      runCmd(observationCommand as AnyCmd, "list", {
         workstream: "WS-smoke",
-        all: true,
+        unlinked: true,
         "show-archived": true,
         json: true,
       }),
     );
-    expect(calls.at(-1)!.body).toEqual({
-      kind: "CONTEXT",
-      workstream: "WS-smoke",
-      stages: ["now", "next", "later", "unscheduled", "done", "abandoned"],
-      includeExtras: true,
+    expect(calls.map((c) => c.body).at(-1)).toEqual({
+      kind: "OBSERVATION_UNLINKED",
+      workstreamId: "WS-smoke",
       showArchived: true,
     });
-  });
-
-  test("context --stage passes exactly the buckets asked for", async () => {
-    const calls = stubServer({
-      "POST /v1/query": { result: DIGEST },
-    });
-    await capture(() =>
-      runCmd(contextCommand as AnyCmd, "run", {
-        workstream: "WS-smoke",
-        stage: "now, done",
-        json: true,
-      }),
-    );
-    expect((calls.at(-1)!.body as { stages: string[] }).stages).toEqual(["now", "done"]);
   });
 
   test("problem show emits the digest the server sent, untouched", async () => {
@@ -663,7 +636,6 @@ describe("the workstream is an argument, not shared state", () => {
     ["observation", observationCommand, "list", {}],
     ["problem", problemCommand, "add", { title: "t", description: "d" }],
     ["problem", problemCommand, "list", {}],
-    ["context", contextCommand, "run", {}],
     ["attempt", attemptCommand, "drift", {}],
     ["abandonment", abandonmentCommand, "list", {}],
     ["workstream", workstreamCommand, "show", {}],

@@ -7,7 +7,6 @@ import { observationCommand } from "./commands/observation.js";
 import { problemCommand } from "./commands/problem.js";
 import { evidenceCommand } from "./commands/evidence.js";
 import { attemptCommand } from "./commands/attempt.js";
-import { contextCommand } from "./commands/context.js";
 import { searchCommand } from "./commands/search.js";
 import { abandonmentCommand } from "./commands/abandonment.js";
 import { outcomeCommand } from "./commands/outcome.js";
@@ -33,7 +32,6 @@ const main = defineCommand({
     attempt: attemptCommand,
     abandonment: abandonmentCommand,
     outcome: outcomeCommand,
-    context: contextCommand,
     search: searchCommand,
     browse: browseCommand,
     view: viewCommand,
