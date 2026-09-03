@@ -14,6 +14,9 @@
  *
  * The cap is a nudge, not a control. Anyone can mint a fresh Principal and
  * collect the allowance again; ADR-0013 states that rather than defending it.
+ * For the same reason the check is not serialised against concurrent writes: two
+ * dispatches racing at the boundary may both land, which costs a Principal
+ * nothing anybody would defend against.
  */
 import { and, count, inArray, isNotNull } from "drizzle-orm";
 
@@ -35,23 +38,24 @@ export const DEFAULT_OBSERVATION_CAP = 200;
 export type Capacity = {
   /** Observations allowed before writes refuse. */
   observationCap: number;
-  /** Where a Principal goes to claim itself, quoted back in the refusal. Empty
-   * when the caller has no deployment address to name one against. */
+  /** Where a Principal goes to claim itself, quoted back in the refusal. */
   claimUrl: string;
 };
 
 /**
  * Read a cap out of deployment configuration.
  *
- * Anything that is not a non-negative integer falls back to the default rather
- * than throwing: a typo in a Worker var should not take every write on the
- * deployment down with it. `0` is meaningful — it caps immediately — so it is
- * only the unparseable that falls back.
+ * Anything that is not a run of digits falls back to the default rather than
+ * throwing: a typo in a Worker var should not take every write on the deployment
+ * down with it. Digits rather than `Number()`, so `0x10` and `1e3` — which a
+ * human writing a cap did not mean — fall back too. `0` is meaningful: it caps
+ * immediately.
  */
 export function observationCapFrom(raw: string | undefined): number {
-  if (raw === undefined || raw.trim() === "") return DEFAULT_OBSERVATION_CAP;
-  const n = Number(raw);
-  return Number.isInteger(n) && n >= 0 ? n : DEFAULT_OBSERVATION_CAP;
+  const trimmed = raw?.trim();
+  if (!trimmed || !/^\d+$/.test(trimmed)) return DEFAULT_OBSERVATION_CAP;
+  const n = Number(trimmed);
+  return Number.isSafeInteger(n) ? n : DEFAULT_OBSERVATION_CAP;
 }
 
 /**
@@ -59,9 +63,16 @@ export function observationCapFrom(raw: string | undefined): number {
  *
  * An email is what claiming attaches (ADR-0013), so its presence is the whole
  * test. Asked across the scope's owner set rather than of the requesting
- * Principal alone, so that when claiming links Principals rather than merging
- * them, one claimed Principal lifts the cap for everything linked to it —
- * and, symmetrically, the allowances of linked Principals cannot be pooled.
+ * Principal alone, so that once claiming links Principals rather than merging
+ * them, one claimed Principal lifts the cap for everything linked to it.
+ *
+ * Claimed means uncapped here, which is narrower than ADR-0013's eventual
+ * "the cap applies to the human across all linked Principals": what a claimed
+ * human is allowed is a pricing question the ADR leaves open, and this cap
+ * exists to create the claim moment rather than to price what follows it.
+ *
+ * Asked first, so a claimed Principal — every browser Member — never pays for
+ * the count below.
  */
 async function isClaimed(db: CruxDb, ownerIds: string[]): Promise<boolean> {
   if (!ownerIds.length) return false;
@@ -73,7 +84,13 @@ async function isClaimed(db: CruxDb, ownerIds: string[]): Promise<boolean> {
   return rows.length > 0;
 }
 
-/** Observations filed by the Principals in this scope. */
+/**
+ * Observations filed by the Principals in this scope.
+ *
+ * Every one of them, archived included: an Observation is never deleted, and
+ * archiving is a judgement about a signal rather than a refund. The meter only
+ * ever goes up, which is the honest shape for a cap whose relief is claiming.
+ */
 async function observationsFiled(db: CruxDb, ownerIds: string[]): Promise<number> {
   if (!ownerIds.length) return 0;
   const rows = await db
@@ -98,11 +115,8 @@ export async function assertWriteCapacity(
   if (await isClaimed(db, ownerIds)) return;
   const filed = await observationsFiled(db, ownerIds);
   if (filed < capacity.observationCap) return;
-  const fix = capacity.claimUrl
-    ? `claim it at ${capacity.claimUrl} to keep filing`
-    : "claim it to keep filing";
   throw new CapacityExceededError(
-    `this Principal has filed ${filed} of ${capacity.observationCap} Observations, so writes are paused — ${fix}. Reading is unaffected.`,
+    `this Principal has filed ${filed} of ${capacity.observationCap} Observations, so writes are paused — claim it at ${capacity.claimUrl} to keep filing. Reading is unaffected.`,
     {
       cap: capacity.observationCap,
       observations: filed,

@@ -7,9 +7,11 @@
  * stable code, and the claim URL an agent reads out of `details` in the
  * conversation where the wall was hit. None of that exists below HTTP.
  *
- * The cap here is five, set as a Worker var in `vitest.config.ts`. That number
- * is nowhere in the source: if these tests pass, the allowance is configuration
- * rather than a constant.
+ * The cap here comes from the `CRUX_OBSERVATION_CAP` binding `vitest.config.ts`
+ * sets, and is read back off `env` rather than written down twice. The default
+ * is two hundred and appears nowhere in this file: if these tests pass, the
+ * allowance is configuration rather than a constant — and raising the binding
+ * does not falsify them.
  */
 import { env, SELF, reset } from "cloudflare:test";
 import { beforeEach, expect, test, describe } from "vitest";
@@ -19,8 +21,8 @@ import { createD1Db, type CruxDb } from "@crux/core/db";
 import { applyD1Schema } from "@crux/core/db/d1";
 import { users } from "@crux/core/db/schema";
 
-/** The value of CRUX_OBSERVATION_CAP the suite runs against. */
-const CAP = 5;
+/** The allowance this suite runs against, from the binding itself. */
+const CAP = Number(env.CRUX_OBSERVATION_CAP);
 
 let db: CruxDb;
 

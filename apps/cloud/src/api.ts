@@ -51,7 +51,9 @@ export interface Env {
 function capacityFor(env: Env, url: URL): Capacity {
   return {
     observationCap: observationCapFrom(env.CRUX_OBSERVATION_CAP),
-    claimUrl: env.CRUX_CLAIM_URL ?? new URL("/claim", url.origin).toString(),
+    // `||`, not `??`: a var set to the empty string is a var nobody filled in,
+    // and a refusal that names nowhere is worse than one that names this host.
+    claimUrl: env.CRUX_CLAIM_URL || new URL("/claim", url.origin).toString(),
   };
 }
 

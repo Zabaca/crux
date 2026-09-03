@@ -15,6 +15,10 @@ describe("observationCapFrom", () => {
     expect(observationCapFrom("   ")).toBe(DEFAULT_OBSERVATION_CAP);
   });
 
+  test("surrounding whitespace is not a typo", () => {
+    expect(observationCapFrom(" 42 ")).toBe(42);
+  });
+
   test("a whole number is the allowance, zero included", () => {
     expect(observationCapFrom("5")).toBe(5);
     expect(observationCapFrom("1000")).toBe(1000);
@@ -23,7 +27,9 @@ describe("observationCapFrom", () => {
   });
 
   test("a typo falls back rather than taking every write down with it", () => {
-    for (const bad of ["two hundred", "20.5", "-1", "1e3x", "NaN"]) {
+    // Including the shapes `Number()` would happily take but a human writing a
+    // cap did not mean: hex and exponent notation.
+    for (const bad of ["two hundred", "20.5", "-1", "0x10", "1e3", "NaN", "+5"]) {
       expect(observationCapFrom(bad)).toBe(DEFAULT_OBSERVATION_CAP);
     }
   });
