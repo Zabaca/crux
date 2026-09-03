@@ -45,7 +45,7 @@ to pick a different name for a reason it should never have known.
 - The only collision that can be reported is one inside the caller's own scope,
   and the words say so: _you already have a Workstream slugged "x"_.
 
-## The cost we are accepting
+## Consequences
 
 A slug no longer identifies a Workstream on its own — only a slug plus a scope
 does. Inside one scope it still can name two rows, because claiming links

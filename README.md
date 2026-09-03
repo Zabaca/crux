@@ -281,10 +281,10 @@ freshly wiped deployment reaches its own browser without a row written by hand �
 `bun run db:restore-identity` remains for restoring a _specific_ identity, which
 is what the runbook below uses.
 
-**Schema application only ever adds.** The DDL is an end state of
-`CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a table from
-the schema module does not drop it in production, and repointing a column at a
-different parent — or tightening a nullable one to `NOT NULL`, as
+**Schema application only ever adds — with one stated exception.** The DDL is an
+end state of `CREATE TABLE IF NOT EXISTS` plus additive `ALTER`s, so removing a
+table from the schema module does not drop it in production, and repointing a
+column at a different parent — or tightening a nullable one to `NOT NULL`, as
 `workstreams.owner_id` is — is a table rebuild that cannot be expressed at all.
 The escape hatch is to start the database over:
 [the rebuild runbook](docs/runbooks/rebuild-production-database.md) covers the
@@ -292,6 +292,13 @@ wipe (`bun run db:wipe`, which is a dry run until it is handed the database's
 own name), the deploy that reapplies the schema, and restoring the one identity
 that makes the browser reachable again. It is destructive and human-gated;
 nothing in CI runs it.
+
+The exception is an index, which holds no rows and can be replaced in place:
+`DROP INDEX IF EXISTS workstreams_slug_unique` runs on every apply, because
+narrowing that slug index to `(owner_id, slug)`
+([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)) means nothing while
+the index it replaces is still enforcing the old rule. Dropping anything that
+holds rows stays out of the schema module and behind the runbook.
 
 `GET /health` is the deployment's liveness check, and the answer to *what is
 live*. It round-trips the D1 binding rather than answering from memory, so a

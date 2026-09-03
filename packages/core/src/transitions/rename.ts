@@ -1,16 +1,13 @@
 /**
  * Slug-rename transition for workstreams.
  *
- * This used to be the most delicate write in the corpus: the primary key was
- * `WS-<slug>`, so renaming rewrote it and every foreign key pointing at it, in
- * one batch with `PRAGMA defer_foreign_keys` held until commit. None of that is
- * needed now. A Workstream id is opaque and a slug is unique to its owner
- * rather than to the deployment (`db/schema.ts`), so a rename touches one row
- * and moves no references at all.
+ * A Workstream id is opaque, so a rename touches one row and moves no
+ * references — the deferred-FK batch this used to need went with the derived
+ * primary key (ADR-0016).
  *
  * Whether the new slug is free is a question about the caller's scope, which
- * this layer does not have — `actions/mutations.ts` asks it, the same way it
- * does for `ADD_WORKSTREAM`.
+ * this layer does not have, so `actions/mutations.ts` asks it — the same way it
+ * does for `ADD_WORKSTREAM`, and backed by the `(owner_id, slug)` index.
  */
 import { eq } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";

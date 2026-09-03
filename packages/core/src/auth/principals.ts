@@ -63,7 +63,7 @@ export async function mintPrincipal(db: CruxDb): Promise<MintedPrincipal> {
 }
 
 /** 16 hex characters of randomness — enough that two mints never collide. */
-function randomSuffix(): string {
+export function randomSuffix(): string {
   const bytes = new Uint8Array(8);
   crypto.getRandomValues(bytes);
   let out = "";
