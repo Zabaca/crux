@@ -116,4 +116,40 @@ describe("applyD1Schema", () => {
       .first<{ name: string }>();
     expect(row?.name).toBe("James Lee");
   });
+
+  test("workstream slugs are unique per owner, not per deployment", async () => {
+    await applyD1Schema(env.DB);
+    const user = async (id: string) =>
+      env.DB.prepare(`insert into users (id, slug, name) values (?, ?, ?)`).bind(id, id, id).run();
+    const workstream = (id: string, slug: string, owner: string) =>
+      env.DB.prepare(`insert into workstreams (id, slug, title, owner_id) values (?, ?, ?, ?)`)
+        .bind(id, slug, slug, owner)
+        .run();
+    await user("USR-a");
+    await user("USR-b");
+
+    await workstream("WS-a", "crux", "USR-a");
+    // Another owner may hold the same name — the whole point.
+    await workstream("WS-b", "crux", "USR-b");
+    // The same owner may not.
+    await expect(workstream("WS-a2", "crux", "USR-a")).rejects.toThrow(/UNIQUE/i);
+  });
+
+  test("drops the deployment-wide slug index a database created before this had", async () => {
+    // The path production takes: the index exists, and `CREATE ... IF NOT
+    // EXISTS` alone would leave it enforcing exactly what this replaces.
+    await applyD1Schema(env.DB);
+    await env.DB.prepare(
+      `CREATE UNIQUE INDEX IF NOT EXISTS workstreams_slug_unique ON workstreams (slug)`,
+    ).run();
+
+    await applyD1Schema(env.DB);
+
+    const row = await env.DB.prepare(
+      `select name from sqlite_master where type = 'index' and name = ?`,
+    )
+      .bind("workstreams_slug_unique")
+      .first<{ name: string }>();
+    expect(row).toBeNull();
+  });
 });

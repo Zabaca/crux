@@ -91,7 +91,10 @@ export function loadStateFromBlob(all: ViewBlob): ViewSnapshot {
     ...xstateFields,
   };
 
-  // Migrate legacy context fields from slugs to IDs.
+  // Migrate legacy context fields from slugs to IDs. `WS-<slug>` is right for
+  // exactly these blobs and no others: a Workstream id is opaque now
+  // (ADR-0016), so this reconstructs the ids rows written back then actually
+  // have. A blob this old cannot name a Workstream created since.
   if (parsed.context && typeof parsed.context === "object") {
     const ctx = parsed.context as Record<string, unknown>;
     if ("workstreamSlug" in ctx || "problemSlug" in ctx) {
@@ -201,7 +204,8 @@ export function loadViewMetaFromBlob(parsed: ViewBlob): ViewMeta {
   // Extract value and context directly from the raw JSON (XState persists them at top-level).
   const value = parsed.value ?? DEFAULT_VALUE;
 
-  // Migrate legacy slug-based context to ID-based context.
+  // Migrate legacy slug-based context to ID-based context — `WS-<slug>` only
+  // ever reconstructs an id a pre-ADR-0016 row really has (see above).
   const rawContext = parsed.context as Record<string, unknown> | undefined;
   const context: ViewMeta["context"] = rawContext
     ? {
