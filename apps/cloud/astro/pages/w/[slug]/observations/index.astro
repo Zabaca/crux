@@ -13,13 +13,11 @@
  * possible (ADR-0009), and the island is the whole point.
  */
 import { env } from "cloudflare:workers";
-import { query } from "@crux/core/reads";
-import type { WorkstreamRow } from "@crux/core/reads";
 
 import LiveRefresh from "../../../../components/LiveRefresh.tsx";
 import { html } from "../../../../../src/web/html.js";
 import { page } from "../../../../../src/web/layout.js";
-import { observationListPage } from "../../../../../src/web/read-pages.js";
+import { PageNotFound, observationListPage } from "../../../../../src/web/read-pages.js";
 import { pageContext } from "../../../../../src/web/session.js";
 
 const ctx = await pageContext(env, Astro.request);
@@ -27,17 +25,18 @@ if (!ctx.ok) return ctx.response;
 
 const slug = Astro.params.slug!;
 
-// The island needs the Workstream's id, which is why this is resolved here as
-// well as inside the view. Resolving it first is also this page's 404 gate:
-// `observationListPage` throws `PageNotFound` on a slug that names nothing, and
-// it never reaches it, so there is nothing here to catch.
-const ws = (await query(
-  { kind: "WORKSTREAM_BY_SLUG", slug },
-  { db: ctx.db, principal: ctx.viewer },
-)) as WorkstreamRow | null;
-if (!ws) return new Response(null, { status: 404 });
-
-const rendered = await observationListPage(ctx.db, ctx.viewer, slug);
+// The island needs the Workstream's id, and the view has already resolved it —
+// it refuses to render without one — so it hands the row back rather than
+// leaving the page to ask a second time. `PageNotFound` on a slug that names
+// nothing is therefore this page's 404 gate, and it is caught here.
+let rendered;
+try {
+  rendered = await observationListPage(ctx.read, slug);
+} catch (err) {
+  if (!(err instanceof PageNotFound)) throw err;
+  return new Response(null, { status: 404 });
+}
+const ws = rendered.workstream;
 
 const shell = page({
   title: rendered.title,

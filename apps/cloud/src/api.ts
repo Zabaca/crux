@@ -8,12 +8,7 @@
  * the caller's ViewStateDO. Reads mirror the CLI's `--json` shapes exactly.
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
-import {
-  authenticateAndResolveScope,
-  mintPrincipal,
-  resolveScope,
-  type Scope,
-} from "@crux/core/auth/principals";
+import { authenticateAndResolveScope, mintPrincipal, type Scope } from "@crux/core/auth/principals";
 import { CLAIM_TTL_MS, createClaim } from "@crux/core/auth/claims";
 import { claimLinkEmail } from "@crux/core/auth/email";
 import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
@@ -152,21 +147,34 @@ async function authenticate(
   if (!env.BETTER_AUTH_SECRET) return null;
   const origin = request.headers.get("origin");
   if (request.method !== "GET" && origin !== url.origin) return null;
-  const viewer = await viewerFor(db, env.BETTER_AUTH_SECRET, url.origin, request);
-  if (!viewer) return null;
   // The browser door has no token row to enter through, so the same joined
-  // query is entered at `users` instead — still one statement (ADR-0007).
-  return { userId: viewer.id, scope: await resolveScope(db, { id: viewer.id }) };
+  // query is entered at `users` instead — still one statement (ADR-0007), and
+  // `viewerFor` has already made it: it is the membership check as well.
+  const session = await viewerFor(db, env.BETTER_AUTH_SECRET, url.origin, request);
+  if (!session) return null;
+  return { userId: session.viewer.id, scope: session.scope };
 }
 
-/** Resolve the per-user ViewStateDO stub. */
-function stubFor(env: Env, userId: string): DurableObjectStub {
-  return env.VIEW_STATE.get(env.VIEW_STATE.idFromName(userId));
+/**
+ * Resolve the ViewStateDO stub for whoever this request belongs to.
+ *
+ * Keyed on the scope's **root** Principal rather than on the requester, because
+ * `idFromName` takes one id and since ADR-0013 a corpus belongs to a set. A
+ * linked Principal — the normal shape once a second machine has been claimed —
+ * would otherwise push into `DO(<itself>)` while the human's browser, which
+ * resolves to the root, listened on `DO(<root>)`: two objects, a frame
+ * delivered correctly to one nobody was subscribed to.
+ *
+ * The root is exactly the id `ownerIds` is computed from, so this can never
+ * widen the boundary: two Principals share a key only when a claim linked them.
+ */
+function stubFor(env: Env, scope: Scope): DurableObjectStub {
+  return env.VIEW_STATE.get(env.VIEW_STATE.idFromName(scope.rootId));
 }
 
-/** Resolve the per-user ViewStateDO as a ViewStore. */
-function viewStoreFor(env: Env, userId: string): DurableObjectViewStore {
-  return new DurableObjectViewStore(stubFor(env, userId));
+/** Resolve that same object as a ViewStore. */
+function viewStoreFor(env: Env, scope: Scope): DurableObjectViewStore {
+  return new DurableObjectViewStore(stubFor(env, scope));
 }
 
 /**
@@ -259,7 +267,7 @@ export async function handleApi(
       const action = await request.json();
       const result = await dispatch(action, {
         db,
-        viewStore: viewStoreFor(env, authed.userId),
+        viewStore: viewStoreFor(env, authed.scope),
         actor: { id: authed.userId },
         scope: authed.scope,
         capacity: capacityFor(env, url),
@@ -280,7 +288,7 @@ export async function handleApi(
         // no scope at all.
         principal: { id: authed.userId },
         scope: authed.scope,
-        viewStore: viewStoreFor(env, authed.userId),
+        viewStore: viewStoreFor(env, authed.scope),
       });
       return json({ result });
     } catch (err) {
@@ -290,7 +298,7 @@ export async function handleApi(
 
   // GET /v1/view — the current view-state, same shape as `crux view get`.
   if (pathname === "/v1/view" && request.method === "GET") {
-    const store = viewStoreFor(env, authed.userId);
+    const store = viewStoreFor(env, authed.scope);
     const blob = await store.read();
     const meta = loadViewMetaFromBlob(blob);
     const snap = loadStateFromBlob(blob);
@@ -312,7 +320,7 @@ export async function handleApi(
 
   // GET /v1/view/stream — the push stream, proxied from the user's DO.
   if (pathname === "/v1/view/stream" && request.method === "GET") {
-    return stubFor(env, authed.userId).fetch("https://view-state/stream");
+    return stubFor(env, authed.scope).fetch("https://view-state/stream");
   }
 
   return errorBody("NOT_FOUND", `no such route: ${request.method} ${pathname}`);

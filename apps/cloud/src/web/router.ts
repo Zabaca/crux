@@ -104,7 +104,13 @@ function redirect(location: string, status = 302): Response {
 /**
  * Resolve the browser session to a Member, or null.
  *
- * `session.ts` has the same resolution for callers that only need a viewer.
+ * `session.ts`'s `viewerFor` is the same resolution for the pages that go on to
+ * *read the corpus*, and it answers with a scope as well, because the query
+ * that decides membership there is the one that resolves the boundary anyway.
+ * The pages this file serves — sign-in, Members, tokens, the 404 — read no
+ * corpus and so have no boundary to resolve, which is why the membership
+ * question is still asked on its own here. Different answer, different name.
+ *
  * This one takes the `auth` instance because this file already built one — it
  * needs it for sign-in, sign-out and invite redemption, and building a second
  * would be two Better Auth instances answering for one deployment.
@@ -115,7 +121,11 @@ function redirect(location: string, status = 302): Response {
  * effect on the removed Member's *next request* rather than at their next
  * sign-in.
  */
-async function viewerFor(db: CruxDb, auth: CruxAuth, request: Request): Promise<Viewer | null> {
+async function accountViewerFor(
+  db: CruxDb,
+  auth: CruxAuth,
+  request: Request,
+): Promise<Viewer | null> {
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;
   const u = session.user as { id: string; name: string; email: string | null };
@@ -257,7 +267,7 @@ export async function handleWeb(
   // signing in needs no route of its own below.
   if (path.startsWith("/api/auth")) return auth.handler(request);
 
-  const viewer = await viewerFor(db, auth, request);
+  const viewer = await accountViewerFor(db, auth, request);
   const render = (r: { title: string; body: Html }, status = 200): Response =>
     htmlResponse(page({ title: r.title, viewer, workspace, body: r.body }), status);
 

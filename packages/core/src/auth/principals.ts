@@ -92,6 +92,20 @@ export function randomSuffix(): string {
  */
 export type Scope = {
   principalId: string;
+  /**
+   * The Principal at the head of this requester's linked set — itself when it
+   * has never been claimed, and whoever claimed it when it has. This is the
+   * `coalesce(claimed_by_user_id, id)` the join below already computes, kept
+   * because one id is what the things that cannot take a set need: the
+   * view-state Durable Object is addressed by `idFromName`, and keying it on
+   * the requester rather than on the root put a linked agent's writes into an
+   * object the human's browser was not listening on (ADR-0014).
+   *
+   * It falls back to the requester's own id when the root join found nothing —
+   * a removed root, or an id naming no row. Both scope to nothing, so the key
+   * only has to be one nobody else resolves to.
+   */
+  rootId: string;
   /** Every Principal whose corpus this requester may see — the requester, plus
    * whatever claiming has linked to it. The set capacity is metered over, so
    * "what I can read" and "what counts against my allowance" are one answer. */
@@ -122,9 +136,9 @@ const ownerJoin = and(
   isNull(ownerUser.removedAt),
 );
 
-/** One row per (owner, workstream) pair; either column is null when the join
- * found nothing, which is how an empty scope arrives. */
-type ScopeRow = { ownerId: string | null; workstreamId: string | null };
+/** One row per (root, owner, workstream) triple; any column is null when the
+ * join found nothing, which is how an empty scope arrives. */
+type ScopeRow = { rootId: string | null; ownerId: string | null; workstreamId: string | null };
 
 function scopeFromRows(principalId: string, rows: ScopeRow[]): Scope {
   const ownerIds = [...new Set(rows.map((r) => r.ownerId).filter(isPresent))];
@@ -132,6 +146,9 @@ function scopeFromRows(principalId: string, rows: ScopeRow[]): Scope {
   const set = new Set(workstreamIds);
   return {
     principalId,
+    // Every row carries the same root — the join matches one — so the first
+    // present one is the answer, and its absence means the requester is alone.
+    rootId: rows.map((r) => r.rootId).find(isPresent) ?? principalId,
     ownerIds,
     workstreamIds,
     has: (workstreamId: string) => set.has(workstreamId),
@@ -144,7 +161,7 @@ function isPresent(value: string | null): value is string {
 
 /**
  * Who a Principal is allowed to read *for*, and what they own — in one
- * statement.
+ * statement — plus whether they are still a Member at all.
  *
  * This is the browser door, where the identity came from a Better Auth session
  * and there is no `api_tokens` row to join through (ADR-0007);
@@ -170,17 +187,36 @@ function isPresent(value: string | null): value is string {
  * The set stays symmetric — a token linked to a human reads what that human
  * owns, and the reverse — for the reason it always did: claiming is what the
  * person did to say the two are one.
+ *
+ * `null` is the answer to the *membership* half: the `where` matched nothing,
+ * because the row is removed or was never there. That is a different answer
+ * from a Member who owns nothing, which arrives as one row with a null
+ * `ownerId` through the left joins, and the two must stay different — one is a
+ * redirect to `/signin`, the other is an empty page. Because the predicate
+ * `isActiveMember` asks for (`id = ? and removed_at is null`) is already this
+ * query's `where` clause, a caller that needs both gets both for one round
+ * trip, and ADR-0011's rule that membership is checked on *every* request is
+ * kept rather than weakened.
  */
-
-export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
+export async function resolveActiveScope(db: CruxDb, principal: Principal): Promise<Scope | null> {
   const rows = await db
-    .select({ ownerId: ownerUser.id, workstreamId: workstreams.id })
+    .select({ rootId: rootUser.id, ownerId: ownerUser.id, workstreamId: workstreams.id })
     .from(selfUser)
     .leftJoin(rootUser, rootJoin)
     .leftJoin(ownerUser, ownerJoin)
     .leftJoin(workstreams, eq(workstreams.ownerId, ownerUser.id))
     .where(and(eq(selfUser.id, principal.id), isNull(selfUser.removedAt)));
+  if (rows.length === 0) return null;
   return scopeFromRows(principal.id, rows);
+}
+
+/**
+ * The same resolution for callers that have already decided the requester may
+ * be here — `query()` and `dispatch()` — where "not a Member" and "owns
+ * nothing" are the same empty corpus.
+ */
+export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
+  return (await resolveActiveScope(db, principal)) ?? scopeFromRows(principal.id, []);
 }
 
 /** A bearer token resolved to who it acts as and what that Principal may see. */
@@ -212,6 +248,7 @@ export async function authenticateAndResolveScope(
     .select({
       tokenHash: apiTokens.tokenHash,
       userId: apiTokens.userId,
+      rootId: rootUser.id,
       ownerId: ownerUser.id,
       workstreamId: workstreams.id,
     })
