@@ -558,6 +558,15 @@ describe("api configuration", () => {
       return new Response(JSON.stringify({ revision: 1, result: { ok: true, id: "OBS-001" } }));
     }) as unknown as typeof fetch;
 
+    // Minting writes a credential the user never asked for: the notice saying
+    // so is captured here, off stdout, so it can be asserted rather than seen.
+    const stderr: string[] = [];
+    const writeErr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => {
+      stderr.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+
     try {
       const out = await capture(() =>
         runCmd(observationCommand as AnyCmd, "add", {
@@ -567,6 +576,19 @@ describe("api configuration", () => {
         }),
       );
       expect(out).toEqual({ ok: true, id: "OBS-001" });
+      // The user is told a credential exists, where it lives, and that claiming
+      // is what makes the corpus survive losing it.
+      const notice = stderr.join("");
+      expect(notice).toContain(join(home, "config.toml"));
+      expect(notice).toContain("crux claim");
+      // Said once, and every line prefixed so a log scraper reads it as a
+      // notice rather than an error.
+      const lines = notice.split("\n").filter(Boolean);
+      expect(lines).toHaveLength(3);
+      expect(lines.every((l) => l.startsWith("crux: "))).toBe(true);
+      // ...and never told the token itself, on either stream.
+      expect(notice).not.toContain("tok-minted");
+      expect(JSON.stringify(out)).not.toContain("tok-minted");
       // Minted once, before anything else, and every later call bears it.
       expect(seen.map((c) => c.path)).toEqual(["/v1/principals", "/v1/dispatch"]);
       expect(seen.slice(1).map((c) => c.auth)).toEqual(["Bearer tok-minted"]);
@@ -574,6 +596,7 @@ describe("api configuration", () => {
       // stranding this Observation on a token nobody kept.
       expect(readFileSync(join(home, "config.toml"), "utf8")).toContain("tok-minted");
     } finally {
+      process.stderr.write = writeErr;
       globalThis.fetch = prev.fetch;
       if (prev.url) process.env.CRUX_API_URL = prev.url;
       else delete process.env.CRUX_API_URL;
@@ -581,6 +604,65 @@ describe("api configuration", () => {
       if (prev.home) process.env.CRUX_HOME = prev.home;
       else delete process.env.CRUX_HOME;
       rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * `crux browse` fires several reads in the same tick. Each builds its own
+   * client, so without a process-wide memo each would mint a *separate*
+   * Principal and the last write would win — orphaning every row filed under
+   * the losers on a token nothing kept.
+   */
+  test("concurrent first-use commands mint one Principal between them", async () => {
+    setApiClient(null);
+    const home = mkdtempSync(join(tmpdir(), "crux-concurrent-mint-"));
+    const prev = {
+      url: process.env.CRUX_API_URL,
+      token: process.env.CRUX_API_TOKEN,
+      home: process.env.CRUX_HOME,
+      fetch: globalThis.fetch,
+    };
+    delete process.env.CRUX_API_TOKEN;
+    process.env.CRUX_API_URL = "https://crux.test";
+    process.env.CRUX_HOME = home;
+
+    const paths: string[] = [];
+    globalThis.fetch = (async (url: string | URL | Request) => {
+      const path = new URL(String(url)).pathname;
+      paths.push(path);
+      if (path === "/v1/principals") {
+        return new Response(JSON.stringify({ token: `tok-${paths.length}` }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ result: [] }));
+    }) as unknown as typeof fetch;
+
+    const stderr: string[] = [];
+    const writeErr = process.stderr.write.bind(process.stderr);
+    process.stderr.write = ((chunk: string) => {
+      stderr.push(String(chunk));
+      return true;
+    }) as typeof process.stderr.write;
+
+    try {
+      await capture(async () => {
+        await Promise.all([
+          runCmd(workstreamCommand as AnyCmd, "list", { json: true }),
+          runCmd(workstreamCommand as AnyCmd, "list", { json: true }),
+        ]);
+      });
+
+      expect(paths.filter((p) => p === "/v1/principals")).toHaveLength(1);
+      expect(stderr.join("").match(/a new Principal was created/g)).toHaveLength(1);
+    } finally {
+      process.stderr.write = writeErr;
+      globalThis.fetch = prev.fetch;
+      if (prev.url) process.env.CRUX_API_URL = prev.url;
+      else delete process.env.CRUX_API_URL;
+      if (prev.token) process.env.CRUX_API_TOKEN = prev.token;
+      if (prev.home) process.env.CRUX_HOME = prev.home;
+      else delete process.env.CRUX_HOME;
+      rmSync(home, { recursive: true, force: true });
+      setApiClient(null);
     }
   });
 

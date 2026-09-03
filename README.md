@@ -89,6 +89,18 @@ token, not a person — writes it into `config.toml`, and everything you file
 belongs to it ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Every
 read is scoped to that Principal, so what you see is what you filed.
 
+It says so when it happens, on stderr, because a credential written without
+being asked for is news. The file is owner-only — mode 600 in a mode 700
+directory, chosen rather than left to umask, and an older config found looser
+has group and other taken off it on the next read — since anything that can
+read it owns the corpus. Narrowing only: a config you hardened further stays
+that way, and one that is a symlink is left alone rather than having its target
+re-moded. The deployment keeps only the token's hash, so it can
+neither reissue nor recover one: losing that file, or moving to a second
+machine, strands the corpus with nothing left that can prove it is yours.
+Claiming is the escape hatch, which makes it about durability before it is
+about the cap.
+
 An unclaimed Principal files against a free allowance — two hundred
 Observations on the public deployment. Past it, a write refuses with
 `CAPACITY_EXCEEDED`, whose `details` carry the URL to claim the Principal and
@@ -369,7 +381,7 @@ naming the broken links and orphans.
 
 - **Transitions are code, not documentation.** Invariants live as plain functions in [`packages/core/src/transitions/`](packages/core/src/transitions/).
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
-- **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded.
+- **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded, and owner-only: it holds a bearer token the deployment cannot reissue.
 - **One corpus, reached over HTTP.** No local database, no replicas — the transition layer runs in exactly one place ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)).
 - **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Workstream slugs are unique per owner, so a refusal never reports what another tenant holds ([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)).
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.

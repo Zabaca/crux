@@ -62,15 +62,24 @@ function initialSnapshot(): ViewSnapshot {
 
 /**
  * Pure counterpart of `loadState`: restore an XState snapshot from an already-read
- * blob. An empty blob (missing/corrupt storage) yields the initial state. No fs.
+ * blob. A blob with no usable state value — missing/corrupt storage, or one
+ * holding only sidecar fields — yields the initial state. No fs.
  */
 export function loadStateFromBlob(all: ViewBlob): ViewSnapshot {
-  if (!all || Object.keys(all).length === 0) return initialSnapshot();
+  if (!all) return initialSnapshot();
   // Strip sidecar fields before passing to XState — they confuse the state restoration.
   const { revision: _r, lastAction: _la, recentQueries: _rq, ...xstateFields } = all;
   void _r;
   void _la;
   void _rq;
+  // The guard is on a usable state value, not on the blob being non-empty: a
+  // blob holding only sidecars is not empty, and a recorded read writes exactly
+  // that for a Principal that has never moved its view. Handing XState a
+  // snapshot with no `value` makes it enumerate `undefined` — which it swallows
+  // into an errored snapshot and rethrows from a `setTimeout`, on a later tick,
+  // where the try/catch below cannot reach it. In workerd that takes the
+  // isolate with it.
+  if (xstateFields.value === undefined) return initialSnapshot();
   // Normalize: XState v5 requires status/children/historyValue; old files omit them.
   // XState types a persisted snapshot as `Snapshot<unknown>`, which has no
   // `context` — but the machine's own context is exactly what has to be
@@ -108,6 +117,12 @@ export function loadStateFromBlob(all: ViewBlob): ViewSnapshot {
     const actor = createActor(viewMachine, {
       snapshot: parsed as unknown as PersistedViewSnapshot,
     });
+    // XState does not throw out of `createActor` when a snapshot is
+    // unrestorable — it stores an errored snapshot and rethrows the cause from
+    // a `setTimeout` the moment the actor is started. So the errored snapshot
+    // is checked here, before starting, which is the only point where that
+    // deferred throw can still be prevented rather than caught.
+    if (actor.getSnapshot().status === "error") return initialSnapshot();
     actor.start();
     const snap = actor.getSnapshot();
     actor.stop();
@@ -117,11 +132,7 @@ export function loadStateFromBlob(all: ViewBlob): ViewSnapshot {
     return snap;
   } catch {
     // Snapshot incompatible — fall back to initial state
-    const actor = createActor(viewMachine);
-    actor.start();
-    const snap = actor.getSnapshot();
-    actor.stop();
-    return snap;
+    return initialSnapshot();
   }
 }
 
