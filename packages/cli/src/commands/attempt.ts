@@ -3,7 +3,7 @@ import { OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
 import type { AddAttemptPayload, CloseAttemptPayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
-import { problemArg, wsArg } from "../resolve-args.js";
+import { requireProblem, requireWorkstream, workstreamArg } from "../require-args.js";
 
 type AttemptRow = {
   id: string;
@@ -37,7 +37,7 @@ const addCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const prVal = problemArg(args.problem);
+    const prVal = requireProblem(args.problem, "--problem <id>");
     const payload: AddAttemptPayload = { problem: prVal, ref: args.ref, label: args.label };
     const { result } = await api().dispatch({ kind: "ADD_ATTEMPT", payload });
     emit(result, OkWithIdOutput, `recorded ${(result as { id: string }).id}`);
@@ -95,11 +95,7 @@ const driftCmd = defineCommand({
     description: "Problems staged as active with no open Attempt against them.",
   },
   args: {
-    workstream: {
-      type: "string",
-      alias: "w",
-      description: "Required. Workstream slug or id — `crux workstream list` shows them.",
-    },
+    ...workstreamArg(),
     stage: {
       type: "string",
       description: "comma-separated stages to treat as active (default: now)",
@@ -108,7 +104,7 @@ const driftCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = requireWorkstream(args.workstream);
     const stages = args.stage
       ? args.stage
           .split(",")

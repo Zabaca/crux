@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { ContextOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
 import { api } from "../api-client.js";
-import { wsArg } from "../resolve-args.js";
+import { requireWorkstream, workstreamArg } from "../require-args.js";
 
 const VALID_STAGES = ["now", "next", "later", "unscheduled", "done", "abandoned"];
 
@@ -12,11 +12,7 @@ export const contextCommand = defineCommand({
     description: "Emit a JSON digest of the workstream for session reload.",
   },
   args: {
-    workstream: {
-      type: "string",
-      alias: "w",
-      description: "Required. Workstream slug or id — `crux workstream list` shows them.",
-    },
+    ...workstreamArg(),
     "show-archived": {
       type: "boolean",
       description: "Include archived Observations in the unlinked-observations section.",
@@ -35,7 +31,7 @@ export const contextCommand = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = wsArg(args.workstream);
+    const wsVal = requireWorkstream(args.workstream);
 
     const stages = args.all
       ? [...VALID_STAGES]

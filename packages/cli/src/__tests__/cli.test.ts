@@ -669,6 +669,7 @@ describe("the workstream is an argument, not shared state", () => {
   test.each([
     ["evidence", evidenceCommand, "link", { observation: "OBS-1" }],
     ["attempt", attemptCommand, "add", { ref: "https://tracker/1", label: "l" }],
+    ["outcome", outcomeCommand, "add", { "observed-impact": "i" }],
   ])("%s %s refuses without a problem id", async (_name, cmd, sub, args) => {
     const calls = stubServer({ "POST /v1/dispatch": { revision: 1, result: { ok: true } } });
 
@@ -680,6 +681,10 @@ describe("the workstream is an argument, not shared state", () => {
     expect(err).toBeInstanceOf(CruxError);
     expect(err.code).toBe("VALIDATION_ERROR");
     expect(err.message).toContain("crux problem list -w <slug>");
+    // The refusal names the argument the way *this* command spells it: a
+    // positional for `evidence link`, a flag for the other two. An agent
+    // retries on what it reads here.
+    expect(err.details).toMatchObject({ discover: "crux problem list -w <slug>" });
     expect(calls).toHaveLength(0);
   });
 

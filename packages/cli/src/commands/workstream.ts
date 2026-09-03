@@ -8,7 +8,7 @@ import type {
   SelectWorkstreamPayload,
 } from "@crux/core/actions";
 import { api } from "../api-client.js";
-import { wsArg } from "../resolve-args.js";
+import { requireWorkstream, workstreamArg } from "../require-args.js";
 
 type WorkstreamRow = { id: string; slug: string; title: string };
 
@@ -45,18 +45,14 @@ const listCmd = defineCommand({
 const showCmd = defineCommand({
   meta: { name: "show", description: "Show a workstream by slug or id." },
   args: {
-    workstream: {
-      type: "string",
-      alias: "w",
-      description: "Required. Workstream slug or id — `crux workstream list` shows them.",
-    },
+    ...workstreamArg(),
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const row = await api().query<WorkstreamRow>({
       kind: "WORKSTREAM_SHOW",
-      id: wsArg(args.workstream),
+      id: requireWorkstream(args.workstream),
     });
     emit(row, `${row.id}\t${row.title}`);
   },

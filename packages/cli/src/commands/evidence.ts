@@ -3,7 +3,7 @@ import { OkWithIdOutput } from "@crux/core/validation";
 import { emit, setJsonMode } from "../output.js";
 import type { AddEvidencePayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
-import { problemArg } from "../resolve-args.js";
+import { requireProblem } from "../require-args.js";
 
 const linkCmd = defineCommand({
   meta: { name: "link", description: "Link an observation to a problem as evidence." },
@@ -19,7 +19,7 @@ const linkCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const prVal = problemArg(args.problem);
+    const prVal = requireProblem(args.problem, "<problem-id>");
     const payload: AddEvidencePayload = {
       observation: args.observation,
       problem: prVal,
