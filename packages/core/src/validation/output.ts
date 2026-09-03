@@ -12,12 +12,12 @@ export const OkWithIdOutput = z
   .object({ ok: z.literal(true), id: z.union([z.string(), z.number()]) })
   .passthrough();
 
-/** { ok: true, kind, oldId, newId, oldSlug, newSlug } — rename commands. */
+/** { ok: true, kind, id, oldSlug, newSlug } — rename commands. The id does not
+ * change: a Workstream id is opaque, not derived from the slug. */
 export const RenameOutput = z.object({
   ok: z.literal(true),
   kind: z.string(),
-  oldId: z.string(),
-  newId: z.string(),
+  id: z.string(),
   oldSlug: z.string(),
   newSlug: z.string(),
 });

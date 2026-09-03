@@ -347,7 +347,8 @@ naming the broken links and orphans.
   [ADR-0012: Crux does not own the build](docs/adr/0012-crux-does-not-own-the-build.md),
   [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md),
   [ADR-0014: view-state belongs to whoever is looking at it](docs/adr/0014-view-state-is-the-humans.md),
-  [ADR-0015: a release is a command, not a merge](docs/adr/0015-a-release-is-a-command-not-a-merge.md).
+  [ADR-0015: a release is a command, not a merge](docs/adr/0015-a-release-is-a-command-not-a-merge.md),
+  [ADR-0016: a slug belongs to its owner](docs/adr/0016-a-slug-belongs-to-its-owner.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md) (superseded by ADR-0014).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
@@ -363,7 +364,7 @@ naming the broken links and orphans.
 - **No stateful `crux use`.** Every command takes `-w <slug>` explicitly.
 - **User identity in `$CRUX_HOME/config.toml` (`~/.claude/.crux/config.toml`).** Not committed, not hardcoded.
 - **One corpus, reached over HTTP.** No local database, no replicas — the transition layer runs in exactly one place ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)).
-- **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
+- **The Principal is the tenant.** Every read and every id a write resolves is scoped to the Principal the server resolved from the request, never to one the client named ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)). Workstream slugs are unique per owner, so a refusal never reports what another tenant holds ([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)).
 - **Status columns only where a human judgment is recorded.** Observation has no `status` — its state is derivable from related rows.
 - **Claude is a tool, not an actor.** The agent holds a Principal; a human owns Principals, and every attribution resolves to one ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 

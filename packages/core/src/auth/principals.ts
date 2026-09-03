@@ -204,13 +204,38 @@ export function problemsInScope(db: CruxDb, scope: Scope) {
  * for what exists on the deployment.
  */
 
+/**
+ * The Workstream this requester means by `slug`, or undefined.
+ *
+ * A slug is unique to its owner rather than to the deployment, so the lookup
+ * has to be filtered to the scope *before* it picks a row: an unscoped
+ * `limit(1)` would happily return a stranger's Workstream and then refuse the
+ * caller their own.
+ *
+ * Inside one scope a slug can still name two rows — claiming links Principals
+ * that each already owned one — so the choice is made deterministic rather than
+ * left to row order: the requester's own Principal wins, then the lowest id.
+ * New duplicates cannot be created; `ADD_WORKSTREAM` and `RENAME_WORKSTREAM`
+ * refuse a slug anything in the scope already holds.
+ */
+export async function findWorkstreamBySlugInScope(db: CruxDb, slug: string, scope: Scope) {
+  const rows = await db
+    .select()
+    .from(workstreams)
+    .where(and(eq(workstreams.slug, slug), inArray(workstreams.id, scope.workstreamIds)));
+  return rows.sort((a, b) => {
+    const own = Number(b.ownerId === scope.principalId) - Number(a.ownerId === scope.principalId);
+    return own !== 0 ? own : a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+  })[0];
+}
+
 /** The Workstream `idOrSlug` names, if this Principal owns it. */
 export async function requireWorkstreamInScope(db: CruxDb, idOrSlug: string, scope: Scope) {
   const byId = (
     await db.select().from(workstreams).where(eq(workstreams.id, idOrSlug)).limit(1)
   )[0];
   const row =
-    byId ?? (await db.select().from(workstreams).where(eq(workstreams.slug, idOrSlug)).limit(1))[0];
+    byId && scope.has(byId.id) ? byId : await findWorkstreamBySlugInScope(db, idOrSlug, scope);
   if (!row || !scope.has(row.id)) {
     throw new NotFoundError(`workstream not found: ${idOrSlug}`, { id: idOrSlug });
   }

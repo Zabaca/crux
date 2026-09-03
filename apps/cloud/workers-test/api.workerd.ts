@@ -1035,16 +1035,89 @@ describe("the boundary is not an oracle", () => {
     );
   });
 
-  test("a slug another Principal already took is refused in words, not with a 500", async () => {
+  test("a slug another Principal holds is granted, not reported back as taken", async () => {
+    // The refusal this replaces said the slug was "taken on this deployment",
+    // which made every unauthenticated mint a probe for what other tenants have
+    // named their areas — and let one Principal squat a name for everybody.
     const other = await mintPrincipal();
     const res = await dispatchAs(other.token, {
       kind: "ADD_WORKSTREAM",
       payload: { slug: "crux", title: "Also called crux" },
     });
+    expect(res.status).toBe(200);
+
+    // Two rows, one slug, and each Principal sees exactly its own.
+    const theirs = (await (await queryAs(other.token, { kind: "WORKSTREAM_LIST" })).json()) as {
+      result: Array<{ id: string; slug: string; title: string }>;
+    };
+    expect(theirs.result.map((w) => w.title)).toEqual(["Also called crux"]);
+    const mine = (await (await query({ kind: "WORKSTREAM_LIST" })).json()) as {
+      result: Array<{ id: string; title: string }>;
+    };
+    expect(mine.result.map((w) => w.title)).toEqual(["Crux"]);
+    expect(theirs.result[0]!.id).not.toBe(mine.result[0]!.id);
+  });
+
+  test("`-w <slug>` resolves to the caller's own Workstream, never the stranger's", async () => {
+    const other = await mintPrincipal();
+    await dispatchAs(other.token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "crux", title: "Also called crux" },
+    });
+    await dispatchAs(other.token, {
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "crux", content: "theirs" },
+    });
+    await dispatch({
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "crux", content: "mine" },
+    });
+
+    const read = async (bearer: string | null) => {
+      const res = bearer
+        ? await queryAs(bearer, { kind: "OBSERVATION_LIST", workstream: "crux" })
+        : await query({ kind: "OBSERVATION_LIST", workstream: "crux" });
+      const body = (await res.json()) as { result: Array<{ content: string }> };
+      return body.result.map((o) => o.content);
+    };
+    expect(await read(null)).toEqual(["mine"]);
+    expect(await read(other.token)).toEqual(["theirs"]);
+  });
+
+  test("a slug the caller already holds is refused, naming only their own corpus", async () => {
+    const res = await dispatch({
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "crux", title: "Mine again" },
+    });
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("ALREADY_EXISTS");
-    expect(body.error.message).toContain("taken on this deployment");
+    expect(body.error.message).toContain("you already have");
+    expect(body.error.message).not.toContain("deployment");
+  });
+
+  test("renaming onto a stranger's slug is granted; onto one of your own is not", async () => {
+    const other = await mintPrincipal();
+    await dispatchAs(other.token, {
+      kind: "ADD_WORKSTREAM",
+      payload: { slug: "reserved", title: "Reserved by a stranger" },
+    });
+
+    const ok = await dispatch({
+      kind: "RENAME_WORKSTREAM",
+      payload: { oldSlug: "crux", newSlug: "reserved" },
+    });
+    expect(ok.status).toBe(200);
+    // The id is opaque, so the rename moves no rows: it is the same Workstream.
+    const renamed = (await ok.json()) as { result: { id: string; newSlug: string } };
+    expect(renamed.result).toMatchObject({ id: "WS-crux", newSlug: "reserved" });
+
+    await dispatch({ kind: "ADD_WORKSTREAM", payload: { slug: "second", title: "Second" } });
+    const clash = await dispatch({
+      kind: "RENAME_WORKSTREAM",
+      payload: { oldSlug: "second", newSlug: "reserved" },
+    });
+    expect(clash.status).toBe(409);
   });
 });
 

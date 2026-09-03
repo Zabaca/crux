@@ -13,6 +13,7 @@ import { workstreams, problems, observations, outcomes, attempts } from "../db/s
 import { eq } from "drizzle-orm";
 import {
   findProblemInScope,
+  findWorkstreamBySlugInScope,
   requireAttemptInScope,
   requireObservationInScope,
   requireProblemInScope,
@@ -33,6 +34,15 @@ import {
   type RoadmapStage,
 } from "../transitions/index.js";
 import type { MutationAction } from "./schemas.js";
+
+/** 16 hex characters of randomness, as `auth/principals.ts` mints ids with. */
+function randomSuffix(): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
 
 async function countRows(
   tableName: "observations" | "outcomes" | "attempts",
@@ -122,23 +132,21 @@ export async function runMutation(
   switch (action.kind) {
     case "ADD_WORKSTREAM": {
       const p = action.payload;
-      const id = `WS-${p.slug}`;
-      // The slug namespace is the deployment's, not the Principal's: `WS-<slug>`
-      // is the primary key and `slug` is uniquely indexed. On a deployment many
-      // Principals share, the first anonymous adopter to pick "crux" takes it,
-      // and the second needs to be told that in words rather than handed a raw
-      // constraint failure as a 500 on their very first command.
-      const taken = await db
-        .select({ id: workstreams.id })
-        .from(workstreams)
-        .where(eq(workstreams.id, id));
-      if (taken.length) {
-        throw new CruxError(
-          "ALREADY_EXISTS",
-          `the slug "${p.slug}" is taken on this deployment — choose another`,
-          { slug: p.slug },
-        );
+      // The slug namespace is the Principal's, not the deployment's: what one
+      // Principal has named "crux" says nothing about what anybody else may
+      // name, and a refusal that said otherwise would be an existence oracle
+      // over other tenants' area names (ADR-0013). So the only collision that
+      // can be reported is one inside the caller's own scope — which still
+      // deserves words rather than a raw constraint failure as a 500.
+      const taken = await findWorkstreamBySlugInScope(db, p.slug, scope);
+      if (taken) {
+        throw new CruxError("ALREADY_EXISTS", `you already have a Workstream slugged "${p.slug}"`, {
+          slug: p.slug,
+        });
       }
+      // Opaque, because a primary key of `WS-<slug>` *is* a deployment-wide
+      // unique index on the slug — the oracle above, in the shape of a key.
+      const id = `WS-${randomSuffix()}`;
       await db.insert(workstreams).values({
         id,
         slug: p.slug,
@@ -150,14 +158,26 @@ export async function runMutation(
     }
     case "RENAME_WORKSTREAM": {
       const p = action.payload;
-      await requireWorkstreamInScope(db, p.oldSlug, scope);
+      const ws = await requireWorkstreamInScope(db, p.oldSlug, scope);
+      // Same question as ADD_WORKSTREAM asks, with the same answer: only a
+      // collision inside the caller's own scope exists to be reported.
+      if (p.newSlug !== ws.slug) {
+        const taken = await findWorkstreamBySlugInScope(db, p.newSlug, scope);
+        if (taken) {
+          throw new CruxError(
+            "ALREADY_EXISTS",
+            `you already have a Workstream slugged "${p.newSlug}"`,
+            { slug: p.newSlug },
+          );
+        }
+      }
       const r = await renameWorkstream(
-        p.oldSlug,
+        ws.id,
         p.newSlug,
         { title: p.title, description: p.description },
         db,
       );
-      return { result: { ok: true, ...r }, workstreamId: r.newId };
+      return { result: { ok: true, ...r }, workstreamId: r.id };
     }
     case "ADD_PROBLEM": {
       const p = action.payload;

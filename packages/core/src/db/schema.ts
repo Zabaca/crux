@@ -12,7 +12,7 @@ import { sql } from "drizzle-orm";
  * Crux entity schema.
  *
  * Conventions:
- * - Workstreams: text PK "WS-<slug>", slug column kept for human-readable URLs.
+ * - Workstreams: opaque text PK, slug column unique per owner and used in URLs.
  * - Problems: integer autoincrement PK, no slug column.
  * - Other entities: prefixed text PKs (OBS-###, EVD-###, …).
  * - Timestamps are integer epoch ms.
@@ -61,22 +61,43 @@ export const apiTokens = sqliteTable("api_tokens", {
   revokedAt: integer("revoked_at"),
 });
 
-export const workstreams = sqliteTable("workstreams", {
-  id: text("id").primaryKey(), // WS-<slug>
-  slug: text("slug").notNull().unique(),
-  title: text("title").notNull(),
-  description: text("description"),
-  ownerId: text("owner_id")
-    .notNull()
-    .references(() => users.id),
-  createdAt: integer("created_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  updatedAt: integer("updated_at")
-    .notNull()
-    .default(sql`(unixepoch() * 1000)`),
-  archivedAt: integer("archived_at"),
-});
+/**
+ * A Workstream. Its slug is unique to its owner, not to the deployment.
+ *
+ * A deployment-wide unique slug made every refusal an existence oracle: a
+ * Principal that asked for one somebody else held was told so, and minting
+ * Principals is free, so the whole directory of other tenants' area names was
+ * enumerable. The slug is scoped to the owner instead, like every other
+ * visibility rule (ADR-0013) — which is also what stops one Principal from
+ * squatting a name for everybody.
+ *
+ * The id is therefore opaque rather than `WS-<slug>`: a primary key derived
+ * from the slug *is* a deployment-wide unique index on it. Rows written before
+ * this still carry `WS-<slug>` ids, which is harmless precisely because nothing
+ * reads them for their slug.
+ */
+export const workstreams = sqliteTable(
+  "workstreams",
+  {
+    id: text("id").primaryKey(), // WS-<random>, opaque
+    slug: text("slug").notNull(),
+    title: text("title").notNull(),
+    description: text("description"),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => users.id),
+    createdAt: integer("created_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    updatedAt: integer("updated_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+    archivedAt: integer("archived_at"),
+  },
+  (t) => ({
+    ownerSlugUnique: uniqueIndex("workstreams_owner_slug_unique").on(t.ownerId, t.slug),
+  }),
+);
 
 export const observations = sqliteTable("observations", {
   id: text("id").primaryKey(), // OBS-###
