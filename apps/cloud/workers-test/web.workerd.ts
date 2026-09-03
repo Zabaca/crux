@@ -28,7 +28,7 @@ function get(path: string, init: RequestInit = {}): Promise<Response> {
   return SELF.fetch(`${BASE}${path}`, {
     redirect: "manual",
     ...init,
-    headers: { accept: "text/html,application/xhtml+xml", ...(init.headers ?? {}) },
+    headers: { accept: "text/html,application/xhtml+xml", ...init.headers },
   });
 }
 
