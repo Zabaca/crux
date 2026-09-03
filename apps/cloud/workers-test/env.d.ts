@@ -6,5 +6,8 @@ declare namespace Cloudflare {
   interface Env {
     DB: D1Database;
     VIEW_STATE: DurableObjectNamespace;
+    /** The free allowance (ADR-0013), so capacity.workerd.ts can assert against
+     * the configured number instead of repeating it. */
+    CRUX_OBSERVATION_CAP: string;
   }
 }

@@ -17,7 +17,18 @@
   // Not a secret: the address sign-in links come *from*, which is public the
   // moment the first one is sent. It must be on a domain the Resend account
   // behind RESEND_API_KEY has verified, or Resend refuses the send.
-  "vars": { "EMAIL_FROM": "Crux <crux@send.zabaca.com>" },
+  //
+  // CRUX_OBSERVATION_CAP is the free allowance on an unclaimed Principal
+  // (ADR-0013): Observations it may file before writes refuse with
+  // CAPACITY_EXCEEDED. Reads are never gated by it. It lives here — and can be
+  // overridden on the deployment — so tuning the number is not a code change.
+  // CRUX_CLAIM_URL, the address that refusal quotes, is deliberately unset: it
+  // defaults to /claim on whichever host answered, which is what this
+  // deployment wants. Set it only to point elsewhere.
+  "vars": {
+    "EMAIL_FROM": "Crux <crux@send.zabaca.com>",
+    "CRUX_OBSERVATION_CAP": "200"
+  },
   // The deployment's address. `custom_domain` makes wrangler own the DNS record
   // and the certificate, so the hostname is created by the same deploy that
   // ships the code rather than clicked in by hand; zabaca.com is a zone on the

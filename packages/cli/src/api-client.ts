@@ -32,6 +32,7 @@ const CRUX_ERROR_CODES: ReadonlySet<string> = new Set<ErrorCode>([
   "NOT_FOUND",
   "ALREADY_EXISTS",
   "VALIDATION_ERROR",
+  "CAPACITY_EXCEEDED",
 ]);
 
 type ErrorEnvelope = {

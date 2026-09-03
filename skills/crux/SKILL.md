@@ -191,6 +191,18 @@ Archive is terminal — no un-archive. Archived rows hide from default queues bu
 
 **You (Claude) are not a User.** Everything you file is attributed to the human. Preserve the "Claude noticed this" vs "user said this" distinction in tags/phrasing, not in the reporter field.
 
+## When a write refuses with CAPACITY_EXCEEDED (exit 27)
+
+The Principal has spent its free allowance of Observations, so **writes** are
+paused; every read still works, so context reloads are unaffected. The refusal's
+`details` carry `cap`, `observations` and `claimUrl`.
+
+Say so in the conversation where it happened — this is the moment the wall
+matters — and offer the fix: claim the Principal at the `claimUrl` from the
+error. Do not retry the command, do not mint a fresh Principal to route around
+it, and do not silently drop what the user asked to file: tell them it was not
+filed, and hold the content so it can be filed once the cap is lifted.
+
 ## View control bus
 
 The view-state machine tracks what the user is looking at across web UI and TUI. Use to navigate surfaces and read current focus without screenshots.

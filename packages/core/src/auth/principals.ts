@@ -113,6 +113,10 @@ export async function visiblePrincipalIds(db: CruxDb, principalId: string): Prom
  */
 export type Scope = {
   principalId: string;
+  /** Every Principal whose corpus this requester may see — the requester, plus
+   * whatever claiming has linked to it. The set capacity is metered over, so
+   * "what I can read" and "what counts against my allowance" are one answer. */
+  ownerIds: string[];
   /** Workstream ids owned by a Principal this requester can see. */
   workstreamIds: string[];
   /** Is this Workstream inside the boundary? */
@@ -131,6 +135,7 @@ export async function resolveScope(db: CruxDb, principal: Principal): Promise<Sc
   const set = new Set(ids);
   return {
     principalId: principal.id,
+    ownerIds: owners,
     workstreamIds: ids,
     has: (workstreamId: string) => set.has(workstreamId),
   };

@@ -83,7 +83,14 @@ describe("dispatch() persists through the injected ViewStore", () => {
 
     const result = await dispatch(
       { kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } },
-      { db, viewStore: store, actor: { id: "USR-test" } },
+      {
+        db,
+        viewStore: store,
+        actor: { id: "USR-test" },
+        // Unreachable on this path — a view action is not a corpus write — but
+        // dispatch() demands one rather than choosing an allowance by omission.
+        capacity: { observationCap: 200, claimUrl: "https://crux.example/claim" },
+      },
     );
 
     expect(result.revision).toBe(1);

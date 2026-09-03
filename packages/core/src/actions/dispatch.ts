@@ -25,6 +25,7 @@ import type { ViewStore } from "../view-state/store.js";
 import type { ViewEvent } from "../view-state/machine.js";
 import { runMutation, type Actor } from "./mutations.js";
 import { resolveScope } from "../auth/principals.js";
+import { assertWriteCapacity, type Capacity } from "../auth/capacity.js";
 
 /** Error thrown when an action is not allowed in the current view state. */
 export class ActionNotAllowedError extends Error {
@@ -72,6 +73,11 @@ export async function dispatch(
      * for the same reason — and it is the *Principal*, resolved server-side, so
      * the tenancy boundary is the same one `query()` enforces (ADR-0013). */
     actor: Actor;
+    /** The free allowance this Principal writes against (ADR-0013). Required,
+     * like the two above: a default here would be an allowance and a claim URL
+     * chosen by omission, and the refusal is only useful if it can name the
+     * deployment's own way out. */
+    capacity: Capacity;
     enforceAllow?: boolean;
   },
 ): Promise<DispatchResult> {
@@ -116,6 +122,14 @@ export async function dispatch(
     meta.value = snap.value;
     meta.context = snap.context;
   } else {
+    // The allowance gate, on the mutation branch only — a corpus write is the
+    // only thing ADR-0013 pauses. View actions are navigation and stay open,
+    // because blocking them would stop somebody browsing what they already
+    // filed, which is the read this cap promises never to touch.
+    //
+    // Here rather than inside each transition, so a write added later is capped
+    // by construction rather than by remembering.
+    await assertWriteCapacity(options.db, scope, options.capacity);
     // Route through mutation runner
     result = await runMutation(action, options.db, options.actor, scope);
   }
