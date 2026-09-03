@@ -40,14 +40,13 @@ jobs:
         run: bun run scripts/build-docs.ts
 
       # Gate the deploy on the checks a human would run first. `docs:check` is
-      # here as well as in the build because ADR-0005 makes structural doc rot a
-      # deploy blocker, and a clear failure here beats a confusing one mid-build.
+      # in that sequence as well as in the build because ADR-0005 makes
+      # structural doc rot a deploy blocker, and a clear failure here beats a
+      # confusing one mid-build. The sequence itself lives in package.json as
+      # `verify`, so this job and pull-request.yml cannot drift apart — a merge
+      # is gated on exactly what the pull request was gated on.
       - name: Verify
-        run: |
-          bun run lint
-          bun run typecheck
-          bun run docs:check
-          bun run test
+        run: bun run verify
 
       # zbc reads secrets.yaml through sops; SOPS_AGE_KEY is the CI recipient
       # listed in .sops.yaml. Deliberately `bunx`, never `bunx --bun`: wrangler

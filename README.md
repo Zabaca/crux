@@ -172,13 +172,32 @@ Cloud crux is one Cloudflare Worker with a D1 database, deployed through
 [zbc](https://github.com/Zabaca/zbc) ([ADR-0004](docs/adr/0004-cloudflare-stack.md)).
 Production only — there is no preview environment.
 
+**A pull request is verified before it can merge.**
+[`pull-request.yml`](.github/workflows/pull-request.yml) runs `bun run verify` —
+lint, typecheck, `docs:check`, the suite — on every PR against `main`. Once the
+[`main` ruleset](docs/runbooks/protect-main.md) is applied, `main` refuses a
+merge whose `Verify` has not passed; until it is, the check is visible but
+advisory — applying it needs repository admin, which the CI token deliberately
+does not hold. The PR job holds no secrets either: it has nothing
+to deploy, so it has no business being able to. Verifying only on the merge made
+the merge itself the first verification, which is how `main` ended up ahead of
+production once already.
+
 **Merging to `main` deploys.** [`production.yml`](.github/workflows/production.yml)
-runs lint, typecheck, `docs:check` and the suite, then `zbc apply production`.
-The same command works from an operator's machine:
+runs the same `bun run verify`, then `zbc apply production`. The sequence lives
+in `package.json`, in one place, so the gate on the pull request and the gate on
+the deploy cannot drift apart. All three work from an operator's machine:
 
 ```sh
-bun run deploy          # bunx @zabaca/zbc apply production
+bun run scripts/build-docs.ts   # derive the doc tree first on a fresh checkout
+bun run verify                  # lint, typecheck, docs:check, test
+bun run deploy                  # bunx @zabaca/zbc apply production
 ```
+
+The derivation is the same step both workflows run before verifying: the doc
+tree is generated rather than committed ([ADR-0005](docs/adr/0005-docs-derived-at-deploy.md)),
+and the Astro pages import it, so a checkout that has never built it cannot
+typecheck.
 
 `zbc apply` converges the database _and_ the code: the
 [`d1`](packages/infra/environments/production/d1.ts) instance applies the schema
@@ -299,7 +318,8 @@ naming the broken links and orphans.
   [agent-driven view control](docs/agent-driven-view-control-spec.md) (superseded by ADR-0014).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
   [model selection](docs/model-selection.md).
-- Runbooks — [rebuild the production database empty](docs/runbooks/rebuild-production-database.md).
+- Runbooks — [rebuild the production database empty](docs/runbooks/rebuild-production-database.md),
+  [require the pull-request check on `main`](docs/runbooks/protect-main.md).
 
 ## Principles
 

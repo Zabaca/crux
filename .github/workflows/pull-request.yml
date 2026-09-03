@@ -1,0 +1,48 @@
+name: Pull request
+
+# Verification happens before the merge decision, not after it. `production.yml`
+# runs the same checks on push to main, but by then the merge is irreversible —
+# and for a while that push *was* the first time CI saw the code. This workflow
+# is the half that runs while the change is still a proposal.
+#
+# It runs the same sequence the deploy gates on (`bun run verify`, defined once
+# in package.json) and it deliberately holds no secrets: there is nothing to
+# deploy from a pull request, so there is no reason for a PR job — which can be
+# opened by anyone — to be able to reach the deployment credentials.
+#
+# No path filter, for the reason production.yml has none: crux is one Worker
+# over one database, so anything that changes the repo can change what ships.
+
+on:
+  pull_request:
+    branches: [main]
+
+# A superseded push has nothing to say about the head commit, so cancel it.
+# (production.yml is the opposite case: a half-applied schema must not be
+# interrupted, so its applies queue instead.)
+concurrency:
+  group: pull-request-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      # The doc tree is derived, not committed (ADR-0005), and the Astro pages
+      # import it — so a fresh checkout cannot typecheck until it is generated.
+      - name: Derive the doc tree
+        run: bun run scripts/build-docs.ts
+
+      - name: Verify
+        run: bun run verify
