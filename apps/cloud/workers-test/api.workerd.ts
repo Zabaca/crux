@@ -5,6 +5,7 @@ import { createD1Db, type CruxDb } from "@crux/core/db";
 import { applyD1Schema } from "@crux/core/db/d1";
 import { mintToken } from "@crux/core/auth";
 import { problems, users, workstreams } from "@crux/core/db/schema";
+import pkg from "../package.json" with { type: "json" };
 
 // Seam: the deployed request path. `SELF.fetch` runs the Worker's own `fetch`
 // against the bindings wrangler.jsonc declares — a real D1 and a real
@@ -46,7 +47,17 @@ describe("GET /health", () => {
   test("round-trips the D1 binding", async () => {
     const res = await SELF.fetch("https://crux.example/health");
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ status: "ok", db: "ok" });
+    expect(await res.json()).toEqual({ status: "ok", db: "ok", version: pkg.version });
+  });
+
+  // `/release` polls this field to decide whether the deploy it just ran is the
+  // one now serving traffic (ADR-0015), so what matters is that the *bundle*
+  // carries the version rather than the test runner reading the file beside it.
+  // A build that dropped the inlined import would answer `undefined` here.
+  test("reports the deployed version, inlined into the bundle", async () => {
+    const res = await SELF.fetch("https://crux.example/health");
+    const body = (await res.json()) as { version?: unknown };
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
   });
 });
 

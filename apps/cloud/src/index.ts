@@ -6,6 +6,11 @@
  */
 import astro from "@astrojs/cloudflare/entrypoints/server.js";
 
+// The deployed version, read from the one package that becomes the deployment
+// (ADR-0015). Vite inlines it into the bundle, so `/health` can answer what is
+// actually serving traffic rather than what somebody believes they deployed.
+import pkg from "../package.json" with { type: "json" };
+
 import { handleApi, type Env } from "./api.js";
 import { handleWeb } from "./web/router.js";
 import { MARK_SVG } from "./web/brand.js";
@@ -55,14 +60,20 @@ function favicon(pathname: string): Response | null {
  * Round-trip the D1 binding. A bound-but-unreachable database is the failure
  * this route exists to catch, so it pays for one trivial query rather than
  * reporting "ok" on a Worker that cannot read its corpus.
+ *
+ * `version` is here and not behind a route of its own because it answers the
+ * same question in the same breath: this is the check `/release` polls after a
+ * deploy, and wrangler's exit code is not an answer to it (ADR-0015). A
+ * degraded response carries it too — knowing which build is failing is the
+ * point of asking.
  */
 async function health(env: Env): Promise<Response> {
   try {
     await env.DB.prepare("select 1 as ok").first();
   } catch {
-    return json({ status: "degraded", db: "error" }, 503);
+    return json({ status: "degraded", db: "error", version: pkg.version }, 503);
   }
-  return json({ status: "ok", db: "ok" });
+  return json({ status: "ok", db: "ok", version: pkg.version });
 }
 
 /**

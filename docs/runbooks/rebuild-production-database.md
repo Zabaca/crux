@@ -98,9 +98,12 @@ One command converges both halves and there is no manual schema step after it:
 [`cloud.ts`](../../packages/infra/environments/production/cloud.ts) imports
 [`d1.ts`](../../packages/infra/environments/production/d1.ts), so zbc applies
 `D1_SCHEMA_STATEMENTS` to the empty database *before* deploying the Worker that
-reads it. Merging to `main` runs the same command from CI — but only on a push,
-so after a wipe the recovery is this one from an operator's machine, not a
-button in Actions.
+reads it. Nothing in CI can run it — no workflow holds the deploy credential
+([ADR-0015](../adr/0015-a-release-is-a-command-not-a-merge.md)) — so this is the
+operator's machine or nothing. This is also the one place `bun run deploy` is
+run outside [`/release`](../../.claude/skills/release/SKILL.md), and correctly:
+a wipe is recovering a deployment, not shipping a version, and the version on
+`main` does not change.
 
 ### 4. Check it
 
@@ -108,9 +111,11 @@ button in Actions.
 curl -s https://<deployment>/health
 ```
 
-`{"status":"ok","db":"ok"}` says the Worker can reach a D1 database. It does
-*not* say the schema is back: that route runs `select 1`, which an empty
-database answers perfectly well. A `503 degraded` means D1 was unreachable —
+`{"status":"ok","db":"ok","version":"<x.y.z>"}` says the Worker can reach a D1
+database. It does *not* say the schema is back: that route runs `select 1`,
+which an empty database answers perfectly well. The `version` is whatever
+`apps/cloud/package.json` read on the machine that deployed — a wipe does not
+change it, so it should match what was live before. A `503 degraded` means D1 was unreachable —
 after a wipe the likeliest cause is the binding id in
 [`wrangler.jsonc`](../../apps/cloud/wrangler.jsonc), though the wipe drops
 tables and never deletes the database, so it should still match.

@@ -172,32 +172,54 @@ Cloud crux is one Cloudflare Worker with a D1 database, deployed through
 [zbc](https://github.com/Zabaca/zbc) ([ADR-0004](docs/adr/0004-cloudflare-stack.md)).
 Production only — there is no preview environment.
 
+**A merge to `main` deploys nothing.** Production moves only when somebody runs
+[`/release`](.claude/skills/release/SKILL.md), and nothing under `.github/`
+holds a deploy credential or may ever be given one
+([ADR-0015](docs/adr/0015-a-release-is-a-command-not-a-merge.md)). The release
+bumps the version, drafts a [`CHANGELOG.md`](CHANGELOG.md) entry for approval,
+runs the gate, deploys, asks `/health` what is now serving traffic, and tags
+only once that answers with the version it just built. A tag on `origin` is
+therefore a release that reached production and was checked there — which is a
+stronger claim than any exit code can make, because the deploy failure this
+repository has actually met exits 0.
+
 **A pull request is verified before it can merge.**
 [`pull-request.yml`](.github/workflows/pull-request.yml) runs `bun run verify` —
 lint, typecheck, `docs:check`, the suite — on every PR against `main`. Once the
 [`main` ruleset](docs/runbooks/protect-main.md) is applied, `main` refuses a
 merge whose `Verify` has not passed; until it is, the check is visible but
 advisory — applying it needs repository admin, which the CI token deliberately
-does not hold. The PR job holds no secrets either: it has nothing
-to deploy, so it has no business being able to. Verifying only on the merge made
-the merge itself the first verification, which is how `main` ended up ahead of
-production once already.
+does not hold. Verifying only on the merge made the merge itself the first
+verification, which is how `main` ended up ahead of production once already.
 
-**Merging to `main` deploys.** [`production.yml`](.github/workflows/production.yml)
-runs the same `bun run verify`, then `zbc apply production`. The sequence lives
-in `package.json`, in one place, so the gate on the pull request and the gate on
-the deploy cannot drift apart. All three work from an operator's machine:
+**`main.yml` verifies the merge result**, and that is all it does.
+[It](.github/workflows/main.yml) runs the same `bun run verify` on every push to
+`main`. That is not a duplicate of the pull request's job: the pull request
+judges the merge-base result, and this judges what `main` actually became, which
+differ exactly when two pull requests pass separately and conflict in meaning
+once both have landed. `/release` refuses unless the newest run of it is green
+for the exact commit being released, so this is also what makes a release
+possible at all.
+
+The sequence lives in `package.json`, in one place, so the two CI gates and the
+release gate cannot drift apart. All of it works from an operator's machine:
 
 ```sh
 bun run scripts/build-docs.ts   # derive the doc tree first on a fresh checkout
 bun run verify                  # lint, typecheck, docs:check, test
-bun run deploy                  # bunx @zabaca/zbc apply production
+bun run deploy                  # bunx @zabaca/zbc apply production — /release runs this
 ```
 
 The derivation is the same step both workflows run before verifying: the doc
 tree is generated rather than committed ([ADR-0005](docs/adr/0005-docs-derived-at-deploy.md)),
 and the Astro pages import it, so a checkout that has never built it cannot
 typecheck.
+
+`bun run deploy` is the one step of `/release` worth running by hand, and only
+to recover a production the release left half-moved. Reaching for it as the
+normal way to ship is what ADR-0015 exists to stop: it skips the version, the
+changelog, and the check that the bundle now serving traffic is the one you
+built.
 
 `zbc apply` converges the database _and_ the code: the
 [`d1`](packages/infra/environments/production/d1.ts) instance applies the schema
@@ -271,9 +293,16 @@ own name), the deploy that reapplies the schema, and restoring the one identity
 that makes the browser reachable again. It is destructive and human-gated;
 nothing in CI runs it.
 
-`GET /health` is the deployment's liveness check. It round-trips the D1 binding
-rather than answering from memory, so a Worker that cannot read its corpus
-reports `503 degraded` instead of a hollow `ok`.
+`GET /health` is the deployment's liveness check, and the answer to *what is
+live*. It round-trips the D1 binding rather than answering from memory, so a
+Worker that cannot read its corpus reports `503 degraded` instead of a hollow
+`ok`, and it reports the `version` inlined into the bundle it is serving — read
+from `apps/cloud/package.json`, the only package in this workspace that becomes
+the deployment. That field is what `/release` polls to decide whether the deploy
+it just ran is the one now taking traffic
+([ADR-0015](docs/adr/0015-a-release-is-a-command-not-a-merge.md)); an exit code
+describes an upload, and the failure worth catching is the one where the upload
+succeeded and the deploy did not.
 
 ## Layout
 
@@ -301,6 +330,9 @@ can serve the tree at `/docs` without a working tree to read
 naming the broken links and orphans.
 
 - [`CONTEXT.md`](CONTEXT.md) — the glossary. Canonical vocabulary for this repo.
+- [`CHANGELOG.md`](CHANGELOG.md) — what each release changed, for the people and
+  agents using it. Written by [`/release`](.claude/skills/release/SKILL.md), one
+  entry per version that reached production.
 - Decisions — [ADR-0001: single dual-audience doc](docs/adr/0001-single-dual-audience-doc.md),
   [ADR-0002: README-rooted doc tree](docs/adr/0002-readme-rooted-doc-tree.md),
   [ADR-0003: cloud crux is client-server and cloud-only](docs/adr/0003-cloud-crux-client-server.md),
@@ -314,13 +346,16 @@ naming the broken links and orphans.
   [ADR-0011: removal revokes access, not identity](docs/adr/0011-removal-revokes-access-not-identity.md),
   [ADR-0012: Crux does not own the build](docs/adr/0012-crux-does-not-own-the-build.md),
   [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md),
-  [ADR-0014: view-state belongs to whoever is looking at it](docs/adr/0014-view-state-is-the-humans.md).
+  [ADR-0014: view-state belongs to whoever is looking at it](docs/adr/0014-view-state-is-the-humans.md),
+  [ADR-0015: a release is a command, not a merge](docs/adr/0015-a-release-is-a-command-not-a-merge.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md) (superseded by ADR-0014).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
   [model selection](docs/model-selection.md).
 - Runbooks — [rebuild the production database empty](docs/runbooks/rebuild-production-database.md),
   [require the pull-request check on `main`](docs/runbooks/protect-main.md).
+- Procedures — [`/release`](.claude/skills/release/SKILL.md), the only path to
+  production.
 
 ## Principles
 

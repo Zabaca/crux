@@ -1,0 +1,50 @@
+name: Main
+
+# Verification, and nothing else. A merge to `main` deploys nothing — production
+# moves only when somebody runs `/release`, which is the only thing holding the
+# deploy credential (ADR-0015). This job must never grow an apply step: two paths
+# to production is how "which commit is live?" stops having an answer.
+#
+# It runs after pull-request.yml has already verified the change, because the two
+# answer different questions. The pull request job judges the merge-base result;
+# this one judges what `main` actually became, which is not the same thing when
+# two pull requests pass separately and conflict in meaning once both have
+# landed. `/release` refuses unless the newest run of this workflow is green for
+# the exact commit being released, so this is also the gate that makes a release
+# possible at all.
+#
+# No path filter: crux is one Worker over one database, so anything that changes
+# the repo can change what ships.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: main-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - run: bun install
+
+      # The doc tree is derived, not committed (ADR-0005), and the Astro pages
+      # import it — so a fresh checkout cannot typecheck until it is generated.
+      - name: Derive the doc tree
+        run: bun run scripts/build-docs.ts
+
+      # The same sequence pull-request.yml runs and `/release` runs, defined once
+      # in package.json so the three cannot drift apart.
+      - name: Verify
+        run: bun run verify

@@ -31,10 +31,16 @@ come from the workflow, not from a commit status anyone with write access could
 post under the same name.
 
 There are no `bypass_actors`, on purpose: admins are not exempt, so `main` takes
-changes only through a pull request. Nothing in the deploy needs a direct push —
-`zbc apply production` reads the trunk, it does not write it — and
+changes only through a pull request. Nothing needs a direct push, releases
+included — [`/release`](../../.claude/skills/release/SKILL.md) opens a pull
+request for its version bump and changelog entry like any other change, and then
+pushes a **tag**, which this ruleset does not target
+([ADR-0015](../adr/0015-a-release-is-a-command-not-a-merge.md)). `zbc apply
+production` reads the trunk and does not write it, and
 [rebuilding the database](rebuild-production-database.md) runs from an
-operator's machine. Add a bypass actor only with a reason worth writing down.
+operator's machine. Add a bypass actor only with a reason worth writing down;
+"the release needs it" is not one, and a tag ruleset added later would be the
+thing that breaks releases.
 
 To change it later, edit the file and `PUT` it back at
 `repos/Zabaca/crux/rulesets/<id>`.
