@@ -9,6 +9,7 @@ import { createActor } from "xstate";
 import {
   computeSaveStateBlob,
   computeSaveViewMetaBlob,
+  loadStateFromBlob,
   loadViewMetaFromBlob,
 } from "./persistence.js";
 import type { ViewBlob } from "./store.js";
@@ -249,5 +250,119 @@ describe("lastAction names the Workstream the action touched", () => {
 
   test("a corrupt lastAction reads as absent rather than throwing", () => {
     expect(loadViewMetaFromBlob({ revision: 1, lastAction: "nonsense" }).lastAction).toBeNull();
+  });
+});
+
+/**
+ * A blob with sidecars and no XState fields is what a recorded read writes for
+ * a Principal that has never moved its view — the ordinary first case, not a
+ * rare one. Restoring it used to hand XState a snapshot with no `value`, which
+ * XState swallows into an errored snapshot and then re-reports through
+ * `reportUnhandledError`: a `setTimeout` that rethrows on a *later tick*,
+ * outside the call that already returned. `loadStateFromBlob` therefore hands
+ * back the right snapshot and takes the isolate down afterwards, which is why
+ * asserting on its return value alone cannot see the bug.
+ *
+ * So the assertion is on the work the call defers: restore with `setTimeout`
+ * captured, then invoke every callback it scheduled and collect what they
+ * throw. Nothing may.
+ */
+function restore(blob: ViewBlob): {
+  snap: ReturnType<typeof loadStateFromBlob>;
+  thrown: unknown[];
+} {
+  const realSetTimeout = globalThis.setTimeout;
+  const deferred: Array<() => void> = [];
+  globalThis.setTimeout = ((cb: () => void) => {
+    deferred.push(cb);
+    return 0;
+  }) as unknown as typeof setTimeout;
+  let snap: ReturnType<typeof loadStateFromBlob>;
+  try {
+    snap = loadStateFromBlob(blob);
+  } finally {
+    globalThis.setTimeout = realSetTimeout;
+  }
+
+  const thrown: unknown[] = [];
+  for (const cb of deferred) {
+    try {
+      cb();
+    } catch (err) {
+      thrown.push(err);
+    }
+  }
+  return { snap, thrown };
+}
+
+describe("loadStateFromBlob restores without an asynchronous throw", () => {
+  test("a sidecar-only blob yields the initial state and raises nothing on any tick", () => {
+    const { snap, thrown } = restore({
+      revision: 3,
+      lastAction: { kind: "ADD_OBSERVATION", ts: 1700, workstreamId: "WS-crux" },
+      recentQueries: [],
+    });
+
+    expect(thrown).toEqual([]);
+    expect(snap.value).toEqual({ viewing: "workstream_list" });
+    expect(snap.context).toEqual({ workstreamId: null, problemId: null });
+  });
+
+  test("an empty blob yields the initial state and raises nothing", () => {
+    const { snap, thrown } = restore({});
+
+    expect(thrown).toEqual([]);
+    expect(snap.value).toEqual({ viewing: "workstream_list" });
+    expect(snap.context).toEqual({ workstreamId: null, problemId: null });
+  });
+
+  test("a fully-formed blob restores its own value and context, raising nothing", () => {
+    const { snap, thrown } = restore({
+      status: "active",
+      value: { viewing: "problem_detail" },
+      context: { workstreamId: "WS-crux", problemId: "42" },
+      historyValue: {},
+      children: {},
+      revision: 7,
+      lastAction: { kind: "OPEN_PROBLEM", ts: 1700, workstreamId: "WS-crux" },
+      recentQueries: [],
+    });
+
+    expect(thrown).toEqual([]);
+    expect(snap.value).toEqual({ viewing: "problem_detail" });
+    expect(snap.context).toEqual({ workstreamId: "WS-crux", problemId: "42" });
+  });
+
+  // `value` present but unusable takes the other guard — the errored snapshot
+  // XState builds during `createActor`, checked before the actor is started.
+  test("a null value falls back, raising nothing", () => {
+    const { snap, thrown } = restore({ status: "active", value: null, revision: 2 });
+
+    expect(thrown).toEqual([]);
+    expect(snap.value).toEqual({ viewing: "workstream_list" });
+    expect(snap.context).toEqual({ workstreamId: null, problemId: null });
+  });
+
+  test("a value naming a state that does not exist falls back, raising nothing", () => {
+    const { snap, thrown } = restore({
+      status: "active",
+      value: { viewing: "a_state_that_was_removed" },
+      context: { workstreamId: "WS-crux", problemId: null },
+      revision: 2,
+    });
+
+    expect(thrown).toEqual([]);
+    expect(snap.value).toEqual({ viewing: "workstream_list" });
+    expect(snap.context).toEqual({ workstreamId: null, problemId: null });
+  });
+
+  test("a legacy slug-based context still migrates to ids", () => {
+    const { snap, thrown } = restore({
+      value: { viewing: "workstream_dashboard" },
+      context: { workstreamSlug: "crux", problemSlug: null },
+    });
+
+    expect(thrown).toEqual([]);
+    expect(snap.context).toEqual({ workstreamId: "WS-crux", problemId: null });
   });
 });
