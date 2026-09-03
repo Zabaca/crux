@@ -14,7 +14,7 @@ Run this when the user has signaled they're ready to review accumulated state an
 `crux` refers to `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Use the explicit path; not on `$PATH`.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context --all
+${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --all
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias.
@@ -26,7 +26,7 @@ If first-run init hasn't happened this session (Bun, deps, db, config, team, web
 Synthesis without fresh context produces drift. Run before the first action:
 
 ```sh
-crux context --all
+crux context -w <slug> --all
 ```
 
 Anchor on:
@@ -36,14 +36,14 @@ Anchor on:
 - `[].attempts[]` — work already in flight or already tried, each with the `closing_note` saying why it ended that way. Don't re-propose a direction that was dropped for a reason still standing.
 - `done[]`, `abandoned[]` — closed Problems, each carrying the Outcome or the Abandonment rationale that closed it. Scan before filing new work.
 
-If no workstream is named and you can't infer one from cwd, ask.
+Every command that acts on a Workstream takes `-w <slug>` and refuses without it — there is no current Workstream to inherit. If none is named, run `crux workstream list` and ask which one.
 
 ## Review loop
 
 For each item in `recent_observations_unlinked`, propose one of:
 
-1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> --problem <id> --note "why this supports it"`. Preferred when fit is clear.
-2. **Promote to a new Problem** — file `crux problem add` (with the seed Observation linked as Evidence in the same review).
+1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> <problem-id> --note "why this supports it"`. Preferred when fit is clear.
+2. **Promote to a new Problem** — file `crux problem add -w <slug>` (with the seed Observation linked as Evidence in the same review).
 3. **Archive** — terminal. `crux observation archive` with a rationale. Use for misfiles, duplicates, evaporated relevance.
 4. **Leave** — explicitly defer. Keep the row; no action this pass.
 
@@ -103,7 +103,7 @@ When what became of a Problem is known, `crux outcome add --problem <id>` record
 
 ## Reload mid-review
 
-If review runs long and the user adds new intake or another session writes, re-run `crux context --json --all` before continuing. State drifts.
+If review runs long and the user adds new intake or another session writes, re-run `crux context -w <slug> --all` before continuing. State drifts.
 
 ## View control bus
 

@@ -8,21 +8,21 @@ import type {
   AbandonProblemPayload,
 } from "@crux/core/actions";
 import { api } from "../api-client.js";
-import { wsArg, hintCtx } from "../ctx-defaults.js";
+import { requireWorkstream, workstreamArg } from "../require-args.js";
 
 type ProblemRow = { id: number; status: string | null; title: string };
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a problem to a workstream." },
   args: {
+    ...workstreamArg(),
     title: { type: "string", required: true },
     description: { type: "string", required: true },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = await wsArg();
-    hintCtx(wsVal);
+    const wsVal = requireWorkstream(args.workstream);
     const payload: AddProblemPayload = {
       workstream: wsVal,
       title: args.title,
@@ -36,6 +36,7 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List problems in a workstream." },
   args: {
+    ...workstreamArg(),
     status: {
       type: "string",
       description: "now | next | later | done | abandoned | unscheduled",
@@ -44,8 +45,7 @@ const listCmd = defineCommand({
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
-    const wsVal = await wsArg();
-    hintCtx(wsVal);
+    const wsVal = requireWorkstream(args.workstream);
     const rows = await api().query<ProblemRow[]>({
       kind: "PROBLEM_LIST",
       workstream: wsVal,

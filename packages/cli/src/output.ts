@@ -4,10 +4,6 @@ export function setJsonMode(on: boolean) {
   jsonMode = on;
 }
 
-export function isJsonMode(): boolean {
-  return jsonMode;
-}
-
 /**
  * When set, `emit()` calls this function instead of writing to stdout.
  * Pass `null` to restore default behaviour. Used by tests to capture output.

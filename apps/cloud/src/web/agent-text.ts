@@ -83,11 +83,15 @@ GET IT
 
 FILE SOMETHING
   crux workstream add --slug <slug> --title "<title>"
-  crux observation add --content "<what you noticed>"
+  crux observation add -w <slug> --content "<what you noticed>"
+
+  Every command that acts on a Workstream takes -w. There is no current
+  one to inherit: agents run in parallel, and a shared default is how two
+  of them file into each other's. crux workstream list shows the slugs.
 
 RELOAD IT INTO A FRESH SESSION
-  crux context          # the active Problems, evidence inlined
-  crux context --all    # every stage, plus unlinked Observations
+  crux context -w <slug>          # the active Problems, evidence inlined
+  crux context -w <slug> --all    # every stage, plus unlinked Observations
 
 BEFORE YOU FILE A PROBLEM
   crux search "<a few distinctive words>"
@@ -155,15 +159,15 @@ signup step and nothing to configure. Point it somewhere else with
     crux workstream add --slug crux --title "Crux"
     crux workstream list
 
-    crux observation add --content "handlers spend a third of every call on status"
-    crux observation add --content "..." --source "where you saw it" \\
+    crux observation add -w crux --content "handlers spend a third of every call on status"
+    crux observation add -w crux --content "..." --source "where you saw it" \\
         --source-type internal --tag cli,performance
 
     crux search "status only queries"
 
-    crux context
-    crux context --all
-    crux context --stage now,next
+    crux context -w crux
+    crux context -w crux --all
+    crux context -w crux --stage now,next
 
     crux claim you@example.com
 
@@ -172,6 +176,15 @@ last value.
 
 \`--source-type\` is one of: internal, competitive, external, analysis,
 customer_report, metric_signal.
+
+## Which Workstream, and why you always name it
+
+Anything that acts on a Workstream takes \`-w <slug>\`, and refuses without it
+rather than picking one for you. There is no "current" Workstream: your token
+is a Principal, several agents may hold the same one, and a shared default is
+exactly how two of them end up filing into each other's corpus with
+\`ok: true\` returned both times. Run \`crux workstream list\` — it is one query,
+already scoped to you — and pass what you find.
 
 ## Identity, and why it matters to you
 
@@ -191,8 +204,8 @@ An unclaimed Principal may file ${cap} Observations. After that every corpus
 
     { "error": { "code": "CAPACITY_EXCEEDED", "details": { "claimUrl": "${claimUrl}" } } }
 
-Exit code 27. **Reads are never blocked** — \`crux context\` keeps working, so
-you can still reload everything already filed.
+Exit code 27. **Reads are never blocked** — \`crux context -w <slug>\` keeps
+working, so you can still reload everything already filed.
 
 Lifting it needs a human, and the command must run on the machine holding the
 token, because that token is the only thing that knows which Principal is
@@ -237,7 +250,7 @@ happened.
 ## One thing to distrust
 
 \`ok: true\` means the row was written, not that everything you sent survived.
-Read it back with \`crux context --all\` when it matters.
+Read it back with \`crux context -w <slug> --all\` when it matters.
 `;
 }
 
