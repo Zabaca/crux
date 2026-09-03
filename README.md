@@ -14,16 +14,16 @@ Crux is a structured residue layer: capture the output of a discovery conversati
 
 A typed entity model with workflow invariants enforced in code, fronted by a CLI designed for Claude Code to operate.
 
-| Entity                     | Role                                                                            |
-| -------------------------- | ------------------------------------------------------------------------------- |
-| **Principal**              | The identity a client acts as: a token, not a person. Owns what it files.       |
-| **Workstream**             | A coherent area of focus (per client, per product).                             |
-| **Observation**            | Atomic intake. Cheap to create, never deleted.                                  |
-| **Problem**                | Synthesized "there's a thing worth solving."                                    |
-| **Evidence**               | Links an Observation to a Problem with a why-note.                              |
-| **Attempt**                | A pointer to work about a Problem happening in another tracker.                 |
-| **Abandonment**            | Graveyard for Problems we gave up on, with reason.                              |
-| **Outcome**                | What became of a Problem; recording one is what marks it done.                  |
+| Entity          | Role                                                                      |
+| --------------- | ------------------------------------------------------------------------- |
+| **Principal**   | The identity a client acts as: a token, not a person. Owns what it files. |
+| **Workstream**  | A coherent area of focus (per client, per product).                       |
+| **Observation** | Atomic intake. Cheap to create, never deleted.                            |
+| **Problem**     | Synthesized "there's a thing worth solving."                              |
+| **Evidence**    | Links an Observation to a Problem with a why-note.                        |
+| **Attempt**     | A pointer to work about a Problem happening in another tracker.           |
+| **Abandonment** | Graveyard for Problems we gave up on, with reason.                        |
+| **Outcome**     | What became of a Problem; recording one is what marks it done.            |
 
 The entity model is the product. Workflow transitions — schedule a Problem, file an Attempt, close one with the judgment that ended it, record an Outcome — are plain functions with invariant checks. You can't close an Attempt twice. You can't record a second Outcome against a Problem the first one closed. You can't archive an Observation that is already archived. The rules are code, not documentation.
 
@@ -31,15 +31,30 @@ The entity model is the product. Workflow transitions — schedule a Problem, fi
 
 Claude Code is the primary surface. You discuss problems and the work against them in conversation, and Claude files entries inline through the `crux` CLI at natural pause points — not as end-of-session ceremony. The CLI is optimized for Claude to run and parse: `--json` on every read command, structured errors with stable codes, meaningful exit codes.
 
-To reload context into a fresh session:
+To reload context into a fresh session, walk three cheap reads rather than
+asking for one digest of everything:
 
 ```sh
-crux context -w <workstream> --json
+crux workstream list --json                     # which corpora exist, by slug
+crux problem list -w <slug> --status now --json # the field, one line per Problem
+crux problem show <id> --json                   # the two or three that matter
 ```
 
-That emits a model-shaped digest: open Problems (sorted by priority), their Evidence with inlined Observations, their Attempts, Abandonment, Outcome. Drop it into a new conversation and Claude starts warm.
+Each is flat in the size of the corpus, and the agent pays only for what it
+reads. `crux evidence list <id>` and `crux attempt list <id>` open the layer
+under a Problem when a Problem is worth that; `crux observation list -w <slug>
+--unlinked` is the intake nobody has synthesized yet. Anything that acts on a
+Workstream names it with `-w` and refuses without one — there is no current
+Workstream to inherit.
 
-For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt. "All workstreams" means all of *yours*: every read is scoped to the Principal that made the request, and one Principal's corpus is invisible to another's ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
+The honest cost of that shape: getting warm is several calls rather than one,
+and the cheapest thing an agent can do is no longer the complete thing. What it
+buys is that the cost stops growing with the corpus — the digest that used to
+answer this in one call inlined every Observation behind every Problem, which
+made the command whose whole purpose was to be cheaper than re-deriving context
+more expensive than re-deriving it.
+
+For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt. "All workstreams" means all of _yours_: every read is scoped to the Principal that made the request, and one Principal's corpus is invisible to another's ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
 Before a Problem gets synthesized, the one that already exists has to be findable:
 
@@ -89,7 +104,7 @@ crux claim you@example.com
 ```
 
 That mails a link to the address you name; opening it is what attaches the
-address, so nothing is written until you do. An address nobody here has *names*
+address, so nothing is written until you do. An address nobody here has _names_
 the Principal — the row it already is becomes you. An address that already has
 an identity here **links** the Principal to it rather than merging the two, so
 an agent on a second machine joins the first without a single authored row being
@@ -113,7 +128,7 @@ To point at a deployment of your own instead, run
 
 There is no local database. Every `crux` command is an HTTP call to the
 deployment ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)): reads go to
-`POST /v1/query` as a *named* read, writes to `POST /v1/dispatch` as an action,
+`POST /v1/query` as a _named_ read, writes to `POST /v1/dispatch` as an action,
 and view-state lives in a per-user Durable Object behind `/v1/view`. Both
 entry points are in core — `query()` beside `dispatch()` — so an invariant and a
 `--json` shape each exist in exactly one place, which is the only arrangement
@@ -138,7 +153,7 @@ For contributors working on Crux itself:
 bun install
 bun run crux user init --name "Your Name" --email "you@example.com"
 bun run crux init --url https://<your-deployment> --token <token>
-bun run crux context -w crux --json
+bun run crux problem list -w crux --status now --json
 ```
 
 `bun run build` derives the doc tree and runs `astro build`; `bun run test`
@@ -165,7 +180,7 @@ The same command works from an operator's machine:
 bun run deploy          # bunx @zabaca/zbc apply production
 ```
 
-`zbc apply` converges the database *and* the code: the
+`zbc apply` converges the database _and_ the code: the
 [`d1`](packages/infra/environments/production/d1.ts) instance applies the schema
 first, and the [`cloud`](packages/infra/environments/production/cloud.ts)
 instance — which imports it — then deploys the Worker that reads it. Deploying
@@ -222,7 +237,7 @@ rows creates its own on first contact
 follows from claiming one: `crux claim <email>` attaches an address to that
 Principal, and signing in mails a link to an address that has a row. So a
 freshly wiped deployment reaches its own browser without a row written by hand —
-`bun run db:restore-identity` remains for restoring a *specific* identity, which
+`bun run db:restore-identity` remains for restoring a _specific_ identity, which
 is what the runbook below uses.
 
 **Schema application only ever adds.** The DDL is an end state of
@@ -308,7 +323,7 @@ removing Members, minting and revoking CLI tokens, pages for Problem and Observa
 the Observation intake list at `/w/<slug>/observations` — grouped into linked,
 archived and waiting, all three read off related rows rather than a status
 column — the doc tree at `/docs`, and the write surfaces — a Workstream at `/w/<slug>`
-that *is* a drag-and-drop roadmap board, and contextual action dialogs that file
+that _is_ a drag-and-drop roadmap board, and contextual action dialogs that file
 entities and record transitions. The board shows all six Stages; the two
 terminal ones, `done` and `abandoned`, are read-only there because they are
 reached by an Outcome or an Abandonment rather than by dragging. Every one of
@@ -332,8 +347,8 @@ against a stub deployment. `bun run test` builds, then runs both runners.
 
 See [`.claude/skills/dev-start/SKILL.md`](.claude/skills/dev-start/SKILL.md) for new-machine onboarding.
 
-
 ---
+
 name: karpathy-guidelines
 description: Behavioral guidelines to reduce common LLM coding mistakes. Use when writing, reviewing, or refactoring code to avoid overcomplication, make surgical changes, surface assumptions, and define verifiable success criteria.
 license: MIT
@@ -348,6 +363,7 @@ license: MIT
 **Don't assume. Don't hide confusion. Surface tradeoffs.**
 
 Before implementing:
+
 - State your assumptions explicitly. If uncertain, ask.
 - If multiple interpretations exist, present them - don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
@@ -370,12 +386,14 @@ Ask yourself: "Would a senior engineer say this is overcomplicated?" If yes, sim
 **Touch only what you must. Clean up only your own mess.**
 
 When editing existing code:
+
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
 - If you notice unrelated dead code, mention it - don't delete it.
 
 When your changes create orphans:
+
 - Remove imports/variables/functions that YOUR changes made unused.
 - Don't remove pre-existing dead code unless asked.
 
@@ -386,11 +404,13 @@ The test: Every changed line should trace directly to the user's request.
 **Define success criteria. Loop until verified.**
 
 Transform tasks into verifiable goals:
+
 - "Add validation" → "Write tests for invalid inputs, then make them pass"
 - "Fix the bug" → "Write a test that reproduces it, then make it pass"
 - "Refactor X" → "Ensure tests pass before and after"
 
 For multi-step tasks, state a brief plan:
+
 ```
 1. [Step] → verify: [check]
 2. [Step] → verify: [check]

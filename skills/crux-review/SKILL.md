@@ -14,7 +14,7 @@ Run this when the user has signaled they're ready to review accumulated state an
 `crux` refers to `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Use the explicit path; not on `$PATH`.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug> --all
+${CLAUDE_PLUGIN_ROOT}/bin/crux observation list -w <slug> --unlinked
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias.
@@ -23,26 +23,42 @@ If first-run init hasn't happened this session (Bun, deps, db, config, team, web
 
 ## Always reload context first
 
-Synthesis without fresh context produces drift. Run before the first action:
+Synthesis without fresh context produces drift. There is no single command that
+loads the whole corpus — a digest that inlines every Observation behind every
+Problem costs more the more you have filed. Run these two before the first
+action; both are flat in the size of the corpus:
 
 ```sh
-crux context -w <slug> --all
+crux observation list -w <slug> --unlinked   # the review queue
+crux problem list -w <slug>                 # every Problem, id + stage + title
 ```
 
 Anchor on:
 
-- `recent_observations_unlinked[]` — primary review queue. Each one is a candidate for either Evidence-linking to an existing Problem or seeding a new Problem.
-- `now[]`, `next[]`, `later[]`, `unscheduled[]` — open Problems by stage, with their Evidence and Attempts. Use to find link targets.
-- `[].attempts[]` — work already in flight or already tried, each with the `closing_note` saying why it ended that way. Don't re-propose a direction that was dropped for a reason still standing.
-- `done[]`, `abandoned[]` — closed Problems, each carrying the Outcome or the Abandonment rationale that closed it. Scan before filing new work.
+- The **unlinked queue** — the primary review queue. Each one is a candidate for either Evidence-linking to an existing Problem or seeding a new Problem. `--show-archived` includes the ones somebody already ruled out.
+- The **Problem list** — open Problems by stage (`--status now|next|later|unscheduled`), which is where you find link targets. Closed ones (`--status done`, `--status abandoned`) are worth a scan before filing new work.
+
+Then open only the Problems that actually look like link targets — do not pull
+the whole tree up front:
+
+```sh
+crux problem show 42                  # the Problem, its Attempts and its Outcome
+crux evidence list 42                 # what is already linked to it, and why
+crux attempt list 42                  # work in flight or already tried
+crux abandonment list -w <slug>       # why the abandoned ones were dropped
+```
+
+`crux attempt list 42` carries the `closingNote` on each closed Attempt — _why_
+the approach ended that way. Don't re-propose a direction that was dropped for a
+reason still standing.
 
 Every command that acts on a Workstream takes `-w <slug>` and refuses without it — there is no current Workstream to inherit. If none is named, run `crux workstream list` and ask which one.
 
 ## Review loop
 
-For each item in `recent_observations_unlinked`, propose one of:
+For each row `crux observation list -w <slug> --unlinked` returns, propose one of:
 
-1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> <problem-id> --note "why this supports it"`. Preferred when fit is clear.
+1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> <problem-id> --note "why this supports it"`. Both ids are positional. Preferred when fit is clear.
 2. **Promote to a new Problem** — file `crux problem add -w <slug>` (with the seed Observation linked as Evidence in the same review).
 3. **Archive** — terminal. `crux observation archive` with a rationale. Use for misfiles, duplicates, evaporated relevance.
 4. **Leave** — explicitly defer. Keep the row; no action this pass.
@@ -68,9 +84,9 @@ When an Observation supports an existing Problem, file `crux evidence link` rath
 Crux does not own the build (ADR-0012). When work about a Problem starts
 somewhere else, record it as an Attempt — `crux attempt add --problem <id> --ref
 <url-or-key> --label "..."` — and nothing more: there is no description field,
-because what the work *is* lives in the linked system and a second copy rots.
+because what the work _is_ lives in the linked system and a second copy rots.
 
-On close, `--note` is the load-bearing half: *why* the approach ended the way it
+On close, `--note` is the load-bearing half: _why_ the approach ended the way it
 did. The tracker says "won't do"; it never says the approach could not handle
 the load. A `shipped` Attempt does not complete the Problem — that is a separate
 judgment, recorded as an Outcome.
@@ -103,7 +119,7 @@ When what became of a Problem is known, `crux outcome add --problem <id>` record
 
 ## Reload mid-review
 
-If review runs long and the user adds new intake or another session writes, re-run `crux context -w <slug> --all` before continuing. State drifts.
+If review runs long and the user adds new intake or another session writes, re-run `crux observation list -w <slug> --unlinked` before continuing. State drifts.
 
 ## View control bus
 

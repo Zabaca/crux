@@ -19,9 +19,10 @@ import {
 // shapes these tests pin are shapes D1 has to produce inside workerd.
 //
 // Expected values come from the CLI contract the skill instructions depend on:
-// `crux context --json` emits a `workstream` + per-stage problem buckets, each
-// problem carrying `evidence`, `attempts`, `abandonment`, `outcome` and
-// `legal_next_transitions`.
+// the flat reads an agent walks to get warm — `WORKSTREAM_LIST` to choose,
+// `PROBLEM_LIST`/`PROBLEM_SUMMARIES` to see the field, `PROBLEM_DETAIL` to drill
+// into the two or three that matter, each carrying `evidence`, `attempts`,
+// `abandonment` and `outcome`.
 
 let db: CruxDb;
 
@@ -93,36 +94,64 @@ describe("query()", () => {
     expect(shown.outcome).toBeNull();
   });
 
-  test("CONTEXT emits the digest shape a fresh session reloads from", async () => {
-    await seed();
-    const digest = (await query(
-      { kind: "CONTEXT", workstream: "t", stages: ["unscheduled"], includeExtras: true },
-      { db, principal },
-    )) as Record<string, any>;
-
-    expect(digest.workstream.slug).toBe("t");
-    expect(Object.keys(digest)).toEqual([
-      "workstream",
-      "seed_version",
-      "unscheduled",
-      "recent_observations_unlinked",
-    ]);
-    const p = digest.unscheduled[0];
-    expect(p.evidence[0].observation.content).toBe("users lose context overnight");
-    expect(p.attempts).toHaveLength(1);
-    expect(p.abandonment).toBeNull();
-    expect(p.outcome).toBeNull();
-    // No status yet: schedule it, or leave through one of the two doors.
-    expect(p.legal_next_transitions).toEqual(["schedule", "abandon", "outcome"]);
-    // OBS-1 is linked as evidence, so it is not in the unlinked queue.
-    expect(digest.recent_observations_unlinked).toEqual([]);
+  test("PROBLEM_DETAIL inlines the Evidence with its Observation", async () => {
+    const { problemId } = await seed();
+    const detail = (await query({ kind: "PROBLEM_DETAIL", id: problemId }, { db, principal })) as {
+      problem: { id: number };
+      evidence: Array<{ note: string; observation: { content: string } }>;
+      attempts: unknown[];
+      abandonment: unknown;
+      outcome: unknown;
+    };
+    expect(detail.problem.id).toBe(problemId);
+    expect(detail.evidence[0]!.observation.content).toBe("users lose context overnight");
+    expect(detail.attempts).toHaveLength(1);
+    expect(detail.abandonment).toBeNull();
+    expect(detail.outcome).toBeNull();
   });
 
-  test("CONTEXT rejects a stage bucket that does not exist", async () => {
+  test("OBSERVATION_UNLINKED omits an Observation already linked as Evidence", async () => {
+    await seed(); // OBS-1 is Evidence for the seeded Problem.
+    await db.insert(observations).values({
+      id: "OBS-2",
+      workstreamId: "WS-t",
+      reporterId: "USR-t",
+      content: "nobody has triaged this one",
+    });
+    const unlinked = (await query(
+      { kind: "OBSERVATION_UNLINKED", workstreamId: "t" },
+      { db, principal },
+    )) as Array<{ id: string }>;
+    expect(unlinked.map((o) => o.id)).toEqual(["OBS-2"]);
+  });
+
+  test("OBSERVATION_UNLINKED hides an archived Observation unless asked for it", async () => {
     await seed();
-    await expect(
-      query({ kind: "CONTEXT", workstream: "t", stages: ["someday"] }, { db, principal }),
-    ).rejects.toThrow(/Invalid stage value/);
+    await db.insert(observations).values([
+      { id: "OBS-2", workstreamId: "WS-t", reporterId: "USR-t", content: "still open intake" },
+      {
+        id: "OBS-3",
+        workstreamId: "WS-t",
+        reporterId: "USR-t",
+        content: "ruled out",
+        archivedAt: 1700,
+        archivedById: "USR-t",
+        archiveRationale: "misfiled",
+      },
+    ]);
+
+    const hidden = (await query(
+      { kind: "OBSERVATION_UNLINKED", workstreamId: "t" },
+      { db, principal },
+    )) as Array<{ id: string }>;
+    expect(hidden.map((o) => o.id)).toEqual(["OBS-2"]);
+
+    const shown = (await query(
+      { kind: "OBSERVATION_UNLINKED", workstreamId: "t", showArchived: true },
+      { db, principal },
+    )) as Array<{ id: string; archive: { rationale: string | null } | null }>;
+    expect(shown.map((o) => o.id).sort()).toEqual(["OBS-2", "OBS-3"]);
+    expect(shown.find((o) => o.id === "OBS-3")!.archive).toMatchObject({ rationale: "misfiled" });
   });
 
   test("a recorded read leaves a trace in recentQueries", async () => {

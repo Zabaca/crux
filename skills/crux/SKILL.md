@@ -12,7 +12,7 @@ Crux is a product-thinking residue tool. This skill is the **default intake mode
 `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug>
+${CLAUDE_PLUGIN_ROOT}/bin/crux problem list -w <slug> --status now
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
@@ -35,12 +35,12 @@ When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-stat
 
 **Per-view allowed mutations:**
 
-| View | Allowed mutations |
-|---|---|
-| `workstream_list` | ADD_WORKSTREAM, RENAME_WORKSTREAM |
-| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION |
-| `problem_detail` | ADD_ATTEMPT, CLOSE_ATTEMPT, ADD_EVIDENCE, ADD_OUTCOME, SCHEDULE_PROBLEM, UNSCHEDULE_PROBLEM, ABANDON_PROBLEM |
-| `intake_queue` | ARCHIVE_OBSERVATION, ADD_OBSERVATION |
+| View                   | Allowed mutations                                                                                            |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `workstream_list`      | ADD_WORKSTREAM, RENAME_WORKSTREAM                                                                            |
+| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION                                                                                 |
+| `problem_detail`       | ADD_ATTEMPT, CLOSE_ATTEMPT, ADD_EVIDENCE, ADD_OUTCOME, SCHEDULE_PROBLEM, UNSCHEDULE_PROBLEM, ABANDON_PROBLEM |
+| `intake_queue`         | ARCHIVE_OBSERVATION, ADD_OBSERVATION                                                                         |
 
 **Global (always allowed):** ADD_OBSERVATION, BACK.
 
@@ -136,21 +136,33 @@ Before the first `crux` command in a session, run these checks in order. Steady 
 
 ## Load context before contributing
 
-When user names a workstream, run before adding state:
+There is no one command that loads the whole corpus, deliberately: a digest that
+inlines every Observation behind every Problem costs more the more you have
+filed, which inverts the point. Walk the cheap reads instead, and stop as soon
+as you know enough. Each is flat in the size of the corpus.
 
 ```sh
-crux context -w <slug>
+crux workstream list                       # which corpora exist, by slug
+crux problem list -w <slug> --status now   # the field: id, stage, title per line
+crux problem show 42                       # one Problem, with its Attempts and Outcome
 ```
 
-This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--stage` or `--all` to opt into more:
+`--status` takes one of `now`, `next`, `later`, `unscheduled`, `done`,
+`abandoned`; omit it for every Problem in the Workstream. For intake mode
+`--status now` is the right anchor — active Problems, so you do not file
+Observations that duplicate in-flight work.
 
-- `--stage=now,next` — specific buckets, comma-separated. Valid values: `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
-- `--all` — all six stage buckets plus `recent_observations_unlinked`.
+Go a layer deeper only for a Problem that has earned it:
 
-For intake mode, anchor on:
+```sh
+crux evidence list 42                 # the Evidence links behind a Problem
+crux attempt list 42                  # work on it happening in another tracker
+crux observation show OBS-17          # one Observation, in full
+```
 
-- `now[]` — active Problems; avoid filing Observations that duplicate in-flight work.
-- If you need to check unlinked observations, run with `--all` instead.
+`crux observation list -w <slug>` is every Observation in the Workstream;
+`crux observation list -w <slug> --unlinked` narrows it to the ones not yet
+linked to a Problem, which is the queue `/crux:review` works from.
 
 If you do not know which slug to pass, run `crux workstream list` and choose one. Never guess, and never fall back to "the last one" — there is no such thing any more, which is the point.
 
@@ -167,9 +179,9 @@ crux attempt drift -w <slug>  # active Problems with no open Attempt
 ```
 
 - **Never describe the work here.** There is no description field and the server
-  refuses a payload carrying one — what the work *is* lives in the system `--ref`
+  refuses a payload carrying one — what the work _is_ lives in the system `--ref`
   points at, and a second copy would rot.
-- `--note` on close is the one thing the tracker never keeps: *why* the approach
+- `--note` on close is the one thing the tracker never keeps: _why_ the approach
   ended the way it did. A closed ticket says "won't do"; it never says the
   approach could not handle the load.
 - Closing an Attempt as `shipped` does **not** complete the Problem. Something
