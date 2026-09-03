@@ -51,7 +51,7 @@ describe("pure ViewMeta blob helpers (no fs)", () => {
       revision: 5,
       value: { viewing: "workstream_dashboard" },
       context: { workstreamId: "WS-crux", problemId: null },
-      lastAction: { kind: "SELECT_WORKSTREAM", ts: 111 },
+      lastAction: { kind: "SELECT_WORKSTREAM", ts: 111, workstreamId: null },
     });
     expect(meta.revision).toBe(5);
     expect(meta.value).toEqual({ viewing: "workstream_dashboard" });
@@ -64,12 +64,12 @@ describe("pure ViewMeta blob helpers (no fs)", () => {
       value: { viewing: "workstream_list" },
       context: { workstreamId: null, problemId: null },
       revision: 2,
-      lastAction: { kind: "ADD_PROBLEM", ts: 999 },
+      lastAction: { kind: "ADD_PROBLEM", ts: 999, workstreamId: null },
       recentQueries: [],
     };
     const merged = computeSaveViewMetaBlob(existing, meta);
     expect(merged.revision).toBe(2);
-    expect(merged.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 999 });
+    expect(merged.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 999, workstreamId: null });
     // xstate fields survive the merge
     expect(merged.value).toEqual({ viewing: "workstream_list" });
     expect(merged.status).toBe("active");

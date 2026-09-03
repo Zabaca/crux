@@ -16,7 +16,7 @@
     "crux": "bun run packages/cli/src/index.ts",
     "docs:check": "bun run scripts/docs-check.ts",
     "favicon": "bun run scripts/build-favicon.ts",
-    "test": "bun test packages && bun run test:workers",
+    "test": "bun test packages apps && bun run test:workers",
     "deploy": "bunx @zabaca/zbc apply production",
     "prepare": "husky",
     "test:workers": "bun run build && cd packages/core && vitest run && cd ../../apps/cloud && vitest run",
