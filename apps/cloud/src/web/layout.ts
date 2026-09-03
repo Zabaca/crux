@@ -135,6 +135,158 @@ h2{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
 .doc th{color:var(--faint);font-weight:600}
 .doc blockquote{border-left:2px solid var(--line);margin:0;padding-left:14px;color:var(--muted)}
 .doc hr{border:0;border-top:1px solid var(--line-2);margin:26px 0}
+/* ── the public homepage ──────────────────────────────────────────────────
+   Its own skin, and deliberately not the app's. The app is cool blue-grey
+   because it is a tool you sit inside; this is the one page that has to have
+   a voice, and it borrows the one the sibling product already established
+   (agentgit.zabaca.com, in zbc's walgit template): a warm off-black ground,
+   copper for the live thing and verdigris — what copper becomes with age —
+   for the settled one, mono headings against serif prose.
+
+   What it does NOT borrow is the two webfonts. Every page here fetches
+   nothing: the document is the whole payload, so JetBrains Mono and
+   Newsreader would be the first external request on the deployment. The
+   fallback stacks carry the same pairing — a real monospace against Georgia
+   — and cost no round trip. */
+body.land-page{
+  --l-ground:#14100e; --l-raised:#1c1815; --l-sunk:#0e0b0a;
+  --l-rule:#2e2723; --l-rule-2:#423831;
+  --l-bone:#ede6de; --l-muted:#a79b90; --l-faint:#8f847a;
+  --l-copper:#c56a3e; --l-verdi:#4e9e8b;
+  --l-mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --l-serif:Georgia,"Times New Roman",serif;
+  --l-move:160ms ease;
+  background:var(--l-ground);color:var(--l-bone);font-family:var(--l-mono)}
+body.land-page header.top{background:var(--l-sunk);border-bottom-color:var(--l-rule)}
+body.land-page .top nav{color:var(--l-muted)}
+body.land-page .top nav a:hover{color:var(--l-bone)}
+body.land-page .wrap{max-width:62rem;padding:0 clamp(1.15rem,5vw,2rem) 4rem}
+.land ::selection{background:var(--l-copper);color:var(--l-sunk)}
+/* Every interactive control gets a ring. The first port of this page dropped
+   the rule and left the keyboard with nothing to follow. */
+.land :focus-visible{outline:2px solid var(--l-copper);outline-offset:3px;border-radius:1px}
+.land a{color:var(--l-verdi);text-underline-offset:3px}
+.land a:hover{color:var(--l-copper)}
+/* Visible only once focused — a keyboard user should not tab the furniture
+   to reach the command. */
+.land-skip{position:absolute;clip-path:inset(50%);left:0;top:0;background:var(--l-copper);
+  color:var(--l-sunk);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;
+  padding:.8rem 1.1rem;z-index:2}
+/* Re-asserted, because the .land a rule (0,1,1) outranks .land-skip (0,1,0)
+   and was painting verdigris on copper — 1.2:1, which is no skip link at all. */
+.land a.land-skip,.land-skip:focus{color:var(--l-sunk)}
+.land-skip:focus{clip-path:none}
+.land-badge{display:inline-block;font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--l-muted);border:1px solid var(--l-rule-2);padding:.32rem .6rem;margin:0 0 2rem}
+.land h1{font-family:var(--l-mono);font-weight:700;font-size:clamp(2.1rem,7.6vw,4rem);
+  line-height:1;letter-spacing:-.045em;margin:0 0 1.5rem;text-wrap:balance;color:var(--l-bone)}
+.land h1 .dot{color:var(--l-copper)}
+.land-lede{font-family:var(--l-serif);font-size:clamp(1.15rem,2.9vw,1.5rem);line-height:1.5;
+  color:var(--l-bone);max-width:38ch;margin:0 0 2.5rem}
+.land-lede em{font-style:normal;color:var(--l-copper)}
+.land section{margin-top:5rem}
+.land h2{font-family:var(--l-mono);font-weight:700;font-size:clamp(1.35rem,4vw,1.85rem);
+  letter-spacing:-.03em;margin:0 0 1rem;text-transform:none;color:var(--l-bone);text-wrap:balance}
+.land h2 .dot{color:var(--l-copper)}
+.land section p{font-family:var(--l-serif);font-size:1.08rem;line-height:1.62;
+  color:var(--l-muted);max-width:58ch;margin:0 0 1.25rem}
+.land section p strong{color:var(--l-bone);font-weight:400}
+.land section p em{font-style:italic;color:var(--l-faint)}
+/* The prose and the command it describes are read together or not at all. */
+.land-split{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);
+  gap:0 2.5rem;align-items:start}
+/* A grid item defaults to min-width:auto, so a track cannot shrink below its
+   content's min-content width — and the terminal blocks are pre-formatted.
+   Without this the track grows instead of the block scrolling, and the whole
+   page pans sideways on a phone. */
+.land-split>*,.land-show>*,.land-rules li,.land-road li{min-width:0}
+.land-split-say p{max-width:46ch;margin-bottom:1rem}
+.land-show{display:grid;gap:1.5rem;align-content:start}
+.land-sh{background:var(--l-sunk);border:1px solid var(--l-rule);padding:.85rem 1rem;
+  overflow-x:auto;font-family:var(--l-mono);font-size:.78rem;line-height:1.8}
+.land-cmd{white-space:pre-wrap;word-break:break-word;color:var(--l-bone)}
+.land-p{color:var(--l-copper);user-select:none}
+.land-out{white-space:pre-wrap;color:var(--l-muted)}
+.land-out .hi{color:var(--l-verdi)}
+.land p.land-under{font-family:var(--l-mono);font-size:.66rem;letter-spacing:.1em;
+  text-transform:uppercase;color:var(--l-faint);margin:.7rem 0 0;max-width:none}
+/* Mint then claim, as a numbered sequence. Three steps with a real terminal
+   each, because the flow is the part people ask about and prose describing a
+   handshake reads worse than the handshake does. The counter is drawn rather
+   than left to the list marker so it can sit in the copper. */
+.land-steps{list-style:none;counter-reset:step;margin:1.75rem 0 1.5rem;padding:0;
+  display:grid;gap:2rem}
+.land-steps li{counter-increment:step;display:grid;gap:.65rem;position:relative;
+  padding-left:2.4rem}
+.land-steps li::before{content:counter(step);position:absolute;left:0;top:-.1rem;
+  width:1.6rem;height:1.6rem;display:grid;place-items:center;font-size:.72rem;
+  font-weight:700;color:var(--l-copper);border:1px solid var(--l-rule-2);border-radius:50%}
+.land-steps .k{font-family:var(--l-serif);font-size:1.05rem;color:var(--l-bone);
+  line-height:1.5}
+.land-quote{margin:0;padding:.9rem 1.1rem;border:1px solid var(--l-rule);
+  border-left:2px solid var(--l-verdi);background:var(--l-raised);
+  font-family:var(--l-serif);font-size:1rem;line-height:1.6;color:var(--l-muted)}
+.land-quote b{color:var(--l-bone);font-weight:400}
+.land-quote .mono{font-family:var(--l-mono);font-size:.85rem;color:var(--l-verdi)}
+@media (max-width:620px){.land-steps li{padding-left:0}
+  .land-steps li::before{position:static;margin-bottom:.2rem}}
+/* The rules, as terms rather than bullets: the label is the name of the rule,
+   and the prose is what it costs you. */
+.land-rules{list-style:none;margin:0;padding:0;display:grid;gap:0;
+  border-top:1px solid var(--l-rule)}
+.land-rules li{border-bottom:1px solid var(--l-rule);padding:1.05rem 0;display:grid;
+  grid-template-columns:9.5rem 1fr;gap:0 1.5rem;align-items:baseline}
+.land-rules .k{font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;color:var(--l-verdi)}
+.land-rules .v{color:var(--l-muted);font-family:var(--l-serif);font-size:1rem;line-height:1.6}
+.land-rules .v b{color:var(--l-bone);font-weight:400}
+.land-rules .v code{font-family:var(--l-mono);font-size:.82rem;color:var(--l-verdi)}
+/* Rules drawn by the container's background showing through a 1px gap. */
+.land-road{list-style:none;margin:0 0 1.5rem;padding:0;display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--l-rule);
+  border:1px solid var(--l-rule)}
+.land-road li{background:var(--l-ground);padding:1.35rem 1.5rem;display:grid;gap:.5rem;
+  align-content:start}
+.land-road .k{font-size:.66rem;letter-spacing:.13em;text-transform:uppercase;color:var(--l-faint)}
+.land-road .t{font-family:var(--l-mono);font-weight:700;color:var(--l-bone);font-size:.95rem}
+.land-road .d{font-family:var(--l-serif);color:var(--l-muted);font-size:.98rem;line-height:1.55}
+.land-foot{margin-top:4rem;padding-top:1.5rem;border-top:1px solid var(--l-rule);
+  font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--l-faint)}
+.land-foot code{font-family:var(--l-mono);text-transform:none;letter-spacing:0;
+  color:var(--l-verdi)}
+.land-foot p{margin:0 0 .6rem}
+.land-foot .plain{text-transform:none;letter-spacing:0;font-family:var(--l-serif);
+  font-size:.95rem;color:var(--l-muted);max-width:58ch;line-height:1.55}
+.land-btn{display:inline-block;font-family:var(--l-mono);font-size:.78rem;letter-spacing:.06em;
+  text-transform:uppercase;border:1px solid var(--l-rule-2);color:var(--l-bone);
+  padding:.7rem 1.1rem;background:none}
+.land-btn{transition:border-color var(--l-move),color var(--l-move),background-color var(--l-move)}
+.land-btn:hover{border-color:var(--l-copper);color:var(--l-copper);text-decoration:none}
+.land a{transition:color var(--l-move)}
+@media (prefers-reduced-motion:reduce){
+  body.land-page *{transition-duration:0.01ms!important;animation-duration:0.01ms!important}
+}
+.land-btn.go{border-left:2px solid var(--l-copper)}
+/* The command is the call to action, so it sits directly under the lede at
+   the hero's own width rather than behind a row of equal-weight buttons.
+   Docs and Sign in already live in the header, where a stranger looks for
+   them; repeating them here made three CTAs of the same weight and no
+   primary one. */
+.land-first{max-width:44rem;margin:0 0 1rem}
+.land-first .land-sh{font-size:.82rem}
+.land-first-say{font-family:var(--l-serif);font-size:1.08rem;line-height:1.62;
+  color:var(--l-muted);max-width:52ch;margin:1.4rem 0 0}
+.land-first-say strong{color:var(--l-bone);font-weight:400}
+@media (max-width:1024px){
+  .land-split{gap:0 1.75rem}
+  .land-road{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:820px){
+  .land-split{grid-template-columns:minmax(0,1fr);gap:2rem 0}
+  .land-rules li{grid-template-columns:1fr;gap:.3rem}
+  .land-road{grid-template-columns:1fr}
+  .land p.land-under{max-width:none}
+  .land section{margin-top:3.25rem}
+}
 @media (max-width:1080px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:800px){.board{grid-template-columns:1fr}.split{grid-template-columns:1fr}
   .rail{position:static}.kv{grid-template-columns:1fr}}
@@ -163,6 +315,12 @@ export function page(opts: {
   viewer: Viewer | null;
   workspace: string;
   body: Html;
+  /**
+   * A class on `<body>`, so a page can own the ground it is painted on. The
+   * homepage is the only caller: it is the one page with its own palette, and
+   * the page background is set on `<body>` rather than inside the content.
+   */
+  bodyClass?: string;
 }): Html {
   const nav = opts.viewer
     ? html`<nav>
@@ -175,7 +333,9 @@ export function page(opts: {
           <button type="submit" class="linkish">Sign out</button>
         </form>
       </nav>`
-    : html`<nav></nav>`;
+    : html`<nav>
+        <a href="/signin">Sign in</a>
+      </nav>`;
 
   return html`<html lang="en">
     <head>
@@ -187,12 +347,11 @@ export function page(opts: {
         ${raw(STYLES)}
       </style>
     </head>
-    <body>
+    <body class="${opts.bodyClass ?? ""}">
       <header class="top">
         <div class="top-in">
           ${MARK_INLINE}<a href="/" class="brand">Crux</a>
-          <span class="ws">Workspace · ${opts.workspace}</span>
-          ${nav}
+          ${opts.viewer ? html`<span class="ws">Workspace · ${opts.workspace}</span>` : ""} ${nav}
         </div>
       </header>
       <div class="wrap">${opts.body}</div>

@@ -19,7 +19,14 @@ import type { Viewer } from "./layout.js";
 /** The bindings the browser surfaces read — a subset of the Worker's `Env`. */
 export type WebEnv = Pick<
   Env,
-  "DB" | "BETTER_AUTH_SECRET" | "CRUX_WORKSPACE_NAME" | "RESEND_API_KEY" | "EMAIL_FROM"
+  | "DB"
+  | "BETTER_AUTH_SECRET"
+  | "CRUX_WORKSPACE_NAME"
+  | "RESEND_API_KEY"
+  | "EMAIL_FROM"
+  // The homepage quotes the free allowance, and reads it from the same var the
+  // cap enforces so a raised cap cannot leave the page stating the old number.
+  | "CRUX_OBSERVATION_CAP"
 >;
 
 /**

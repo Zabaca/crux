@@ -437,7 +437,13 @@ describe("after a claim names a Principal", () => {
       .getSetCookie()
       .map((c) => c.split(";")[0]!)
       .join("; ");
-    const home = await SELF.fetch(`${BASE}/`, { redirect: "manual", headers: { cookie } });
+    // With the Accept a browser sends: `/` answers plain text to a caller that
+    // does not ask for HTML, so omitting it here would land on the agent
+    // document and never exercise the session at all.
+    const home = await SELF.fetch(`${BASE}/`, {
+      redirect: "manual",
+      headers: { cookie, accept: "text/html,application/xhtml+xml" },
+    });
     expect(home.status, "the session lands on the Workstream list, not the sign-in page").toBe(200);
     expect(await home.text()).toContain("signs-in");
   });
