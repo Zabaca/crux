@@ -3,18 +3,18 @@
  * user, and stop resolving once revoked — exercised through the public
  * mint/authenticate/revoke interface against a real D1 inside workerd, which is
  * the runtime that will actually authenticate every request (ADR-0006).
+ *
+ * Authenticating is `authenticateAndResolveScope`: there is one way in, and it
+ * answers who the token acts as and what they may see in the same statement.
+ * `authorization-round-trips.workerd.ts` pins that it stays one.
  */
 import { env, reset } from "cloudflare:test";
 import { describe, test, expect, beforeEach } from "vitest";
 import { createD1Db, type CruxDb } from "../src/db/client.js";
 import { applyD1Schema } from "../src/db/d1/index.js";
 import { users } from "../src/db/schema.js";
-import {
-  mintToken,
-  revokeToken,
-  authenticateToken,
-  timingSafeEqualHex,
-} from "../src/auth/tokens.js";
+import { mintToken, revokeToken, timingSafeEqualHex } from "../src/auth/tokens.js";
+import { authenticateAndResolveScope } from "../src/auth/principals.js";
 
 let db: CruxDb;
 
@@ -28,8 +28,8 @@ beforeEach(async () => {
 describe("token lifecycle", () => {
   test("a minted token resolves to its user", async () => {
     const { token } = await mintToken(db, { userId: "USR-james", name: "laptop" });
-    const who = await authenticateToken(db, token);
-    expect(who?.userId).toBe("USR-james");
+    const who = await authenticateAndResolveScope(db, token);
+    expect(who?.principal.id).toBe("USR-james");
   });
 
   test("the plaintext token is returned once and is not stored verbatim", async () => {
@@ -45,14 +45,14 @@ describe("token lifecycle", () => {
 
   test("a wrong token does not authenticate", async () => {
     await mintToken(db, { userId: "USR-james" });
-    expect(await authenticateToken(db, "crux_not_a_real_token")).toBeNull();
+    expect(await authenticateAndResolveScope(db, "crux_not_a_real_token")).toBeNull();
   });
 
   test("a revoked token stops working", async () => {
     const { token, id } = await mintToken(db, { userId: "USR-james" });
-    expect(await authenticateToken(db, token)).not.toBeNull();
+    expect(await authenticateAndResolveScope(db, token)).not.toBeNull();
     await revokeToken(db, { tokenId: id, userId: "USR-james" });
-    expect(await authenticateToken(db, token)).toBeNull();
+    expect(await authenticateAndResolveScope(db, token)).toBeNull();
   });
 });
 

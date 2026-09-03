@@ -42,7 +42,7 @@ import {
   problemsInScope,
   requireProblemInScope,
   requireWorkstreamInScope,
-  resolveScope,
+  scopeFor,
   type Principal,
   type Scope,
 } from "../auth/principals.js";
@@ -432,12 +432,22 @@ async function unlinkedObservations(
  */
 export async function query(
   rawQuery: unknown,
-  options: { db: CruxDb; principal: Principal; viewStore?: ViewStore },
+  options: {
+    db: CruxDb;
+    principal: Principal;
+    viewStore?: ViewStore;
+    /** An already-resolved scope for this same Principal, when the caller has
+     * one. The API resolves identity and scope in a single statement at the
+     * edge, and handing it down is what keeps that one round trip from becoming
+     * two. Omitting it resolves the scope here — never runs unscoped — and a
+     * scope belonging to somebody else is ignored rather than trusted. */
+    scope?: Scope;
+  },
 ): Promise<unknown> {
   const q = QuerySchema.parse(rawQuery);
   const { db } = options;
 
-  const result = await run(q, db, await resolveScope(db, options.principal));
+  const result = await run(q, db, await scopeFor(db, options.principal, options.scope));
 
   const record = RECORDED[q.kind];
   if (record && options.viewStore) {

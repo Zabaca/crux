@@ -6,7 +6,7 @@
  * row it already is grows an email, a name and a slug, and becomes the human.
  * An address that already belongs to somebody *links* the Principal to them —
  * `claimed_by_user_id`, an edge — and nothing else is touched. Tenancy then
- * resolves to "every Principal claimed by me" (`visiblePrincipalIds`), which is
+ * resolves to "every Principal claimed by me" (`resolveScope`), which is
  * how one person ends up reading two machines' corpora without either corpus
  * being rewritten.
  *
@@ -253,7 +253,7 @@ export async function applyClaim(
   }
 
   // Defensive: a root never carries an edge, so this collapses to `human.id`.
-  // It costs one `??` to guarantee the set in `visiblePrincipalIds` is one hop
+  // It costs one `??` to guarantee the set `resolveScope` reads is one hop
   // deep no matter what a future path writes.
   const rootId = human.claimedByUserId ?? human.id;
   const linked = await db

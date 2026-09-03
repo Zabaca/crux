@@ -14,12 +14,13 @@
  * is nameless in the human sense and reachable only by the token it was minted
  * with.
  */
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/sqlite-core";
 
 import type { CruxDb } from "../db/client.js";
-import { attempts, observations, problems, users, workstreams } from "../db/schema.js";
+import { apiTokens, attempts, observations, problems, users, workstreams } from "../db/schema.js";
 import { NotFoundError } from "../transitions/errors.js";
-import { mintToken } from "./tokens.js";
+import { hashToken, mintToken, timingSafeEqualHex } from "./tokens.js";
 
 /** What a mint hands back: the row's id, and the token that acts as it (once). */
 export type MintedPrincipal = {
@@ -71,54 +72,6 @@ export function randomSuffix(): string {
   return out;
 }
 
-/**
- * The Principals whose corpus `principalId` may read — the scoping set every
- * read is filtered through.
- *
- * "Every Principal claimed by me" (ADR-0013), resolved in two hops: find the
- * human this Principal answers to — itself, unless a claim linked it to someone
- * — then everything else that human has claimed. An unclaimed Principal has no
- * edges either way, so the set is the singleton it always was.
- *
- * The set is deliberately symmetric. A token linked to a human reads what that
- * human owns, exactly as the human's browser session reads what the token
- * filed; the alternative — a human who can read a machine's corpus but not the
- * reverse — would make "which of my machines filed this" a question the product
- * could not answer, and claiming is what the person did to say the two are one.
- *
- * Returning the set rather than a predicate is what kept this a change to one
- * answer instead of to twenty reads.
- */
-export async function visiblePrincipalIds(db: CruxDb, principalId: string): Promise<string[]> {
-  // Cheap existence check, so a token naming a row that has since been deleted
-  // scopes to nothing rather than to a set containing a dangling id.
-  const rows = await db
-    .select({ id: users.id, claimedByUserId: users.claimedByUserId })
-    .from(users)
-    .where(and(eq(users.id, principalId), isNull(users.removedAt)))
-    .limit(1);
-  const self = rows[0];
-  if (!self) return [];
-
-  // The root's removal takes the whole set with it, and a removed linked row is
-  // dropped from it. ADR-0011 makes removal the one column every way in reads;
-  // a claim edge that outlived it would be a way in it did not close.
-  const rootId = self.claimedByUserId ?? self.id;
-  const root = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.id, rootId), isNull(users.removedAt)))
-    .limit(1);
-  if (!root.length) return [];
-  const linked = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(and(eq(users.claimedByUserId, rootId), isNull(users.removedAt)));
-  // A Set, because the requester is either the root or one of the linked rows,
-  // and both paths must produce the same corpus.
-  return [...new Set([rootId, ...linked.map((r) => r.id)])];
-}
-
 // ---------------------------------------------------------------------------
 // Tenancy
 // ---------------------------------------------------------------------------
@@ -149,22 +102,145 @@ export type Scope = {
   has(workstreamId: string): boolean;
 };
 
-export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
-  const owners = await visiblePrincipalIds(db, principal.id);
-  const rows = owners.length
-    ? await db
-        .select({ id: workstreams.id })
-        .from(workstreams)
-        .where(inArray(workstreams.ownerId, owners))
-    : [];
-  const ids = rows.map((r) => r.id);
-  const set = new Set(ids);
+/**
+ * The joined shape every scope resolution walks, aliased once so both doors
+ * enter the same query. See `resolveScope` for what it means.
+ */
+const selfUser = alias(users, "scope_self");
+const rootUser = alias(users, "scope_root");
+const ownerUser = alias(users, "scope_owner");
+
+/** root = whoever this Principal answers to, and they must still be a Member. */
+const rootJoin = and(
+  eq(rootUser.id, sql`coalesce(${selfUser.claimedByUserId}, ${selfUser.id})`),
+  isNull(rootUser.removedAt),
+);
+
+/** owner = the root itself, plus every Principal that root has claimed. */
+const ownerJoin = and(
+  or(eq(ownerUser.id, rootUser.id), eq(ownerUser.claimedByUserId, rootUser.id)),
+  isNull(ownerUser.removedAt),
+);
+
+/** One row per (owner, workstream) pair; either column is null when the join
+ * found nothing, which is how an empty scope arrives. */
+type ScopeRow = { ownerId: string | null; workstreamId: string | null };
+
+function scopeFromRows(principalId: string, rows: ScopeRow[]): Scope {
+  const ownerIds = [...new Set(rows.map((r) => r.ownerId).filter(isPresent))];
+  const workstreamIds = [...new Set(rows.map((r) => r.workstreamId).filter(isPresent))];
+  const set = new Set(workstreamIds);
   return {
-    principalId: principal.id,
-    ownerIds: owners,
-    workstreamIds: ids,
+    principalId,
+    ownerIds,
+    workstreamIds,
     has: (workstreamId: string) => set.has(workstreamId),
   };
+}
+
+function isPresent(value: string | null): value is string {
+  return value !== null;
+}
+
+/**
+ * Who a Principal is allowed to read *for*, and what they own — in one
+ * statement.
+ *
+ * This is the browser door, where the identity came from a Better Auth session
+ * and there is no `api_tokens` row to join through (ADR-0007);
+ * `authenticateAndResolveScope` is the same query entered through one.
+ *
+ * "Every Principal claimed by me" (ADR-0013) is three lookups on `users` and a
+ * lookup on `workstreams`, and every one of them was awaiting the one before
+ * it. On D1 that depth is the cost: four round trips at ~60ms each, paid by
+ * every read on a corpus of any size, including an empty one. They are all one
+ * join apart, so they collapse:
+ *
+ *   self  — the row the request resolved to, which must not be removed
+ *   root  — the human it answers to: itself, or whoever claimed it
+ *   owner — root, plus everything else root has claimed
+ *   ws    — the Workstreams those owners hold
+ *
+ * The joins after `self` are LEFT joins on purpose. A removed root, or a self
+ * whose claim points at a row that is gone, must scope to *nothing* while
+ * leaving the requester authenticated — a token whose corpus is empty is not a
+ * token that failed to authenticate, and collapsing the two would turn a
+ * removal into a 401 for a Principal that still exists.
+ *
+ * The set stays symmetric — a token linked to a human reads what that human
+ * owns, and the reverse — for the reason it always did: claiming is what the
+ * person did to say the two are one.
+ */
+
+export async function resolveScope(db: CruxDb, principal: Principal): Promise<Scope> {
+  const rows = await db
+    .select({ ownerId: ownerUser.id, workstreamId: workstreams.id })
+    .from(selfUser)
+    .leftJoin(rootUser, rootJoin)
+    .leftJoin(ownerUser, ownerJoin)
+    .leftJoin(workstreams, eq(workstreams.ownerId, ownerUser.id))
+    .where(and(eq(selfUser.id, principal.id), isNull(selfUser.removedAt)));
+  return scopeFromRows(principal.id, rows);
+}
+
+/** A bearer token resolved to who it acts as and what that Principal may see. */
+export type AuthenticatedScope = {
+  principal: Principal;
+  scope: Scope;
+};
+
+/**
+ * The CLI door: authenticate a bearer token *and* resolve its scope, in one
+ * round trip.
+ *
+ * Same query as `resolveScope`, entered one join earlier — through the token
+ * row rather than through the user row. There is no separate "just
+ * authenticate" call: a second copy of the removal and revocation predicates is
+ * how one of them ends up missed.
+ *
+ * The stored hash is still read back and compared in constant time. The `where`
+ * clause is an index probe and says nothing about how long a mismatch takes to
+ * reject, so the comparison stays on a value the row handed us.
+ */
+export async function authenticateAndResolveScope(
+  db: CruxDb,
+  presented: string | null | undefined,
+): Promise<AuthenticatedScope | null> {
+  if (!presented) return null;
+  const hash = await hashToken(presented);
+  const rows = await db
+    .select({
+      tokenHash: apiTokens.tokenHash,
+      userId: apiTokens.userId,
+      ownerId: ownerUser.id,
+      workstreamId: workstreams.id,
+    })
+    .from(apiTokens)
+    // Inner, unlike the joins below it: a token whose owner is gone or removed
+    // does not authenticate at all, which is what makes removal close every
+    // token that Member ever minted (ADR-0011).
+    .innerJoin(selfUser, and(eq(selfUser.id, apiTokens.userId), isNull(selfUser.removedAt)))
+    .leftJoin(rootUser, rootJoin)
+    .leftJoin(ownerUser, ownerJoin)
+    .leftJoin(workstreams, eq(workstreams.ownerId, ownerUser.id))
+    .where(and(eq(apiTokens.tokenHash, hash), isNull(apiTokens.revokedAt)));
+  const first = rows[0];
+  if (!first) return null;
+  if (!timingSafeEqualHex(first.tokenHash, hash)) return null;
+  return { principal: { id: first.userId }, scope: scopeFromRows(first.userId, rows) };
+}
+
+/**
+ * The scope a caller already resolved for this Principal, or a fresh one.
+ *
+ * `query()` and `dispatch()` both take an optional pre-resolved scope, and both
+ * have to ask the same question of it, so the question is asked once here. A
+ * scope carrying somebody else's `principalId` is ignored rather than trusted —
+ * the one way a handed-down scope could become a cross-tenant disclosure.
+ */
+export async function scopeFor(db: CruxDb, principal: Principal, provided?: Scope): Promise<Scope> {
+  if (provided && provided.principalId === principal.id) return provided;
+  return resolveScope(db, principal);
 }
 
 /** Who is asking. Resolved server-side from a bearer token or a session. */

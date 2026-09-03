@@ -3,15 +3,16 @@
  *
  * A token is a random opaque string shown to the user exactly once at mint time.
  * Only its SHA-256 hash is stored, so a leaked database yields no usable tokens.
- * Authentication hashes the presented token, looks up the (indexed) hash, and
- * confirms it with a constant-time comparison before resolving the user.
+ * This module mints, revokes and hashes them; *authenticating* one lives in
+ * `principals.ts`, because resolving who a token acts as and what they may see
+ * is a single joined statement rather than two (`authenticateAndResolveScope`).
  *
  * Everything here uses the Web Crypto global (`crypto.subtle`, `getRandomValues`),
  * which exists in both workerd and Bun — no `node:crypto`, so it runs in the Worker.
  */
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import type { CruxDb } from "../db/client.js";
-import { apiTokens, users } from "../db/schema.js";
+import { apiTokens } from "../db/schema.js";
 
 const TOKEN_PREFIX = "crux_";
 
@@ -90,38 +91,6 @@ export async function revokeToken(
     .where(and(eq(apiTokens.id, opts.tokenId), eq(apiTokens.userId, opts.userId)));
   const meta = (result as { meta?: { changes?: number } } | undefined)?.meta;
   return (meta?.changes ?? 0) > 0;
-}
-
-export type AuthedToken = { userId: string; tokenId: string };
-
-/**
- * Resolve a presented bearer token to its (active) owner, or null if the token
- * is unknown, revoked, or owned by someone no longer in the Workspace. The
- * stored hash is confirmed in constant time.
- *
- * The owner's membership is joined in rather than checked by the caller,
- * because there is only one thing a resolved token is for — acting as that
- * person — and a removed person may not act. Removing a Member therefore kills
- * every token they ever minted without revoking any of them one by one, and a
- * re-invite hands them all back, which is the same asymmetry the session gate
- * has.
- */
-export async function authenticateToken(
-  db: CruxDb,
-  presented: string | null | undefined,
-): Promise<AuthedToken | null> {
-  if (!presented) return null;
-  const hash = await hashToken(presented);
-  const rows = await db
-    .select({ id: apiTokens.id, userId: apiTokens.userId, tokenHash: apiTokens.tokenHash })
-    .from(apiTokens)
-    .innerJoin(users, eq(users.id, apiTokens.userId))
-    .where(and(eq(apiTokens.tokenHash, hash), isNull(apiTokens.revokedAt), isNull(users.removedAt)))
-    .limit(1);
-  const row = rows[0];
-  if (!row) return null;
-  if (!timingSafeEqualHex(row.tokenHash, hash)) return null;
-  return { userId: row.userId, tokenId: row.id };
 }
 
 function toHex(bytes: Uint8Array): string {
