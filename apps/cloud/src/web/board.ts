@@ -14,8 +14,8 @@ import {
   type ObservationSummary,
   type ProblemSummary,
   type ReadContext,
+  type WorkstreamRow,
 } from "@crux/core/reads";
-import type { WorkstreamRow } from "@crux/core/reads";
 
 export type BoardData = {
   workstream: WorkstreamRow;

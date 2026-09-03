@@ -21,12 +21,19 @@ import { countingD1 } from "@crux/core/db/test-utils";
 import { applyD1Schema } from "@crux/core/db/d1";
 import { observations, problems, users, workstreams } from "@crux/core/db/schema";
 import { resolveActiveScope, type Scope } from "@crux/core/auth/principals";
+// Statically, for the reason web.workerd.ts gives: better-auth is a large graph
+// and loading it inside a test's own timeout is a flake waiting for a loaded CI
+// runner. Imported here it is paid during collection.
+import { createAuth } from "@crux/core/auth/better-auth";
 
 import { boardData } from "../src/web/board.js";
+import { pageContext } from "../src/web/session.js";
 
 let db: CruxDb;
 
 const VIEWER = "USR-viewer";
+const BASE = "https://crux.example";
+const SECRET = "test-secret-not-used-in-production";
 
 /** The scope query is the one that walks `users` under its own alias. */
 const isScopeResolution = (sql: string) => sql.includes("scope_self");
@@ -35,7 +42,13 @@ beforeEach(async () => {
   await reset();
   db = createD1Db(env.DB);
   await applyD1Schema(env.DB);
-  await db.insert(users).values({ id: VIEWER, slug: "viewer", name: "Viewer" });
+  await db.insert(users).values({
+    id: VIEWER,
+    slug: "viewer",
+    name: "Viewer",
+    email: "viewer@example.com",
+    emailVerified: true,
+  });
   await db
     .insert(workstreams)
     .values({ id: "WS-crux", slug: "crux", title: "Crux", ownerId: VIEWER });
@@ -53,6 +66,32 @@ beforeEach(async () => {
   });
 });
 
+/** A session cookie for the seeded viewer, as clicking their link would produce. */
+async function sessionCookie(): Promise<string> {
+  let link: string | undefined;
+  const auth = createAuth(db, {
+    secret: SECRET,
+    baseURL: BASE,
+    sendEmail: async (message) => {
+      link = message.text.match(/https?:\/\/\S+/)?.[0];
+    },
+  });
+  await auth.api.signInMagicLink({
+    body: { email: "viewer@example.com", callbackURL: "/" },
+    headers: new Headers(),
+  });
+  expect(link, "signing in mails a link").toBeDefined();
+  const verified = await auth.api.magicLinkVerify({
+    query: { token: new URL(link!).searchParams.get("token")! },
+    headers: new Headers(),
+    asResponse: true,
+  });
+  return verified.headers
+    .getSetCookie()
+    .map((c) => c.split(";")[0]!)
+    .join("; ");
+}
+
 async function scopeForViewer(): Promise<Scope> {
   const scope = await resolveActiveScope(db, { id: VIEWER });
   expect(scope).not.toBeNull();
@@ -61,14 +100,24 @@ async function scopeForViewer(): Promise<Scope> {
 
 describe("the board's read composition", () => {
   test("resolves the scope once for the whole render, not once per read", async () => {
+    const cookie = await sessionCookie();
     const counted = countingD1(env.DB);
 
-    // What `pageContext` does: one statement that is both the membership check
-    // and the scope, then every read on the page carries it.
-    const scope = await resolveActiveScope(counted.db, { id: VIEWER });
-    expect(scope).not.toBeNull();
-    await boardData({ db: counted.db, principal: { id: VIEWER }, scope: scope! }, "crux");
+    // The render as the Worker performs it: `pageContext` resolves the session
+    // and the boundary, then the board reads through what it hands down. Every
+    // statement either half issues is counted, which is why the binding is
+    // swapped rather than the handle — `pageContext` builds its own out of the
+    // `Env` it is given.
+    const ctx = await pageContext(
+      { ...env, DB: counted.binding, BETTER_AUTH_SECRET: SECRET },
+      new Request(`${BASE}/w/crux`, { headers: { cookie } }),
+    );
+    expect(ctx.ok).toBe(true);
+    if (!ctx.ok) return;
+    expect(await boardData(ctx.read, "crux")).not.toBeNull();
 
+    // One, for the whole page. Before the handoff this was four: the membership
+    // check, and then the boundary re-resolved by each of the three reads.
     expect(counted.statements.filter(isScopeResolution)).toHaveLength(1);
   });
 

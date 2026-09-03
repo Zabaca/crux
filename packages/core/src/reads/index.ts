@@ -670,9 +670,9 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       // already established. Awaiting them one at a time — which is what
       // building the object literal in order did — spent four sequential round
       // trips on four independent reads. Two of them still contain a necessary
-      // second hop of their own (Observations behind Evidence, the Problem an
-      // Outcome hands off to), so the floor here is the depth of the deepest
-      // one, not the sum of all four.
+      // second hop of their own (the Observations behind the Evidence, the
+      // follow-up Problems an Outcome names), so the floor here is the depth of
+      // the deepest one, not the sum of all four.
       const [attemptRows, evidenceRows, abandonRows, outcome] = await Promise.all([
         attemptsFor(db, problemId),
         evidenceWithObservations(db, problemId, true),

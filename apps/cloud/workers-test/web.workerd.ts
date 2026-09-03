@@ -567,9 +567,18 @@ describe("read pages", () => {
 
   test("a URL naming nothing is a 404 page, not a crash", async () => {
     const { cookie } = await inviteAndJoin("missing@example.com", "Missing");
-    const res = await get("/w/crux/problems/9999", { headers: { cookie } });
-    expect(res.status).toBe(404);
-    expect(await res.text()).toContain("Not found");
+    // The slug and the id are now read concurrently, so a URL where *neither*
+    // names anything reaches the id read that used to be skipped once the slug
+    // had already failed. It still has to be a 404 page rather than a 500.
+    for (const path of [
+      "/w/crux/problems/9999",
+      "/w/nope/problems/9999",
+      "/w/nope/problems/not-a-number",
+    ]) {
+      const res = await get(path, { headers: { cookie } });
+      expect(res.status, path).toBe(404);
+      expect(await res.text()).toContain("Not found");
+    }
   });
 
   test("corpus text is escaped, not interpolated as markup", async () => {

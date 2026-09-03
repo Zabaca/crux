@@ -10,20 +10,21 @@
  * Every page is server-rendered from `query()` — the same named reads the CLI
  * asks for — so a `--json` shape and the page that displays it can never drift
  * apart, and no page composes SQL of its own. Which rows a page may show is not
- * decided here either: every function takes the viewing Principal and hands it
- * to `query()`, which is the one place the tenancy boundary is applied
- * (ADR-0013). A Workstream the viewer does not own reads as missing, so these
- * pages 404 on it exactly as they do on a slug that never existed.
+ * decided here either: every function takes the `ReadContext` the request
+ * resolved — the viewing Principal *and* its scope — and hands it to `query()`,
+ * which is the one place the tenancy boundary is applied (ADR-0013). A
+ * Workstream the viewer does not own reads as missing, so these pages 404 on it
+ * exactly as they do on a slug that never existed.
  */
 import { query } from "@crux/core/reads";
 import type {
   ObservationDetail,
   ObservationSummary,
   ProblemDetail,
+  ReadContext,
   WorkstreamRow,
   WorkstreamSummary,
 } from "@crux/core/reads";
-import type { ReadContext } from "@crux/core/reads";
 
 import { html, isoDate as date, type Html } from "./html.js";
 

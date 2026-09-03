@@ -99,6 +99,8 @@ export type PageContext =
       /** Hand this to every `query()` on the page: the scope is resolved once,
        * here, and re-resolving it per read is what this carries it to avoid. */
       read: ReadContext;
+      /** The same row as `read.principal`, with the name and address the shell
+       * prints. Reads take `read`; the layout takes this. */
       viewer: Viewer;
       workspace: string;
     }

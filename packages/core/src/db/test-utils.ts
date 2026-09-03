@@ -18,6 +18,9 @@ import { createD1Db, type CruxDb } from "./client.js";
 export type CountedDb = {
   /** Hand this to the code under test in place of a real handle. */
   db: CruxDb;
+  /** The wrapped binding itself, for code that builds its own handle out of an
+   * `Env` rather than being handed one. */
+  binding: D1Database;
   /** Every statement prepared, in the order it was prepared. */
   statements: string[];
   /** The most statements ever executing at the same moment. 1 means every one
@@ -87,5 +90,5 @@ export function countingD1(binding: D1Database): CountedDb {
     },
   });
 
-  return { db: createD1Db(proxy), statements, peakConcurrency: () => peak };
+  return { db: createD1Db(proxy), binding: proxy, statements, peakConcurrency: () => peak };
 }

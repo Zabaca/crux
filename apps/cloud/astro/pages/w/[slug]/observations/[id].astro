@@ -25,12 +25,12 @@ if (!ctx.ok) return ctx.response;
 const slug = Astro.params.slug!;
 const id = Astro.params.id!;
 
+// The island needs the Workstream this row belongs to, and the Observation
+// carries it — asking again would be a second read for an answer
+// `observationPage` has already refused to render without, so it hands the
+// detail back instead.
 let rendered;
 try {
-  // The island needs the Workstream this row belongs to, and the Observation
-  // carries it — asking again by slug would be a second read for an answer
-  // `observationPage` has already refused to render without, so it hands the
-  // detail back instead.
   rendered = await observationPage(ctx.read, slug, id);
 } catch (err) {
   if (!(err instanceof PageNotFound)) throw err;
