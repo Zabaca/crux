@@ -54,17 +54,34 @@ export function landingPage(opts: { observationCap: number }): {
 
       <div id="start" class="land-first">
         ${shell([
+          { cmd: `crux workstream add --slug crux --title "Crux"` },
           {
             cmd: `crux observation add -w crux --content "handlers spend\na third of every call on status-only queries"`,
           },
         ])}
         <p class="land-under">No account · No token · No invite · The corpus is yours</p>
         <p class="land-first-say">
-          There is no project to create first and nothing to fill in.
-          <strong>First use mints your Principal</strong> and writes it down, so the second command
-          already knows who you are.
+          Nothing to sign up for and nothing to configure.
+          <strong>The first command mints your Principal</strong> and writes it down, so the second
+          command already knows who you are.
         </p>
       </div>
+
+      <section>
+        <h2>Get it<span class="dot">.</span></h2>
+        <p>
+          Crux is a Claude Code plugin. No account to create and no token to paste — the first
+          command you run mints your Principal.
+        </p>
+        ${shell([
+          { cmd: "/plugin marketplace add Zabaca/crux" },
+          { cmd: "/plugin install crux" },
+        ])}
+        <p>
+          Requires Bun. Or run your own deployment — the source is at
+          <a href="https://github.com/Zabaca/crux">github.com/Zabaca/crux</a>.
+        </p>
+      </section>
 
       <section>
         <div class="land-split">
@@ -118,6 +135,11 @@ export function landingPage(opts: { observationCap: number }): {
           What it does keep is the judgement no tracker records. A closed ticket says
           <strong>won't do</strong>. It never says the approach could not handle the load.
         </p>
+        <p>
+          Before synthesizing one, <code>crux search "&lt;a few words&gt;"</code> checks every
+          Workstream for a near-twin — Problem titles, descriptions, and Observation content —
+          so a duplicate's Evidence doesn't split across two rows.
+        </p>
       </section>
 
       <section>
@@ -132,6 +154,7 @@ export function landingPage(opts: { observationCap: number }): {
           <li>
             <span class="k">The agent files. A Principal appears.</span>
             ${shell([
+              { cmd: `crux workstream add --slug crux --title "Crux"` },
               {
                 cmd: `crux observation add -w crux --content "handlers spend a third of every call"`,
               },
@@ -237,6 +260,11 @@ export function landingPage(opts: { observationCap: number }): {
         <p class="plain">
           A Principal is a token, not a person. It lives on the machine that minted it — claiming an
           address is what makes the corpus reachable from anywhere else.
+        </p>
+        <p class="plain">
+          Once claimed, a Workstream is also a browser page — a drag-and-drop board that updates
+          live as the CLI files against it. Every command, and the rest of the docs, are at
+          <a href="/docs">/docs</a>.
         </p>
         <p>Crux · Open source</p>
       </footer>
