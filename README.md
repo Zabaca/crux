@@ -329,8 +329,8 @@ succeeded and the deploy did not.
 
 - [`.claude-plugin/`](.claude-plugin/) — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
 - [`skills/crux/`](skills/crux/) — the Crux skill that teaches Claude when and how to operate the CLI.
-- [`packages/core`](packages/core) — schema, transitions, `dispatch()` and `query()`, validation, config loader.
-- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, and the HTTP client every command goes through.
+- [`packages/core`](packages/core) — the engine: schema, transitions, `dispatch()` and `query()`, identity, and the doc-tree walker. Nothing here is CLI-only.
+- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, the HTTP client every command goes through, the Zod schemas its `--json` output and its typed arguments are checked against, and the `config.toml` loader.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding, the production database rebuild
   (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, and the favicon

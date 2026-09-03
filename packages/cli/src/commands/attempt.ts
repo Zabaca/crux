@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { OkWithIdOutput, OkWithStatusOutput } from "@crux/core/validation";
+import { OkWithIdOutput, OkWithStatusOutput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
 import type { AddAttemptPayload, CloseAttemptPayload } from "@crux/core/actions";
 import { api } from "../api-client.js";

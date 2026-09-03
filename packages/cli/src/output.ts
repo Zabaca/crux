@@ -14,7 +14,11 @@ export function setCaptureWriter(fn: ((payload: unknown) => void) | null): void 
   captureWriter = fn;
 }
 
-/** Minimal interface satisfied by any Zod schema (avoids importing zod into cli). */
+/**
+ * Minimal interface satisfied by any Zod schema. Structural rather than a `ZodType`
+ * so `emit` stays the writer and nothing more — the schemas it is handed live in
+ * `./validation/`, and swapping what builds them is not a change to this file.
+ */
 export interface OutputSchema {
   parse(data: unknown): unknown;
 }

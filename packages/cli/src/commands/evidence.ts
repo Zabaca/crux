@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { OkWithIdOutput } from "@crux/core/validation";
+import { OkWithIdOutput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
 import type { AddEvidencePayload } from "@crux/core/actions";
 import { api } from "../api-client.js";

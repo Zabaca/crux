@@ -1,7 +1,7 @@
 import { defineCommand } from "citty";
 import { formatStateValue } from "@crux/core/view-state";
 import { emit, setJsonMode } from "../output.js";
-import { ViewStateOutput, ViewPathOutput } from "@crux/core/validation";
+import { ViewStateOutput, ViewPathOutput } from "../validation/index.js";
 import { api } from "../api-client.js";
 
 type ViewPayload = {

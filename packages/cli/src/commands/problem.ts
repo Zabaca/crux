@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { OkWithStatusOutput, ProblemShowOutput, RoadmapStage } from "@crux/core/validation";
+import { OkWithStatusOutput, ProblemShowOutput, RoadmapStage } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
 import type {
   AddProblemPayload,
