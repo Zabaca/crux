@@ -13,6 +13,54 @@ Every version here except `0.1.0` was cut by `/release`
 verified against `/health` before its tag was pushed. A tag on `origin` is
 therefore a release that reached production and was checked there.
 
+## 0.3.0 — 2026-09-03
+
+Pages stop being slow, one Principal can no longer learn what another has named
+its Workstreams, and the door to *done* is named for what it does.
+
+### Breaking
+
+- **`crux outcome add` is now `crux problem complete`.** Recording an Outcome is
+  how a Problem finishes, so the command lives on the Problem and says so.
+  `crux outcome list` and `crux outcome show` are unchanged. The dispatch action
+  `ADD_OUTCOME` is likewise `COMPLETE_PROBLEM`.
+- **`crux browse` is gone**, with the TUI behind it. The browser is the human
+  surface and the CLI is the agent's; the terminal UI was a third thing serving
+  neither.
+
+### Faster
+
+- **Authorization resolves in one D1 round trip instead of five.** Every read
+  used to pay a token join, three `users` lookups and a Workstream query in
+  strict sequence before its own query began — depth is what D1 charges for, so
+  an empty corpus cost the same as a full one. They are one join apart and now
+  collapse into a single statement.
+- **Independent reads stop waiting for each other.** Three sites awaited round
+  trips in series that had no dependency between them.
+
+### Safer
+
+- **Workstream slugs are unique per owner, not per deployment.** A refusal used
+  to tell you somebody else held that name, and minting a Principal is free — so
+  the directory of other tenants' area names was enumerable. Slugs are scoped to
+  their owner like every other visibility rule, which also stops one Principal
+  squatting a name for everybody.
+- **The Principal token file is no longer world-readable**, and says it already
+  exists rather than silently overwriting.
+- **Live refresh is keyed to one Principal**, so a claimed corpus no longer
+  hears its own writes echo back.
+
+### Fixed
+
+- **A view snapshot with no state value restores cleanly** instead of throwing.
+- **The homepage stops describing commands that do not exist**, and stops
+  offering `/docs` to visitors who cannot read it.
+
+### Under the hood
+
+The TUI package and its skill are deleted; a test-collection timeout that only
+ever failed in CI is fixed.
+
 ## 0.2.0 — 2026-09-03
 
 Production stops moving on its own, and the deployment can now be asked which
