@@ -66,7 +66,9 @@ export const workstreams = sqliteTable("workstreams", {
   slug: text("slug").notNull().unique(),
   title: text("title").notNull(),
   description: text("description"),
-  ownerId: text("owner_id").references(() => users.id),
+  ownerId: text("owner_id")
+    .notNull()
+    .references(() => users.id),
   createdAt: integer("created_at")
     .notNull()
     .default(sql`(unixepoch() * 1000)`),

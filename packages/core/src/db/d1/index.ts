@@ -123,7 +123,7 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
     slug text NOT NULL,
     title text NOT NULL,
     description text,
-    owner_id text REFERENCES users(id),
+    owner_id text NOT NULL REFERENCES users(id),
     created_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
     updated_at integer DEFAULT (unixepoch() * 1000) NOT NULL,
     archived_at integer
