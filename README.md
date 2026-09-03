@@ -175,15 +175,18 @@ Production only — there is no preview environment.
 **A pull request is verified before it can merge.**
 [`pull-request.yml`](.github/workflows/pull-request.yml) runs `bun run verify` —
 lint, typecheck, `docs:check`, the suite — on every PR against `main`, and
-`main` requires that check to pass before a merge lands. The PR job holds no
-secrets: it has nothing to deploy, so it has no business being able to. Verifying
-only on the merge made the merge itself the first verification, which is how
-`main` ended up ahead of production once already.
+and once the [`main` ruleset](docs/runbooks/protect-main.md) is applied, `main`
+refuses a merge whose `Verify` has not passed. Until it is, the check is
+visible but advisory — applying it needs repository admin, which the CI token
+deliberately does not hold. The PR job holds no secrets either: it has nothing
+to deploy, so it has no business being able to. Verifying only on the merge made
+the merge itself the first verification, which is how `main` ended up ahead of
+production once already.
 
 **Merging to `main` deploys.** [`production.yml`](.github/workflows/production.yml)
 runs the same `bun run verify`, then `zbc apply production`. The sequence lives
 in `package.json`, in one place, so the gate on the pull request and the gate on
-the deploy cannot drift apart. Both commands work from an operator's machine:
+the deploy cannot drift apart. All three work from an operator's machine:
 
 ```sh
 bun run scripts/build-docs.ts   # derive the doc tree first on a fresh checkout
