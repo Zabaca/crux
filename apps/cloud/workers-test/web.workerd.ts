@@ -8,9 +8,10 @@ import { dispatch } from "@crux/core/actions";
 import { eq } from "drizzle-orm";
 
 // Seam: the deployed request path, same as api.workerd.ts. The browser surfaces
-// — sign-in, invite, the read pages, Members and CLI tokens — are all HTTP on
-// this Worker, so `SELF.fetch` is the interface they are tested through. No page
-// module is imported and poked directly.
+// — sign-in, invite, the pages showing corpus data, Members and CLI tokens —
+// are all HTTP on this Worker, whichever of its two renderers answers, so
+// `SELF.fetch` is the interface they are tested through. No page module is
+// imported and poked directly.
 
 let db: CruxDb;
 
@@ -382,9 +383,10 @@ describe("removing a Member", () => {
         body: JSON.stringify({ kind: "WORKSTREAM_LIST" }),
       });
 
-    // Both doors open before the removal, and both renderers with them: `/` is
-    // the hand-written entry's own page, `/w/<slug>` is Astro's. They resolve
-    // the session through different functions, so a gate added to one and not
+    // Both doors open before the removal, and both renderers with them: `/w/<slug>`
+    // is Astro's page, and `/` is Astro's too until it declines, at which point
+    // the hand-written entry answers it through its own session resolution. Two
+    // functions resolve a session on this Worker, so a gate added to one and not
     // the other would leave half the site readable.
     expect((await get("/", { headers: { cookie: leaver.cookie } })).status).toBe(200);
     expect((await get("/w/crux", { headers: { cookie: leaver.cookie } })).status).toBe(200);
@@ -565,11 +567,13 @@ describe("read pages", () => {
 /**
  * Live refresh on the pages showing corpus data.
  *
- * The four of them are server-rendered documents with nothing else to hydrate,
- * so what makes them fresh is one island subscribing to this Member's
- * ViewStateDO stream and re-reading the page. What is checkable through the
- * request path is that the island is on the page and which Workstream it is
- * listening for — the filtering itself is pinned in
+ * They are server-rendered documents — the island holds no copy of the corpus
+ * — so what makes them fresh is one subscription to this Member's ViewStateDO
+ * stream and a re-read of the page. On the Problem page it hydrates alongside
+ * the action bar; on the other three it is the only island there is.
+ *
+ * What is checkable through the request path is that the island is on the page
+ * and which Workstream it is listening for — the filtering itself is pinned in
  * `astro/lib/__tests__/view-stream.test.ts`, against the same subscriber.
  */
 describe("live refresh", () => {
@@ -613,6 +617,32 @@ describe("live refresh", () => {
     const res = await get(`/w/crux/observations/${observationId}`, { headers: { cookie } });
     expect(res.status).toBe(200);
     expect(island(await res.text(), "LiveRefresh")).toContain("WS-crux");
+  });
+
+  test("a moved route that names nothing still lands on the 404 page", async () => {
+    const { cookie } = await inviteAndJoin("live-404@example.com", "Live Missing");
+    // Two renderers answer these URLs between them: Astro declines with a bare
+    // 404 and the hand-written entry renders the page. A reader should not be
+    // able to tell, so what is asserted is the page, not the status alone.
+    for (const path of ["/w/nope/observations", "/w/crux/observations/OBS-999"]) {
+      const res = await get(path, { headers: { cookie } });
+      expect(res.status).toBe(404);
+      expect(await res.text()).toContain("Not found");
+    }
+  });
+
+  test("the moved routes are still behind the session gate", async () => {
+    for (const path of ["/", "/w/crux/observations", "/w/crux/observations/OBS-1"]) {
+      const res = await get(path);
+      // `/` is the exception: it answers the public homepage rather than
+      // bouncing, which is the whole reason it has two answers.
+      if (path === "/") {
+        expect(res.status).toBe(200);
+        continue;
+      }
+      expect(res.status).toBe(302);
+      expect(res.headers.get("location")).toContain("/signin?next=");
+    }
   });
 
   test("the account pages ship no client JavaScript at all", async () => {

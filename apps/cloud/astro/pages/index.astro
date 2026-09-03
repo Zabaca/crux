@@ -6,10 +6,13 @@
  * the URL onto Astro is a routing change, not a rewrite. What Astro adds is the
  * subscription, which needs an island and so needs this renderer (ADR-0009).
  *
- * A request with no session falls through with a 404 rather than redirecting.
- * `/` is the one address with two answers — the Workstream list for a Member,
- * the public homepage for a stranger (ADR-0013) — and the second of them lives
- * in `router.ts`, which is what the Worker tries next when Astro answers 404.
+ * A request this page cannot render falls through with a 404 rather than
+ * answering: `/` is the one address with two answers — the Workstream list for
+ * a Member, the public homepage for a stranger (ADR-0013) — and the second of
+ * them lives in `router.ts`, which is what the Worker tries next when Astro
+ * answers 404. That covers both refusals `pageContext` makes, the missing
+ * session and the deployment with no `BETTER_AUTH_SECRET`, because `handleWeb`
+ * has its own answer for each: the homepage, and the "Not configured" 503.
  */
 import { env } from "cloudflare:workers";
 

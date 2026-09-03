@@ -84,9 +84,7 @@ async function health(env: Env): Promise<Response> {
  *
  * `/` is the exception that proves the list: Astro renders the Workstream list
  * there for a Member and answers 404 for anybody else, which falls through to
- * the public homepage in `handleWeb` (ADR-0013). It is also the one path in the
- * list that a POST reaches, so `astroOwns` hands it over for a GET only — see
- * there.
+ * the public homepage in `handleWeb` (ADR-0013).
  */
 const ASTRO_PATHS = [
   /^\/_astro\//,
@@ -101,16 +99,18 @@ const ASTRO_PATHS = [
 /**
  * Whether Astro answers for this request, rather than `handleWeb`.
  *
- * Path is nearly the whole of it. The method matters at `/` alone: it is the
- * only address in `ASTRO_PATHS` that anything ever POSTs to, and Astro answers
- * an unrouted POST with its CSRF 403 rather than a 404 — which would not fall
- * through, and would replace the answer `handleWeb` gives that request today.
- * Reading a page is a GET; nothing here is written by posting to `/`.
+ * Every path above is a page or an asset, so every one of them is read with a
+ * GET, and the method is part of the test rather than a note about `/`. Astro
+ * answers a request it has no route for with its CSRF 403 rather than a 404,
+ * which does not fall through — so a POST that matched one of these patterns
+ * would be answered by Astro instead of reaching `handleWeb`, which is what
+ * `/` (the public homepage) and any future form under `/w/` would notice.
+ * Nothing here is written by posting to a page: the browser's writes go to
+ * `/v1/dispatch`, which is handled well before this.
  */
 function astroOwns(pathname: string, method: string): boolean {
-  if (!ASTRO_PATHS.some((p) => p.test(pathname))) return false;
-  if (pathname === "/") return method === "GET" || method === "HEAD";
-  return true;
+  if (method !== "GET" && method !== "HEAD") return false;
+  return ASTRO_PATHS.some((p) => p.test(pathname));
 }
 
 /**

@@ -27,8 +27,10 @@ if (!ctx.ok) return ctx.response;
 
 const slug = Astro.params.slug!;
 
-// Resolved here as well as inside the page, because the island needs the
-// Workstream's id and a slug that names nothing has to 404 before either.
+// The island needs the Workstream's id, which is why this is resolved here as
+// well as inside the view. Resolving it first is also this page's 404 gate:
+// `observationListPage` throws `PageNotFound` on a slug that names nothing, and
+// it never reaches it, so there is nothing here to catch.
 const ws = (await query(
   { kind: "WORKSTREAM_BY_SLUG", slug },
   { db: ctx.db, principal: ctx.viewer },

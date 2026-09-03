@@ -8,7 +8,7 @@ import react from "@astrojs/react";
  *
  * `workerEntryPoint` is what keeps that a single Worker: the hand-written
  * `src/index.ts` stays the entry — it still owns `/health`, `/v1` and the
- * server-rendered read pages, and it still exports `ViewStateDO` — and Astro
+ * server-rendered account pages, and it still exports `ViewStateDO` — and Astro
  * wraps it rather than replacing it. `namedExports` is why the Durable Object
  * survives the bundle; without it the class is tree-shaken and the migration
  * in `wrangler.jsonc` refers to a class that is no longer exported.
