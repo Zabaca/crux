@@ -962,6 +962,19 @@ describe("the public homepage", () => {
     expect(body).not.toContain('href="/members"');
   });
 
+  test("it walks the mint-then-claim sequence, which is the part people ask about", async () => {
+    const body = await (await get("/")).text();
+    expect(body).toContain("Mint, then claim");
+    // The command a human runs, and where it has to run.
+    expect(body).toContain("crux claim you@example.com");
+    expect(body).toContain("from the machine holding the token");
+    // Both outcomes, because which one you get depends on the address.
+    expect(body).toContain("becomes");
+    expect(body).toContain("linked");
+    // And the promise the claim page itself makes.
+    expect(body).toContain("Nothing it filed was moved or rewritten");
+  });
+
   test("a Member still gets their Workstream list at /", async () => {
     const { cookie } = await inviteAndJoin("home@example.com", "Home Member");
     const res = await get("/", { headers: { cookie } });

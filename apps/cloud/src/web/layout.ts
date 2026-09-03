@@ -210,6 +210,26 @@ body.land-page .wrap{max-width:62rem;padding:0 clamp(1.15rem,5vw,2rem) 4rem}
 .land-out .hi{color:var(--l-verdi)}
 .land p.land-under{font-family:var(--l-mono);font-size:.66rem;letter-spacing:.1em;
   text-transform:uppercase;color:var(--l-faint);margin:.7rem 0 0;max-width:none}
+/* Mint then claim, as a numbered sequence. Three steps with a real terminal
+   each, because the flow is the part people ask about and prose describing a
+   handshake reads worse than the handshake does. The counter is drawn rather
+   than left to the list marker so it can sit in the copper. */
+.land-steps{list-style:none;counter-reset:step;margin:1.75rem 0 1.5rem;padding:0;
+  display:grid;gap:2rem}
+.land-steps li{counter-increment:step;display:grid;gap:.65rem;position:relative;
+  padding-left:2.4rem}
+.land-steps li::before{content:counter(step);position:absolute;left:0;top:-.1rem;
+  width:1.6rem;height:1.6rem;display:grid;place-items:center;font-size:.72rem;
+  font-weight:700;color:var(--l-copper);border:1px solid var(--l-rule-2);border-radius:50%}
+.land-steps .k{font-family:var(--l-serif);font-size:1.05rem;color:var(--l-bone);
+  line-height:1.5}
+.land-quote{margin:0;padding:.9rem 1.1rem;border:1px solid var(--l-rule);
+  border-left:2px solid var(--l-verdi);background:var(--l-raised);
+  font-family:var(--l-serif);font-size:1rem;line-height:1.6;color:var(--l-muted)}
+.land-quote b{color:var(--l-bone);font-weight:400}
+.land-quote .mono{font-family:var(--l-mono);font-size:.85rem;color:var(--l-verdi)}
+@media (max-width:620px){.land-steps li{padding-left:0}
+  .land-steps li::before{position:static;margin-bottom:.2rem}}
 /* The rules, as terms rather than bullets: the label is the name of the rule,
    and the prose is what it costs you. */
 .land-rules{list-style:none;margin:0;padding:0;display:grid;gap:0;

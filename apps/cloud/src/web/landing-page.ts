@@ -110,6 +110,59 @@ export function landingPage(opts: { observationCap: number }): {
       </section>
 
       <section>
+        <h2>Mint, then claim<span class="dot">.</span></h2>
+        <p>
+          Nothing signs up. The first command mints a <strong>Principal</strong> — a token, not a
+          person — and writes it down. It owns everything filed through it, and every read is scoped
+          to it. When the work is worth keeping, a human attaches themselves to it.
+        </p>
+
+        <ol class="land-steps">
+          <li>
+            <span class="k">The agent files. A Principal appears.</span>
+            ${shell([
+              { cmd: `crux observation add --content "handlers spend a third of every call"` },
+              { out: raw('{ "ok": true, "id": <span class="hi">"OBS-001"</span> }') },
+            ])}
+            <p class="land-under">
+              No signup · The token lands in config.toml · It is the only key to what you file
+            </p>
+          </li>
+          <li>
+            <span class="k">A human claims it, from the machine holding the token.</span>
+            ${shell([
+              { cmd: "crux claim you@example.com" },
+              {
+                out: raw(
+                  '{ "ok": true, "principalId": "USR-2fb29b58aa78675c",\n' +
+                    '  "expiresAt": 1788450658096 }',
+                ),
+              },
+            ])}
+            <p class="land-under">
+              One-shot link · Fifteen minutes · Only that token knows which Principal is asking
+            </p>
+          </li>
+          <li>
+            <span class="k">They open the link.</span>
+            <blockquote class="land-quote">
+              Principal <span class="mono">USR-2fb29b58aa78675c</span> is linked to
+              <b>you@example.com</b>, alongside everything else that address owns. The free
+              allowance no longer applies to it.
+            </blockquote>
+            <p class="land-under">Nothing it filed was moved or rewritten</p>
+          </li>
+        </ol>
+
+        <p>
+          If the address is new, the Principal <em>becomes</em> that identity. If it already has
+          one, the Principal is <em>linked</em> to it — so one person can own many, one per machine,
+          and read across all of them. Until then the allowance is ${cap} Observations, and only
+          writes stop at it.
+        </p>
+      </section>
+
+      <section>
         <h2>The rules<span class="dot">.</span></h2>
         <ul class="land-rules">
           ${rule(
