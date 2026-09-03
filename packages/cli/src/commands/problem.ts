@@ -6,6 +6,7 @@ import type {
   ScheduleProblemPayload,
   UnscheduleProblemPayload,
   AbandonProblemPayload,
+  CompleteProblemPayload,
 } from "@crux/core/actions";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
@@ -94,6 +95,42 @@ const unscheduleCmd = defineCommand({
   },
 });
 
+function asList(v: unknown): string[] {
+  if (Array.isArray(v)) return v as string[];
+  if (typeof v === "string")
+    return v
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  return [];
+}
+
+const completeCmd = defineCommand({
+  meta: {
+    name: "complete",
+    description: "Complete a problem by recording its outcome (terminal).",
+  },
+  args: {
+    id: { type: "positional", required: true },
+    "observed-impact": { type: "string", required: true },
+    learnings: { type: "string" },
+    "follow-up-problems": { type: "string", description: "comma-separated problem ids" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const payload: CompleteProblemPayload = {
+      problem: args.id,
+      observedImpact: args["observed-impact"],
+      learnings: args.learnings,
+      followUpProblemIds: asList(args["follow-up-problems"]),
+    };
+    const { result } = await api().dispatch({ kind: "COMPLETE_PROBLEM", payload });
+    const { id } = result as { id: string };
+    emit(result, OkWithStatusOutput, `problem ${args.id} is done — outcome ${id}`);
+  },
+});
+
 const abandonCmd = defineCommand({
   meta: { name: "abandon", description: "Abandon a problem (terminal)." },
   args: {
@@ -117,6 +154,7 @@ export const problemCommand = defineCommand({
     show: showCmd,
     schedule: scheduleCmd,
     unschedule: unscheduleCmd,
+    complete: completeCmd,
     abandon: abandonCmd,
   },
 });

@@ -99,9 +99,9 @@ judgment, recorded as an Outcome.
 
 Problems start unscheduled (null status). `crux problem schedule <id> --stage now|next|later` only when user has expressed genuine intent. `now` = actively in flight, `next` = queued, `later` = acknowledged but not soon. Leave unscheduled rather than guess.
 
-### Outcome closes the loop
+### Completing a Problem is recording its Outcome
 
-When what became of a Problem is known, `crux outcome add --problem <id>` records it. Recording one is what closes the Problem to `done`; there is no other way.
+When what became of a Problem is known, `crux problem complete <id> --observed-impact "..."` records the Outcome and closes the Problem to `done` in the same act; there is no other way to reach `done`, and no way to record an Outcome without completing the Problem. `--learnings` and `--follow-up-problems` are optional.
 
 ## Titles
 

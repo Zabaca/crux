@@ -91,8 +91,8 @@ export const CloseAttemptAction = z.object({
     })
     .strict(),
 });
-export const AddOutcomeAction = z.object({
-  kind: z.literal("ADD_OUTCOME"),
+export const CompleteProblemAction = z.object({
+  kind: z.literal("COMPLETE_PROBLEM"),
   payload: z.object({
     problem: z.union([z.string(), z.number()]),
     observedImpact: z.string(),
@@ -147,7 +147,7 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AbandonProblemAction,
   AddAttemptAction,
   CloseAttemptAction,
-  AddOutcomeAction,
+  CompleteProblemAction,
   AddObservationAction,
   ArchiveObservationAction,
   AddEvidenceAction,
@@ -183,7 +183,7 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ABANDON_PROBLEM",
   "ADD_ATTEMPT",
   "CLOSE_ATTEMPT",
-  "ADD_OUTCOME",
+  "COMPLETE_PROBLEM",
   "ADD_OBSERVATION",
   "ARCHIVE_OBSERVATION",
   "ADD_EVIDENCE",
@@ -208,7 +208,7 @@ export type UnscheduleProblemPayload = z.infer<typeof UnscheduleProblemAction>["
 export type AbandonProblemPayload = z.infer<typeof AbandonProblemAction>["payload"];
 export type AddAttemptPayload = z.infer<typeof AddAttemptAction>["payload"];
 export type CloseAttemptPayload = z.infer<typeof CloseAttemptAction>["payload"];
-export type AddOutcomePayload = z.infer<typeof AddOutcomeAction>["payload"];
+export type CompleteProblemPayload = z.infer<typeof CompleteProblemAction>["payload"];
 export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];
 export type AddWorkstreamPayload = z.infer<typeof AddWorkstreamAction>["payload"];
 export type RenameWorkstreamPayload = z.infer<typeof RenameWorkstreamAction>["payload"];

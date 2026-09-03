@@ -102,8 +102,8 @@ export function problemActions(
       ],
     },
     {
-      kind: "ADD_OUTCOME",
-      label: "Record an Outcome",
+      kind: "COMPLETE_PROBLEM",
+      label: "Complete",
       fields: [
         problem,
         { name: "observedImpact", label: "What became of it", type: "textarea", required: true },

@@ -346,7 +346,7 @@ describe("Outcome — the door to done", () => {
     const id = await fileProblem("Context evaporates");
 
     const res = await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: { problem: id, observedImpact: "sessions start warm", learnings: "structure wins" },
     });
     expect(res.status).toBe(200);
@@ -369,13 +369,13 @@ describe("Outcome — the door to done", () => {
   test("a Problem carries at most one — the first closes it", async () => {
     const id = await fileProblem("Only once");
     const first = await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: { problem: id, observedImpact: "a" },
     });
     expect(first.status).toBe(200);
 
     const second = await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: { problem: id, observedImpact: "b" },
     });
     expect(second.status).toBe(422);
@@ -394,7 +394,7 @@ describe("Outcome — the door to done", () => {
     await dispatch({ kind: "ABANDON_PROBLEM", payload: { id, rationale: "not worth it" } });
 
     const res = await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: { problem: id, observedImpact: "too late" },
     });
     expect(res.status).toBe(422);
@@ -407,7 +407,7 @@ describe("Outcome — the door to done", () => {
     const followUp = await fileProblem("The next thing");
 
     await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: {
         problem: id,
         observedImpact: "helped, and raised this",
@@ -428,7 +428,7 @@ describe("Outcome — the door to done", () => {
     const id = await fileProblem("Names a stranger");
 
     const res = await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: { problem: id, observedImpact: "done", followUpProblemIds: [9999] },
     });
     expect(res.status).toBe(422);
@@ -1049,7 +1049,7 @@ describe("the boundary is not an oracle", () => {
     ).json()) as { result: { id: number } };
 
     const res = await dispatch({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: {
         problem: mine.result.id,
         observedImpact: "done",

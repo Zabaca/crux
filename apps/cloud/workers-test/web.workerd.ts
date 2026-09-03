@@ -928,13 +928,13 @@ describe("contextual page actions", () => {
     // Recording an Outcome closes the Problem, so a second one has nothing to
     // close — the transition is refused rather than silently ignored.
     const first = await browserDispatch(
-      { kind: "ADD_OUTCOME", payload: { problem: problemId, observedImpact: "warm starts" } },
+      { kind: "COMPLETE_PROBLEM", payload: { problem: problemId, observedImpact: "warm starts" } },
       cookie,
     );
     expect(first.status).toBe(200);
 
     const res = await browserDispatch(
-      { kind: "ADD_OUTCOME", payload: { problem: problemId, observedImpact: "again" } },
+      { kind: "COMPLETE_PROBLEM", payload: { problem: problemId, observedImpact: "again" } },
       cookie,
     );
     expect(res.status).toBe(422);
@@ -949,7 +949,7 @@ describe("contextual page actions", () => {
 
     const res = await browserDispatch(
       {
-        kind: "ADD_OUTCOME",
+        kind: "COMPLETE_PROBLEM",
         payload: {
           problem: problemId,
           observedImpact: "sessions start warm",

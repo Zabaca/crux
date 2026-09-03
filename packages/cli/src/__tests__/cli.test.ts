@@ -136,6 +136,20 @@ describe("reads", () => {
     expect(subs.sort()).toEqual(["add", "list", "rename", "show"]);
   });
 
+  test("outcome has no add — the Problem is completed, and that is what records one", async () => {
+    // `outcome add` read like filing a child entity; the same call closes the
+    // Problem, so the verb lives on `problem`. What is left here are the reads.
+    const subs = Object.keys((outcomeCommand as AnyCmd).subCommands ?? {});
+    expect(subs.sort()).toEqual(["list", "show"]);
+
+    const rows = [{ id: "OUT-001", problemId: 7, observedImpact: "sessions start warm" }];
+    const calls = stubServer({ "POST /v1/query": { result: rows } });
+    const out = await capture(() => runCmd(outcomeCommand as AnyCmd, "list", { json: true }));
+
+    expect(calls[0]!.body).toEqual({ kind: "OUTCOME_LIST" });
+    expect(out).toEqual(rows);
+  });
+
   test("workstream list asks for WORKSTREAM_LIST and prints what came back", async () => {
     const rows = [{ id: "WS-smoke", slug: "smoke", title: "Smoke WS" }];
     const calls = stubServer({ "POST /v1/query": { result: rows } });
@@ -368,14 +382,14 @@ describe("writes", () => {
     });
   });
 
-  test("outcome add names the Problem it closes, and splits its follow-ups", async () => {
+  test("problem complete names the Problem it closes, and splits its follow-ups", async () => {
     const calls = stubServer({
       "POST /v1/dispatch": { revision: 3, result: { ok: true, id: "OUT-001", status: "done" } },
     });
 
     const out = await capture(() =>
-      runCmd(outcomeCommand as AnyCmd, "add", {
-        problem: "7",
+      runCmd(problemCommand as AnyCmd, "complete", {
+        id: "7",
         "observed-impact": "sessions start warm",
         learnings: "structure wins",
         "follow-up-problems": "8, 9",
@@ -384,7 +398,7 @@ describe("writes", () => {
     );
 
     expect(calls[0]!.body).toEqual({
-      kind: "ADD_OUTCOME",
+      kind: "COMPLETE_PROBLEM",
       payload: {
         problem: "7",
         observedImpact: "sessions start warm",
@@ -742,7 +756,6 @@ describe("the workstream is an argument, not shared state", () => {
   test.each([
     ["evidence", evidenceCommand, "link", { observation: "OBS-1" }],
     ["attempt", attemptCommand, "add", { ref: "https://tracker/1", label: "l" }],
-    ["outcome", outcomeCommand, "add", { "observed-impact": "i" }],
   ])("%s %s refuses without a problem id", async (_name, cmd, sub, args) => {
     const calls = stubServer({ "POST /v1/dispatch": { revision: 1, result: { ok: true } } });
 
@@ -755,7 +768,7 @@ describe("the workstream is an argument, not shared state", () => {
     expect(err.code).toBe("VALIDATION_ERROR");
     expect(err.message).toContain("crux problem list -w <slug>");
     // The refusal names the argument the way *this* command spells it: a
-    // positional for `evidence link`, a flag for the other two. An agent
+    // positional for `evidence link`, a flag for `attempt add`. An agent
     // retries on what it reads here.
     expect(err.details).toMatchObject({ discover: "crux problem list -w <slug>" });
     expect(calls).toHaveLength(0);
