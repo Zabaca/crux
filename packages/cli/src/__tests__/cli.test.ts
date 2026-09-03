@@ -9,7 +9,7 @@
  * a real D1 — `packages/core/workers-test/reads.workerd.ts`.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -727,17 +727,29 @@ describe("view", () => {
     expect(out).toEqual({ path: "https://crux.test/v1/view" });
   });
 
-  test("view reset posts to the deployment", async () => {
-    const calls = stubServer({
-      "POST /v1/view/reset": {
-        ok: true,
-        value: { viewing: "workstream_list" },
-        context: { workstreamId: null, problemId: null },
-      },
-    });
-    await capture(() => runCmd(viewCommand as AnyCmd, "reset", { json: true }));
-    expect(calls[0]!.method).toBe("POST");
-    expect(calls[0]!.url).toBe("https://crux.test/v1/view/reset");
+  test("the view is readable and nothing on offer can move it", () => {
+    // `send`, `next` and `reset` are gone: one view is shared by every agent
+    // holding this Principal's token, so a command that moved it would move the
+    // page under whoever is reading — the same collision `-w` closed, relocated.
+    const subs = Object.keys((viewCommand as AnyCmd).subCommands ?? {});
+    expect(subs.sort()).toEqual(["get", "path"]);
+  });
+
+  test("workstream has no select — discovery replaces selection", () => {
+    const subs = Object.keys((workstreamCommand as AnyCmd).subCommands ?? {});
+    expect(subs).not.toContain("select");
+    expect(subs.sort()).toEqual(["add", "list", "rename", "show"]);
+  });
+
+  test("no command but `view` itself reads the view", () => {
+    // The trap this closes is an agent taking `context.workstreamId` as a
+    // default. Nothing may reach /v1/view except the command whose whole job is
+    // to print it.
+    const dir = join(import.meta.dir, "..", "commands");
+    const offenders = readdirSync(dir)
+      .filter((f) => f !== "view.ts")
+      .filter((f) => readFileSync(join(dir, f), "utf8").includes("/v1/view"));
+    expect(offenders).toEqual([]);
   });
 });
 

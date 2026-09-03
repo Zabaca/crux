@@ -222,24 +222,26 @@ Do not retry the command, do not mint a fresh Principal to route around it, and
 do not silently drop what the user asked to file: tell them it was not filed,
 and hold the content so it can be filed once the cap is lifted.
 
-## View control bus
+## The human's view — readable, not drivable
 
-The view-state machine tracks what the user is looking at across web UI and TUI. Use to navigate surfaces and read current focus without screenshots.
+The view-state machine tracks what the human is looking at in the browser and
+the TUI. You may read it; you may not move it.
 
 ```sh
-crux view get --json        # current state + context
-crux view next --json       # legal events from current state
-crux view send <EVENT> --json
-crux view send <EVENT> --payload '{"id":"x"}' --json
-crux view reset --json
-crux view path
+crux view get --json        # what they are looking at: state + context
+crux view path              # the endpoint serving it
 ```
 
-`crux view send` fails non-zero if event is refused. Check `crux view next` first when uncertain.
+There is no `view send`, no `view next` and no `view reset`, and no
+`workstream select`. One view is shared by every agent holding this Principal's
+token, so a command that moved it would move the page under whoever is reading
+it, and two agents would fight over the screen.
 
-**Critical:** Always use `crux view send`; never edit `view-state.json` directly. Direct edits bypass guards and corrupt state.
-
-**Data mutations do not push to surfaces.** Open web UI won't auto-refresh on db changes — user must reload. Navigation does update live. Two separate channels.
+**The view is never a source of defaults.** Do not read `context.workstreamId`
+out of `view get` and use it as the Workstream for a write — that reinstates the
+shared-state collision in your own reasoning instead of in the CLI. The
+Workstream comes from `-w <slug>`, chosen from `crux workstream list`, every
+time.
 
 ## Browse (TUI fallback)
 
