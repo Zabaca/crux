@@ -141,7 +141,9 @@ To point at a deployment of your own instead, run
 There is no local database. Every `crux` command is an HTTP call to the
 deployment ([ADR-0003](docs/adr/0003-cloud-crux-client-server.md)): reads go to
 `POST /v1/query` as a _named_ read, writes to `POST /v1/dispatch` as an action,
-and view-state lives in a per-user Durable Object behind `/v1/view`. Both
+and view-state lives in a Durable Object behind `/v1/view`, one per human —
+keyed by the root Principal, so every Principal a claim linked into one person
+pushes to and listens on the same object ([ADR-0014](docs/adr/0014-view-state-is-the-humans.md)). Both
 entry points are in core — `query()` beside `dispatch()` — so an invariant and a
 `--json` shape each exist in exactly one place, which is the only arrangement
 that survives two people writing at once.

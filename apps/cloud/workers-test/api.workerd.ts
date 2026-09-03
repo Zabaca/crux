@@ -1191,7 +1191,9 @@ async function frameOn(bearer: string, act: () => Promise<unknown>): Promise<Vie
   await act();
   let buffered = "";
   // The stream opens with a `: connected` comment; the frame we want is the
-  // next one. Bounded so a stream that never carries it fails rather than hangs.
+  // next one. The bound is on chunks that are not it — a stream that carries no
+  // frame at all blocks in `read()` and is caught by the test timeout, since
+  // there is no heartbeat to wake it.
   for (let i = 0; i < 5; i++) {
     const { value, done } = await reader.read();
     if (done) break;
@@ -1349,7 +1351,9 @@ describe("live refresh follows the linked set, not the token", () => {
     await db
       .update(users)
       // Exactly the production shape: the root carries the address, the linked
-      // row carries none and points at it.
+      // row carries none and points at it. Load-bearing rather than decorative
+      // — capacity reads `isClaimed` across the whole set, so without it these
+      // Principals file against the free allowance.
       .set({ email: "dana@example.com" })
       .where(eq(users.id, root.principal.id));
     await db
@@ -1415,14 +1419,18 @@ describe("live refresh follows the linked set, not the token", () => {
   test("a Principal whose root was removed falls back to its own object", async () => {
     const { root, linked } = await linkedPair();
     await workstreamAs(linked.token, "orphaned");
+
+    const revision = async (bearer: string) =>
+      ((await (await as(bearer, "/v1/view")).json()) as { revision: number }).revision;
+    // While the link stands, the write it just made is on the shared object.
+    expect(await revision(linked.token), "the shared object carries the write").toBeGreaterThan(0);
+
     expect(await removeMember(db, { userId: root.id })).toBe(true);
 
-    // Scoped to nothing, so there is nothing left to file — but the object it
-    // reads is still its own rather than the dead root's, which is what keeps
-    // the fallback from being a second way into somebody else's stream.
-    const stream = await as(linked.token, "/v1/view/stream");
-    expect(stream.status).toBe(200);
-    await stream.body!.cancel();
-    expect((await as(linked.token, "/v1/view")).status).toBe(200);
+    // And now it reads an object with nothing in it — a fresh one, addressed by
+    // its own id. Still 200: the Principal authenticates, it is only scoped to
+    // nothing. Were the fallback the dead root's id instead, the revision above
+    // would still be there.
+    expect(await revision(linked.token), "the fallback is a different object").toBe(0);
   });
 });
