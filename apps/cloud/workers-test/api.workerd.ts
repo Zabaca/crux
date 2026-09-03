@@ -415,26 +415,22 @@ describe("Outcome — the door to done", () => {
 });
 
 describe("view routes", () => {
-  test("GET /v1/view/next answers with the current state and its event list", async () => {
-    const body = (await (await call("/v1/view/next")).json()) as {
-      value: unknown;
-      events: Array<{ type: string; payload: unknown }>;
-    };
-    expect(body.value).toEqual({ viewing: "workstream_list" });
-    expect(Array.isArray(body.events)).toBe(true);
-  });
-
-  test("POST /v1/view/reset returns the view to its initial state", async () => {
+  test("the view can be read and cannot be driven", async () => {
+    // An agent may see what the human is looking at; moving them is not on
+    // offer, because one view is shared by every client holding the token.
     await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });
-    const reset = (await (await call("/v1/view/reset", { method: "POST" })).json()) as {
-      ok: boolean;
-      context: { workstreamId: string | null };
-    };
-    expect(reset.ok).toBe(true);
-    expect(reset.context.workstreamId).toBeNull();
 
+    for (const gone of [
+      await call("/v1/view/next"),
+      await call("/v1/view/reset", { method: "POST" }),
+    ]) {
+      expect(gone.status).toBe(404);
+      expect(await gone.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+    }
+
+    // And the read still answers, with the state the dispatch left behind.
     const view = (await (await call("/v1/view")).json()) as { stateLabel: string };
-    expect(view.stateLabel).toContain("workstream_list");
+    expect(view.stateLabel).toContain("workstream_dashboard");
   });
 
   test("view state is per user — another token sees its own", async () => {

@@ -20,15 +20,6 @@ export type ViewContext = {
   problemId: string | null;
 };
 
-// Keyed by ViewEvent["type"] so TypeScript errors if a new event is added
-// to the schema above without updating this map.
-export const VIEW_EVENT_PAYLOAD_HINTS: Record<ViewEvent["type"], Record<string, string> | null> = {
-  SELECT_WORKSTREAM: { id: "string" },
-  OPEN_PROBLEM: { id: "string" },
-  SELECT_INTAKE: null,
-  BACK: null,
-};
-
 export const viewMachine = setup({
   types: {
     context: {} as ViewContext,

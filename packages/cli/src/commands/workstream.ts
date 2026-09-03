@@ -1,12 +1,7 @@
 import { defineCommand } from "citty";
 import { OkWithIdOutput, RenameOutput } from "@crux/core/validation";
-import { NotFoundError } from "@crux/core/transitions";
 import { emit, setJsonMode } from "../output.js";
-import type {
-  AddWorkstreamPayload,
-  RenameWorkstreamPayload,
-  SelectWorkstreamPayload,
-} from "@crux/core/actions";
+import type { AddWorkstreamPayload, RenameWorkstreamPayload } from "@crux/core/actions";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
 
@@ -87,30 +82,11 @@ const renameCmd = defineCommand({
   },
 });
 
-const selectCmd = defineCommand({
-  meta: { name: "select", description: "Select a workstream (sets view state context)." },
-  args: {
-    slug: { type: "positional", required: true, description: "Workstream slug" },
-    json: { type: "boolean" },
-  },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const client = api();
-    const row = await client.query<WorkstreamRow | null>({
-      kind: "WORKSTREAM_BY_SLUG",
-      slug: args.slug,
-    });
-    if (!row) throw new NotFoundError(`workstream not found: ${args.slug}`, { id: args.slug });
-    const payload: SelectWorkstreamPayload = { id: row.id };
-    const { viewState, revision } = await client.dispatch({ kind: "SELECT_WORKSTREAM", payload });
-    emit(
-      { ok: true, value: viewState, revision, context: { workstreamId: row.id } },
-      `selected ${row.id}`,
-    );
-  },
-});
-
 export const workstreamCommand = defineCommand({
   meta: { name: "workstream", description: "Workstreams." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, rename: renameCmd, select: selectCmd },
+  // There is no `select`. Pointing the human's screen at a Workstream was the
+  // only thing it did once nothing resolved a default from view-state, and one
+  // shared screen is not something parallel agents can share. Discovery
+  // replaces selection: `list` to choose, `-w` to act.
+  subCommands: { add: addCmd, list: listCmd, show: showCmd, rename: renameCmd },
 });

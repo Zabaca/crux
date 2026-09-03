@@ -14,15 +14,7 @@ import { CLAIM_TTL_MS, createClaim } from "@crux/core/auth/claims";
 import { claimLinkEmail } from "@crux/core/auth/email";
 import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
 import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
-import {
-  loadViewMetaFromBlob,
-  loadStateFromBlob,
-  formatStateValue,
-  nextEvents,
-  resetStateWithStore,
-  VIEW_EVENT_PAYLOAD_HINTS,
-  type ViewEvent,
-} from "@crux/core/view-state";
+import { loadViewMetaFromBlob, loadStateFromBlob, formatStateValue } from "@crux/core/view-state";
 import { query } from "@crux/core/reads";
 import { CruxError } from "@crux/core/transitions";
 import { ZodError } from "zod";
@@ -300,23 +292,9 @@ export async function handleApi(
     });
   }
 
-  // GET /v1/view/next — legal events from the current state, with payload hints.
-  if (pathname === "/v1/view/next" && request.method === "GET") {
-    const snap = loadStateFromBlob(await viewStoreFor(env, authed.userId).read());
-    return json({
-      value: snap.value,
-      events: nextEvents(snap).map((type) => ({
-        type,
-        payload: VIEW_EVENT_PAYLOAD_HINTS[type as ViewEvent["type"]] ?? null,
-      })),
-    });
-  }
-
-  // POST /v1/view/reset — back to the initial state.
-  if (pathname === "/v1/view/reset" && request.method === "POST") {
-    const snap = await resetStateWithStore(viewStoreFor(env, authed.userId));
-    return json({ ok: true, value: snap.value, context: snap.context });
-  }
+  // There is no /v1/view/next and no /v1/view/reset. The view is the human's:
+  // it is readable above, and the only thing that moves it is a view action
+  // through /v1/dispatch, which is what their own browser and TUI send.
 
   // GET /v1/view/stream — the push stream, proxied from the user's DO.
   if (pathname === "/v1/view/stream" && request.method === "GET") {

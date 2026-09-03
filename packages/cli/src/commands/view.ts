@@ -14,7 +14,10 @@ type ViewPayload = {
 };
 
 const getCmd = defineCommand({
-  meta: { name: "get", description: "Print current view state." },
+  meta: {
+    name: "get",
+    description: "Print what the human is looking at. Never a source of defaults.",
+  },
   args: { json: { type: "boolean" } },
   async run({ args }) {
     if (args.json) setJsonMode(true);
@@ -35,39 +38,6 @@ const getCmd = defineCommand({
   },
 });
 
-const nextCmd = defineCommand({
-  meta: {
-    name: "next",
-    description: "Print legal events from the current state.",
-  },
-  args: { json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const payload = await api().get<{
-      value: unknown;
-      events: Array<{ type: string; payload: unknown }>;
-    }>("/v1/view/next");
-    const text = payload.events.length
-      ? payload.events
-          .map((e) => `${e.type}${e.payload ? `  ${JSON.stringify(e.payload)}` : "  (no payload)"}`)
-          .join("\n")
-      : "(none)";
-    emit(payload, ViewStateOutput, text);
-  },
-});
-
-const resetCmd = defineCommand({
-  meta: { name: "reset", description: "Reset view state to initial." },
-  args: { json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const payload = await api().post<{ ok: true; value: unknown; context: unknown }>(
-      "/v1/view/reset",
-    );
-    emit(payload, ViewStateOutput, `reset → ${formatStateValue(payload.value as never)}`);
-  },
-});
-
 const pathCmd = defineCommand({
   meta: {
     name: "path",
@@ -83,12 +53,13 @@ const pathCmd = defineCommand({
   },
 });
 
+// The view belongs to the human. An agent may read what they are looking at;
+// moving them is not on offer — several agents steering one screen is the same
+// collision the explicit `-w` was introduced to close, relocated to the screen.
 export const viewCommand = defineCommand({
-  meta: { name: "view", description: "Inspect and drive the view-control bus." },
+  meta: { name: "view", description: "Read the human's current view. Read-only." },
   subCommands: {
     get: getCmd,
-    next: nextCmd,
-    reset: resetCmd,
     path: pathCmd,
   },
 });

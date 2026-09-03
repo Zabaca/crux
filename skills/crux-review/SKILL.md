@@ -121,18 +121,21 @@ When what became of a Problem is known, `crux outcome add --problem <id>` record
 
 If review runs long and the user adds new intake or another session writes, re-run `crux observation list -w <slug> --unlinked` before continuing. State drifts.
 
-## View control bus
+## The human's view — readable, not drivable
 
-Drive web UI / TUI focus during review so the user sees what you're working on:
+You can see what the human is looking at, and you cannot move them:
 
 ```sh
-crux view send OPEN_PROBLEM --payload '{"id":"42"}' --json
-crux view next --json | jq '.events[].type'   # check legal events first
+crux view get --json        # their current state + context
 ```
 
-Always use `crux view send`; never edit `view-state.json` directly.
+`view send`, `view next` and `view reset` are gone, and so is
+`workstream select` — one view is shared by every agent holding this token, so
+driving it means moving the page under someone who is reading it. Say which
+Problem you are working on instead of navigating them to it.
 
-**Data mutations do not push to surfaces.** When you file Evidence, Problems or Attempts, the open web UI won't auto-refresh — user must reload. Navigation does update live.
+**Never take a default from the view.** `context.workstreamId` is where *they*
+are, not where your write belongs; that comes from `-w <slug>` every time.
 
 ## Hand back to intake
 
