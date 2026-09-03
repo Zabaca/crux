@@ -171,7 +171,19 @@ let override: CruxApiClient | null = null;
 
 export function setApiClient(next: CruxApiClient | null): void {
   override = next;
+  minting = null;
 }
+
+/**
+ * The one mint this process will ever do.
+ *
+ * The per-client memo inside `createApiClient` is not enough: `api()` builds a
+ * fresh client per call, and `crux browse` issues several in the same tick. Each
+ * would mint its own Principal, the last `writeConfig` would win, and every
+ * Observation filed under a losing token would be orphaned on a credential
+ * nothing kept — the exact unrecoverable loss this notice warns about.
+ */
+let minting: Promise<string> | null = null;
 
 /**
  * Mint a Principal against `baseUrl` and remember it.
@@ -181,14 +193,53 @@ export function setApiClient(next: CruxApiClient | null): void {
  * filed through it. Persisting it immediately is the point — a token minted and
  * then lost would strand the corpus it just created on the next command.
  */
-async function mintPrincipalToken(baseUrl: string): Promise<string> {
+function mintPrincipalToken(baseUrl: string): Promise<string> {
+  minting ??= mintOnce(baseUrl).catch((err: unknown) => {
+    // A failed mint must not poison the next command in a long-lived process.
+    minting = null;
+    throw err;
+  });
+  return minting;
+}
+
+async function mintOnce(baseUrl: string): Promise<string> {
   const anonymous = createApiClient({ baseUrl, token: "" });
   const minted = await anonymous.post<{ token?: string }>("/v1/principals", {});
   if (!minted.token) {
     throw new ApiError("UNKNOWN", `${baseUrl} did not return a token for a new Principal`);
   }
-  writeConfig({ api: { url: anonymous.baseUrl, token: minted.token } });
+  const path = writeConfig({ api: { url: anonymous.baseUrl, token: minted.token } });
+  announceMintedPrincipal(anonymous.baseUrl, path);
   return minted.token;
+}
+
+/**
+ * Say that a credential was written, once, at the only moment it is news.
+ *
+ * A Principal used to be minted deliberately by a signed-in Member; it is now
+ * minted silently on first use by anyone (ADR-0013), so without this the first
+ * a user hears of the token is when they lose it. The deployment keeps only its
+ * hash, which makes that loss permanent: deleting `config.toml` — or simply
+ * working from a second machine — strands the corpus with nothing left that can
+ * prove ownership. `crux claim` is the only escape hatch, because an attached
+ * address can sign in and reach the same corpus again, so claiming is about
+ * durability before it is ever about the free allowance.
+ *
+ * It goes to stderr because stdout is `--json` and is parsed, and every line is
+ * prefixed `crux: ` so a log scraper reads it as a notice rather than an error.
+ * The token itself is never named — the point is that a secret exists and where
+ * it lives; what mode it ended up at is a promise the filesystem may refuse to
+ * keep, so it is documented in the README rather than claimed here.
+ */
+function announceMintedPrincipal(baseUrl: string, path: string): void {
+  process.stderr.write(
+    [
+      `crux: a new Principal was created on ${baseUrl}.`,
+      `crux: its access token was written to ${path} — it is the only proof this corpus is yours, and the deployment cannot reissue it.`,
+      `crux: run \`crux claim <you@example.com>\` to attach an address, so the corpus survives losing that file.`,
+      "",
+    ].join("\n"),
+  );
 }
 
 /**
