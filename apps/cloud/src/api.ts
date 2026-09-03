@@ -8,7 +8,7 @@
  * the caller's ViewStateDO. Reads mirror the CLI's `--json` shapes exactly.
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
-import { authenticateToken } from "@crux/core/auth";
+import { authenticateAndResolveScope, resolveScope, type Scope } from "@crux/core/auth/principals";
 import { mintPrincipal } from "@crux/core/auth/principals";
 import { CLAIM_TTL_MS, createClaim } from "@crux/core/auth/claims";
 import { claimLinkEmail } from "@crux/core/auth/email";
@@ -136,15 +136,23 @@ async function authenticate(
   env: Env,
   db: CruxDb,
   url: URL,
-): Promise<{ userId: string } | null> {
+): Promise<{ userId: string; scope: Scope } | null> {
   const token = bearer(request);
-  if (token) return authenticateToken(db, token);
+  if (token) {
+    // Identity and scope in one statement: on D1 the four sequential lookups
+    // this used to be cost more than most reads that follow them.
+    const authed = await authenticateAndResolveScope(db, token);
+    return authed ? { userId: authed.principal.id, scope: authed.scope } : null;
+  }
 
   if (!env.BETTER_AUTH_SECRET) return null;
   const origin = request.headers.get("origin");
   if (request.method !== "GET" && origin !== url.origin) return null;
   const viewer = await viewerFor(db, env.BETTER_AUTH_SECRET, url.origin, request);
-  return viewer ? { userId: viewer.id } : null;
+  if (!viewer) return null;
+  // The browser door has no token row to enter through, so the same joined
+  // query is entered at `users` instead — still one statement (ADR-0007).
+  return { userId: viewer.id, scope: await resolveScope(db, { id: viewer.id }) };
 }
 
 /** Resolve the per-user ViewStateDO stub. */
@@ -249,6 +257,7 @@ export async function handleApi(
         db,
         viewStore: viewStoreFor(env, authed.userId),
         actor: { id: authed.userId },
+        scope: authed.scope,
         capacity: capacityFor(env, url),
       });
       return json(result);
@@ -266,6 +275,7 @@ export async function handleApi(
         // from the body. A read that took its own scope as an argument would be
         // no scope at all.
         principal: { id: authed.userId },
+        scope: authed.scope,
         viewStore: viewStoreFor(env, authed.userId),
       });
       return json({ result });

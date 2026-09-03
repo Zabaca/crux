@@ -13,13 +13,18 @@ import type { CruxDb } from "../../db/client.js";
  * A CruxDb double: a `select().from().where()` chain that answers `rows`.
  *
  * `where()` answers a real Promise carrying a `limit()`, the way drizzle's
- * builder does, because a scoped read may end at either: `visiblePrincipalIds`
- * takes one row, while the Workstream lookup behind the scope awaits the
- * builder directly.
+ * builder does, because a scoped read may end at either: a lookup that takes
+ * one row, or `resolveScope`, which joins across `users` and `workstreams` and
+ * awaits the builder directly.
  */
 function dbReturning(rows: unknown[]): CruxDb {
   const answer = () => Object.assign(Promise.resolve(rows), { limit: async () => rows });
-  const chain = { from: () => chain, where: answer };
+  const chain = {
+    from: () => chain,
+    leftJoin: () => chain,
+    innerJoin: () => chain,
+    where: answer,
+  };
   return { select: () => chain } as unknown as CruxDb;
 }
 

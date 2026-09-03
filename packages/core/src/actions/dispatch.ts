@@ -24,7 +24,7 @@ import {
 import type { ViewStore } from "../view-state/store.js";
 import type { ViewEvent } from "../view-state/machine.js";
 import { runMutation, type Actor } from "./mutations.js";
-import { resolveScope } from "../auth/principals.js";
+import { resolveScope, type Scope } from "../auth/principals.js";
 import { assertWriteCapacity, type Capacity } from "../auth/capacity.js";
 
 /** Error thrown when an action is not allowed in the current view state. */
@@ -78,6 +78,9 @@ export async function dispatch(
      * chosen by omission, and the refusal is only useful if it can name the
      * deployment's own way out. */
     capacity: Capacity;
+    /** An already-resolved scope for `actor`, when the caller has one — see
+     * `query()`. Ignored unless it belongs to this actor. */
+    scope?: Scope;
     enforceAllow?: boolean;
   },
 ): Promise<DispatchResult> {
@@ -114,7 +117,10 @@ export async function dispatch(
   // One scope for the whole dispatch. The view branch needs it as much as the
   // mutation branch does: its guards ask "does this Workstream exist", and an
   // unscoped answer is an existence oracle even though it moves no rows.
-  const scope = await resolveScope(options.db, options.actor);
+  const scope =
+    options.scope && options.scope.principalId === options.actor.id
+      ? options.scope
+      : await resolveScope(options.db, options.actor);
 
   if (isViewAction(action)) {
     // Route through XState machine

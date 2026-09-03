@@ -57,7 +57,7 @@ export async function listMembers(db: CruxDb): Promise<Member[]> {
  * delete would either be refused or would strand the history the row carries.
  * Nothing else is written — no token is revoked and no session row is dropped
  * — because every gate reads this one column: `findMemberByEmail` stops the
- * mail, `authenticateToken` stops the CLI, and the browser's viewer lookup
+ * mail, `authenticateAndResolveScope` stops the CLI, and the browser's viewer lookup
  * stops the session. One write to undo, which is what makes a re-invite a
  * reinstatement rather than a rebuild.
  *
