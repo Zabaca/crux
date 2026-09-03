@@ -444,6 +444,34 @@ describe("view routes", () => {
     expect(view.stateLabel).toContain("workstream_dashboard");
   });
 
+  // A Principal that has never moved its view still has a blob: a recorded read
+  // (PROBLEM_SHOW) and every mutation write the sidecars alone, with no XState
+  // fields at all. Since ADR-0013 mints a Principal on first contact that is
+  // the ordinary first sequence, so what it answers is pinned here, on the
+  // deployed request path. The deferred throw it used to raise is asserted in
+  // core's persistence.test.ts — this runner swallows it, which is exactly why
+  // the suite was green while the cloud logged an uncaught exception.
+  test("a view whose blob holds only sidecars reads as the initial state", async () => {
+    await dispatch({
+      kind: "ADD_PROBLEM",
+      payload: { workstream: "WS-crux", title: "P", description: "d" },
+    });
+    // The recorded read — this is what writes recentQueries over a blob that
+    // has no XState fields yet.
+    expect((await query({ kind: "PROBLEM_SHOW", id: 1 })).status).toBe(200);
+
+    const res = await call("/v1/view");
+    expect(res.status).toBe(200);
+    const view = (await res.json()) as {
+      stateLabel: string;
+      value: unknown;
+      context: { workstreamId: string | null; problemId: string | null };
+    };
+    expect(view.stateLabel).toBe("viewing.workstream_list");
+    expect(view.value).toEqual({ viewing: "workstream_list" });
+    expect(view.context).toEqual({ workstreamId: null, problemId: null });
+  });
+
   test("view state is per user — another token sees its own", async () => {
     await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });
     await db.insert(users).values({ id: "USR-other", slug: "other", name: "Other" });
