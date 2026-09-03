@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { configPath, loadApiConfig, writeConfig } from "@crux/core/config";
+import { configPath, loadApiConfig, writeConfig } from "../config/user.js";
 import { emit, setJsonMode } from "../output.js";
 import { ApiError, createApiClient } from "../api-client.js";
 

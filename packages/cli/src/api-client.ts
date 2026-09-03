@@ -8,8 +8,7 @@
  * stable codes and exit codes, so a rejection from the server reads on the
  * terminal exactly as the local path used to.
  */
-import { userConfig } from "@crux/core";
-import { writeConfig } from "@crux/core/config";
+import { loadApiConfig, writeConfig } from "./config/user.js";
 import { CruxError, type ErrorCode } from "@crux/core/transitions";
 import { ActionNotAllowedError } from "@crux/core/actions";
 
@@ -253,7 +252,7 @@ function announceMintedPrincipal(baseUrl: string, path: string): void {
  */
 export function api(): CruxApiClient {
   if (override) return override;
-  const { url, token } = userConfig.loadApiConfig();
+  const { url, token } = loadApiConfig();
   const baseUrl = url ?? DEFAULT_API_URL;
   if (token) return createApiClient({ baseUrl, token });
   return createApiClient({ baseUrl, token: () => mintPrincipalToken(baseUrl) });

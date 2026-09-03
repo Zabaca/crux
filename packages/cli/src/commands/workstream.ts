@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { OkWithIdOutput, RenameOutput } from "@crux/core/validation";
+import { OkWithIdOutput, RenameOutput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
 import type { AddWorkstreamPayload, RenameWorkstreamPayload } from "@crux/core/actions";
 import { api } from "../api-client.js";

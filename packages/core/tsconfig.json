@@ -4,8 +4,9 @@
     "rootDir": ".",
     "outDir": "./dist",
     // Core is built against D1 now, so `D1Database` has to be in scope. `bun`
-    // stays because config/user.ts is still node-shaped — it leaves when the
-    // CLI does.
+    // is for core's own `bun:test` suites and for `docs/`, the build-time link
+    // walker that reads the working tree — the only node-shaped code left here
+    // now that the CLI owns `config.toml`.
     "types": ["bun", "@cloudflare/workers-types"]
   },
   "include": ["src/**/*.ts", "workers-test/**/*.ts", "vitest.config.ts"]

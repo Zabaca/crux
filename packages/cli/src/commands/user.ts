@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
-import { configPath, loadUserConfig, slugifyName, writeUserConfig } from "@crux/core/config";
-import { UserInitInput } from "@crux/core/validation";
+import { configPath, loadUserConfig, slugifyName, writeUserConfig } from "../config/user.js";
+import { UserInitInput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
 
 const initCmd = defineCommand({

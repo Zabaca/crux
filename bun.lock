@@ -20,7 +20,7 @@
     },
     "apps/cloud": {
       "name": "@crux/cloud",
-      "version": "0.2.0",
+      "version": "0.3.0",
       "dependencies": {
         "@astrojs/cloudflare": "^14.1.5",
         "@astrojs/react": "^6.0.1",
@@ -53,6 +53,8 @@
       "dependencies": {
         "@crux/core": "workspace:*",
         "citty": "^0.2.2",
+        "smol-toml": "^1.3.0",
+        "zod": "^4.3.6",
       },
       "devDependencies": {
         "@cloudflare/workers-types": "^5.20260724.1",
