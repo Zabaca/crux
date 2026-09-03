@@ -43,6 +43,8 @@ import {
   claimedPage,
 } from "./account-pages.js";
 import { applyClaim, findPendingClaim, ClaimError } from "@crux/core/auth/claims";
+import { observationCapFrom } from "@crux/core/auth/capacity";
+import { landingPage } from "./landing-page.js";
 import {
   ensureMember,
   findMemberByEmail,
@@ -349,6 +351,14 @@ export async function handleWeb(
       workspace,
       canSendEmail: Boolean(sendEmail),
     });
+  }
+
+  // The homepage is the one page addressed to somebody with no session, so it
+  // sits above the gate rather than behind it. A Member still gets their
+  // Workstream list at the same address — the public page is what `/` means
+  // only when nobody is signed in (ADR-0013 made that the common case).
+  if (path === "/" && !viewer) {
+    return render(landingPage({ observationCap: observationCapFrom(env.CRUX_OBSERVATION_CAP) }));
   }
 
   // ---- everything below is Members-only ------------------------------------

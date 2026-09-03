@@ -383,9 +383,18 @@ describe("removing a Member", () => {
 
     // The session cookie is still in their browser and the token is still in
     // their config; neither is a way in any more.
+    // `/` answers 200 for anybody now, because that address is the public
+    // homepage when there is no session. So the assertion is about *what* comes
+    // back, not the status: the stranger's page, never their Workstreams. That
+    // is a stronger claim than the redirect it replaces — a gate that resolved
+    // the session but rendered the Member view anyway would pass a status check
+    // and fail this one.
     const handWritten = await get("/", { headers: { cookie: leaver.cookie } });
-    expect(handWritten.status).toBe(302);
-    expect(handWritten.headers.get("location")).toContain("/signin");
+    expect(handWritten.status).toBe(200);
+    const strangerBody = await handWritten.text();
+    expect(strangerBody).toContain("A problem registry for AI agents");
+    expect(strangerBody).not.toContain("On The Way Out");
+    expect(strangerBody).not.toContain('href="/members"');
 
     const astroPage = await get("/w/crux", { headers: { cookie: leaver.cookie } });
     expect(astroPage.status).toBe(302);
@@ -906,5 +915,46 @@ describe("Attempts on the Problem page", () => {
 
     const body = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
     expect(body).toContain("Spike it");
+  });
+});
+
+/**
+ * The public homepage. It is the only page addressed to somebody with no
+ * session, so what matters is that `/` stops redirecting for a stranger while
+ * still meaning "your Workstreams" for a Member — one address, two answers.
+ */
+describe("the public homepage", () => {
+  test("a stranger gets the homepage at / instead of a redirect to sign-in", async () => {
+    const res = await get("/");
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("A problem registry for AI agents");
+    expect(body).toContain("crux observation add");
+  });
+
+  test("it quotes the deployment's own allowance rather than a hard-coded number", async () => {
+    const body = await (await get("/")).text();
+    // This deployment's vitest config sets the cap to 5, while production sets
+    // 200 — so a page that quoted the default would pass here by coincidence
+    // and lie in production. Asserting 5 is what pins that it reads the var.
+    expect(body).toContain("5 Observations free");
+    expect(body).not.toContain("200 Observations free");
+  });
+
+  test("it offers the two doors a stranger can actually open", async () => {
+    const body = await (await get("/")).text();
+    expect(body).toContain('href="/docs"');
+    expect(body).toContain('href="/signin"');
+    // And not the signed-in shell's nav.
+    expect(body).not.toContain('href="/members"');
+  });
+
+  test("a Member still gets their Workstream list at /", async () => {
+    const { cookie } = await inviteAndJoin("home@example.com", "Home Member");
+    const res = await get("/", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).not.toContain("A problem registry for AI agents");
+    expect(body).toContain("crux");
   });
 });

@@ -135,6 +135,36 @@ h2{font-size:12px;font-weight:650;letter-spacing:.12em;text-transform:uppercase;
 .doc th{color:var(--faint);font-weight:600}
 .doc blockquote{border-left:2px solid var(--line);margin:0;padding-left:14px;color:var(--muted)}
 .doc hr{border:0;border-top:1px solid var(--line-2);margin:26px 0}
+/* The public homepage. Wider measure than the app pages and no cards: it is
+   read top-to-bottom by somebody deciding whether to run one command. */
+.land-hero{padding:64px 0 8px;max-width:760px;margin:0 auto}
+.land-h1{font-size:40px;line-height:1.12;letter-spacing:-.03em;font-weight:680;margin:0 0 14px}
+.land-lede{font-size:17px;line-height:1.62;color:var(--muted);margin:0 0 26px}
+.land-lede b{color:var(--ink);font-weight:600}
+.land-cta{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 8px}
+.land-sec{max-width:760px;padding:34px 0 0;border-top:1px solid var(--line-2);margin:34px auto 0}
+.land-sec:first-of-type{border-top:0}
+.land-sec h2{font-size:12px;margin:0 0 14px}
+.land-body{color:#ccd4de;margin:0 0 16px;font-size:15px;line-height:1.65}
+.land-note{color:var(--muted);font-size:12.5px;margin:12px 0 0;line-height:1.6}
+.land-sh{background:var(--col-2);border:1px solid var(--line-2);border-radius:9px;
+  padding:13px 15px;overflow-x:auto;font-size:12.5px;line-height:1.75}
+.land-cmd{white-space:pre-wrap;word-break:break-word;color:var(--ink)}
+.land-p{color:var(--now);user-select:none}
+.land-out{white-space:pre-wrap;color:var(--muted)}
+.land-rules,.land-next{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.land-rules li{color:var(--muted);font-size:14px;line-height:1.6;padding-left:14px;
+  border-left:2px solid var(--line)}
+.land-rules b{color:var(--ink);font-weight:600}
+.land-next li{color:#ccd4de;font-size:14px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.land-tag{color:var(--faint);font-size:11px;font-weight:650;letter-spacing:.06em;
+  text-transform:uppercase;flex:none;min-width:172px}
+.land-foot{max-width:760px;margin:40px auto 0;padding:22px 0 0;border-top:1px solid var(--line-2);
+  color:var(--muted)}
+.land-foot p{margin:0 0 8px}
+.land-foot code{background:var(--col-2);border:1px solid var(--line-2);border-radius:5px;padding:1px 6px}
+@media (max-width:700px){.land-h1{font-size:30px}.land-hero{padding-top:40px}
+  .land-tag{min-width:0}}
 @media (max-width:1080px){.board{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media (max-width:800px){.board{grid-template-columns:1fr}.split{grid-template-columns:1fr}
   .rail{position:static}.kv{grid-template-columns:1fr}}
@@ -175,7 +205,10 @@ export function page(opts: {
           <button type="submit" class="linkish">Sign out</button>
         </form>
       </nav>`
-    : html`<nav></nav>`;
+    : html`<nav>
+        <a href="/docs">Docs</a>
+        <a href="/signin">Sign in</a>
+      </nav>`;
 
   return html`<html lang="en">
     <head>
@@ -191,8 +224,7 @@ export function page(opts: {
       <header class="top">
         <div class="top-in">
           ${MARK_INLINE}<a href="/" class="brand">Crux</a>
-          <span class="ws">Workspace · ${opts.workspace}</span>
-          ${nav}
+          ${opts.viewer ? html`<span class="ws">Workspace · ${opts.workspace}</span>` : ""} ${nav}
         </div>
       </header>
       <div class="wrap">${opts.body}</div>

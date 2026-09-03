@@ -30,8 +30,8 @@ export function signInPage(opts: { next?: string; error?: string } = {}): {
   const body = html`
     <h1>Sign in</h1>
     <p class="sub">
-      Members of this Workspace only. Enter your address and we will email you a link — there is no
-      password to remember or lose.
+      For an address that already has a claim on this deployment — a Member, or a Principal you
+      claimed. Enter it and we will email you a link; there is no password to remember or lose.
     </p>
     ${opts.error ? html`<div class="notice bad">${opts.error}</div>` : ""}
     <form class="form" method="post" action="/signin">
