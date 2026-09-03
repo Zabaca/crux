@@ -11,7 +11,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, relative } from "node:path";
 
 import { createApiClient, setApiClient, ApiError } from "../api-client.js";
 import { setCaptureWriter, setJsonMode } from "../output.js";
@@ -109,6 +109,18 @@ const VIEW_WITH_WS = {
   globalActions: ["ADD_OBSERVATION"],
 };
 
+/** Every CLI source file, as [path relative to src/, contents]. */
+function cliSources(): Array<[string, string]> {
+  const root = join(import.meta.dir, "..");
+  const walk = (dir: string): string[] =>
+    readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
+      const full = join(dir, e.name);
+      if (e.isDirectory()) return e.name === "__tests__" ? [] : walk(full);
+      return /\.tsx?$/.test(e.name) ? [full] : [];
+    });
+  return walk(root).map((full) => [relative(root, full), readFileSync(full, "utf8")]);
+}
+
 beforeEach(() => {
   setJsonMode(false);
   setCaptureWriter(null);
@@ -125,6 +137,13 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("reads", () => {
+  test("workstream has no select — discovery replaces selection", () => {
+    // Once nothing resolves a default from view-state, `select` only moved the
+    // human's screen. `list` to choose, `-w` to act.
+    const subs = Object.keys((workstreamCommand as AnyCmd).subCommands ?? {});
+    expect(subs.sort()).toEqual(["add", "list", "rename", "show"]);
+  });
+
   test("workstream list asks for WORKSTREAM_LIST and prints what came back", async () => {
     const rows = [{ id: "WS-smoke", slug: "smoke", title: "Smoke WS" }];
     const calls = stubServer({ "POST /v1/query": { result: rows } });
@@ -735,21 +754,19 @@ describe("view", () => {
     expect(subs.sort()).toEqual(["get", "path"]);
   });
 
-  test("workstream has no select — discovery replaces selection", () => {
-    const subs = Object.keys((workstreamCommand as AnyCmd).subCommands ?? {});
-    expect(subs).not.toContain("select");
-    expect(subs.sort()).toEqual(["add", "list", "rename", "show"]);
-  });
+  test("only `view get` reads the view, and only the TUI moves it", () => {
+    // Two traps, both agent-side. Reading `context.workstreamId` and using it
+    // as a default reinstates the shared-Workstream collision; dispatching a
+    // view action moves the human's page. `browse/` is exempt from the second:
+    // it is the human at their own keyboard, driving their own screen.
+    const readers = cliSources().filter(
+      ([rel]) => rel !== "commands/view.ts" && !rel.startsWith("browse/"),
+    );
+    expect(readers.filter(([, src]) => src.includes("/v1/view")).map(([rel]) => rel)).toEqual([]);
 
-  test("no command but `view` itself reads the view", () => {
-    // The trap this closes is an agent taking `context.workstreamId` as a
-    // default. Nothing may reach /v1/view except the command whose whole job is
-    // to print it.
-    const dir = join(import.meta.dir, "..", "commands");
-    const offenders = readdirSync(dir)
-      .filter((f) => f !== "view.ts")
-      .filter((f) => readFileSync(join(dir, f), "utf8").includes("/v1/view"));
-    expect(offenders).toEqual([]);
+    const drivers = cliSources().filter(([rel]) => !rel.startsWith("browse/"));
+    const viewActions = /SELECT_WORKSTREAM|OPEN_PROBLEM|SELECT_INTAKE|"BACK"/;
+    expect(drivers.filter(([, src]) => viewActions.test(src)).map(([rel]) => rel)).toEqual([]);
   });
 });
 

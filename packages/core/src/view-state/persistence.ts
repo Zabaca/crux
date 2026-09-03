@@ -342,29 +342,6 @@ export async function sendViewEventWithStore(
   return next;
 }
 
-/** Reset view-state to initial, through the caller's store. */
-export async function resetStateWithStore(store: ViewStore): Promise<ViewSnapshot> {
-  const actor = createActor(viewMachine);
-  actor.start();
-  const snap = actor.getSnapshot();
-  actor.stop();
-  await store.write(computeSaveStateBlob(await store.read(), snap, { lastActionKind: "RESET" }));
-  return snap;
-}
-
-/** Legal event types from the current snapshot. */
-export function nextEvents(snapshot: ViewSnapshot): string[] {
-  // XState v5 doesn't expose `nextEvents` on snapshots anymore; derive by probing
-  // the machine's state node for `on` handlers. Use internal path resolution.
-  const value = snapshot.value;
-  const leaf = leafStateId(value);
-  const def = viewMachine.definition;
-  const node = resolveStateNode(def, leaf);
-  if (!node) return [];
-  const on = (node as { on?: Record<string, unknown> }).on ?? {};
-  return Object.keys(on);
-}
-
 export function formatStateValue(value: ViewSnapshot["value"]): string {
   if (typeof value === "string") return value;
   const parts: string[] = [];
@@ -378,25 +355,6 @@ export function formatStateValue(value: ViewSnapshot["value"]): string {
   }
   if (typeof cur === "string") parts.push(cur);
   return parts.join(".");
-}
-
-function leafStateId(value: ViewSnapshot["value"]): string {
-  return formatStateValue(value);
-}
-
-type StateNodeLike = {
-  states?: Record<string, StateNodeLike>;
-  on?: Record<string, unknown>;
-};
-
-function resolveStateNode(root: StateNodeLike, dotted: string): StateNodeLike | null {
-  const parts = dotted.split(".");
-  let cur: StateNodeLike | undefined = root;
-  for (const p of parts) {
-    if (!cur?.states?.[p]) return null;
-    cur = cur.states[p];
-  }
-  return cur ?? null;
 }
 
 function sameState(a: ViewSnapshot, b: ViewSnapshot): boolean {

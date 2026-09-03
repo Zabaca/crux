@@ -29,30 +29,6 @@ Problem ids resolve the same way — pass them explicitly; `crux problem list -w
 
 The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
 
-## Collab mode (CRUX_COLLAB=1)
-
-When the environment variable `CRUX_COLLAB=1` is set, the CLI enforces view-state–aware action permissions. Mutations not allowed in the current view state will hard-reject with exit code 25 (`[ACTION_NOT_ALLOWED]`). The web UI auto-refreshes on any dispatched mutation via SSE. The web UI dispatches via `POST /api/action`; same `dispatch()`, same allow-list (always enforced for UI calls).
-
-**Per-view allowed mutations:**
-
-| View | Allowed mutations |
-|---|---|
-| `workstream_list` | ADD_WORKSTREAM, RENAME_WORKSTREAM |
-| `workstream_dashboard` | ADD_PROBLEM, ADD_OBSERVATION |
-| `problem_detail` | ADD_ATTEMPT, CLOSE_ATTEMPT, ADD_EVIDENCE, ADD_OUTCOME, SCHEDULE_PROBLEM, UNSCHEDULE_PROBLEM, ABANDON_PROBLEM |
-| `intake_queue` | ARCHIVE_OBSERVATION, ADD_OBSERVATION |
-
-**Global (always allowed):** ADD_OBSERVATION, BACK.
-
-Use `crux view get` to inspect current state and allowed actions:
-
-```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux view get
-# → { value, context, revision, lastAction, allowedActions[], globalActions[] }
-```
-
-When CRUX_COLLAB is absent (default), all commands fall through to direct mode without view-state checks.
-
 ## When to invoke (intake)
 
 - User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add -w <slug> --content "..."`.
@@ -236,6 +212,9 @@ There is no `view send`, no `view next` and no `view reset`, and no
 `workstream select`. One view is shared by every agent holding this Principal's
 token, so a command that moved it would move the page under whoever is reading
 it, and two agents would fight over the screen.
+
+Nor does it gate you: what you may file does not depend on where the human is
+looking. The allow-list in `allowedActions` describes their surface, not yours.
 
 **The view is never a source of defaults.** Do not read `context.workstreamId`
 out of `view get` and use it as the Workstream for a write — that reinstates the

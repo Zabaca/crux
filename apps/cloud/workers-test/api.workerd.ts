@@ -425,8 +425,13 @@ describe("view routes", () => {
     // offer, because one view is shared by every client holding the token.
     await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });
 
-    expect((await call("/v1/view/next")).status).toBe(404);
-    expect((await call("/v1/view/reset", { method: "POST" })).status).toBe(404);
+    for (const gone of [
+      await call("/v1/view/next"),
+      await call("/v1/view/reset", { method: "POST" }),
+    ]) {
+      expect(gone.status).toBe(404);
+      expect(await gone.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
+    }
 
     // And the read still answers, with the state the dispatch left behind.
     const view = (await (await call("/v1/view")).json()) as { stateLabel: string };
