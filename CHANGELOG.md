@@ -13,6 +13,29 @@ Every version here except `0.1.0` was cut by `/release`
 verified against `/health` before its tag was pushed. A tag on `origin` is
 therefore a release that reached production and was checked there.
 
+## 0.2.0 — 2026-09-03
+
+Production stops moving on its own, and the deployment can now be asked which
+version it is running.
+
+### What you can observe
+
+- **`GET /health` reports a `version`**, beside `status` and `db`, read from the
+  bundle actually serving the request. Asking a crux deployment what it is
+  running is now a question with an answer rather than an inference from the
+  merge log. The `503 degraded` response carries it too — knowing which build is
+  failing is the point of asking.
+
+### Under the hood
+
+Merging to `main` no longer deploys: production moves only when an operator runs
+`/release`, which bumps the version, drafts the entry you are reading, runs the
+gate, deploys, polls `/health` until it reports the version just built, and only
+then tags. No GitHub workflow holds a deploy credential any more. A tag on
+`origin` is therefore a release that reached production and was checked there — a
+stronger claim than an exit code can make, since the one deploy failure this
+project has actually met exits `0`.
+
 ## 0.1.0 — 2026-09-03
 
 **Seed entry, written retroactively.** This records what was already live on
