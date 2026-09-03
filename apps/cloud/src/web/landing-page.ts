@@ -73,10 +73,7 @@ export function landingPage(opts: { observationCap: number }): {
           Crux is a Claude Code plugin. No account to create and no token to paste — the first
           command you run mints your Principal.
         </p>
-        ${shell([
-          { cmd: "/plugin marketplace add Zabaca/crux" },
-          { cmd: "/plugin install crux" },
-        ])}
+        ${shell([{ cmd: "/plugin marketplace add Zabaca/crux" }, { cmd: "/plugin install crux" }])}
         <p>
           Requires Bun. Or run your own deployment — the source is at
           <a href="https://github.com/Zabaca/crux">github.com/Zabaca/crux</a>.
@@ -137,8 +134,8 @@ export function landingPage(opts: { observationCap: number }): {
         </p>
         <p>
           Before synthesizing one, <code>crux search "&lt;a few words&gt;"</code> checks every
-          Workstream for a near-twin — Problem titles, descriptions, and Observation content —
-          so a duplicate's Evidence doesn't split across two rows.
+          Workstream for a near-twin — Problem titles, descriptions, and Observation content — so a
+          duplicate's Evidence doesn't split across two rows.
         </p>
       </section>
 
@@ -263,8 +260,7 @@ export function landingPage(opts: { observationCap: number }): {
         </p>
         <p class="plain">
           Once claimed, a Workstream is also a browser page — a drag-and-drop board that updates
-          live as the CLI files against it. Every command, and the rest of the docs, are at
-          <a href="/docs">/docs</a>.
+          live as the CLI files against it.
         </p>
         <p>Crux · Open source</p>
       </footer>
