@@ -1,239 +1,292 @@
 ---
 name: crux
-description: Capture observations mid-conversation through the `crux` CLI — cheap, low-friction intake. Use during discovery/design conversations whenever something worth remembering surfaces; do not use for implementation-only work.
+description: How Crux works and how to drive it — Workstreams, Observations, Problems, Evidence, Attempts, Outcomes — through the `crux` CLI. Use whenever a discovery or design conversation produces something worth keeping, when reloading what a past session concluded, or when work about a known Problem starts or ends somewhere else.
 ---
 
-# Crux — intake mode
+# Crux
 
-Crux is a product-thinking residue tool. This skill is the **default intake mode**: capture Observations as they surface, cheaply, without trying to synthesize them into Problems on the spot.
+Crux is a **problem registry**. It keeps the problem and the evidence behind it, so a
+later session reloads what was concluded instead of re-deriving it. It does **not**
+keep the work — that lives in whatever tracker you already use.
 
-## How to invoke the CLI
+There are no modes. Capture as things surface, synthesize when there is something to
+synthesize, record what became of a Problem when you know. The entities below are the
+whole model, and the invariants are enforced server-side: you cannot close an Attempt
+twice, cannot record a second Outcome, cannot archive an archived Observation.
 
-`crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
+## Running the CLI
 
-```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux problem list -w <slug> --status now
-```
-
-**JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
-
-**Every command that acts on a Workstream takes `-w <slug>`.** There is no current Workstream to inherit and no view-state fallback: agents run in parallel against one Principal, so a shared default is how two of them silently file into each other's corpus. Omitting `-w` refuses with `VALIDATION_ERROR` (exit 24) rather than picking one.
-
-Discovery is a read, and it is cheap:
+`crux` is the plugin-bundled binary. Use the explicit path — it is not on `$PATH`, and
+each Bash call is a fresh shell:
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux workstream list
+${CLAUDE_PLUGIN_ROOT}/bin/crux problem list -w crux
 ```
 
-Problem ids resolve the same way — pass them explicitly; `crux problem list -w <slug>` shows them.
+- **JSON is the default output.** No `--json` needed; the flag is a deprecated no-op.
+- **Every command that acts on a Workstream takes `-w <slug>`, always.** There is no
+  current Workstream and no fallback. Agents run in parallel against one Principal, so
+  a shared default is how two of them file into each other's corpus. Omitting `-w`
+  refuses with `VALIDATION_ERROR` (exit 24) rather than guessing.
+- Ids are explicit too. `crux problem list -w <slug>` shows them.
+- The wrapper runs `bun install` on first use. The only prerequisite is Bun
+  (`command -v bun`); if missing, `curl -fsSL https://bun.sh/install | bash`, then
+  restart the shell.
+- **Nothing to sign up for.** The first command that touches the corpus mints a
+  Principal and writes the token to `~/.claude/.crux/config.toml`. Do not ask for a URL
+  or a token. Only if the user runs their own deployment: `crux init --url … --token …`.
 
-The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
+## Loading context
 
-## When to invoke (intake)
-
-- User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add -w <slug> --content "..."`.
-- An existing Observation was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."`. Terminal — and it takes no `-w`, since the id already names the row.
-
-That's the full intake surface.
-
-## Search before you synthesize a Problem
-
-**Never file a Problem without searching first.** Duplication among Observations
-is by design — they are cheap, and two people noticing the same thing twice is
-signal. Duplication among Problems is the failure this rule exists to prevent: a
-near-twin splits the Evidence for one thing across two rows, and neither reads as
-load-bearing afterwards.
-
-So before `crux problem add -w <slug>`, run:
-
-```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux search "<a few distinctive words>"
-```
-
-It answers with `{ query, problems[], observations[] }` — each match carrying its
-`workstreamSlug`, and each Problem its full title and description, which is what
-you judge sameness against. It searches **every** Workstream by default, because a
-near-twin filed in the wrong one is exactly what you want to find; add
-`--workstream <slug>` to narrow, `--limit <n>` to cap (default 20 of each kind).
-
-Matching is a case-insensitive substring, not word-aware: search a distinctive
-stem (`auth`, `onboard`) rather than a whole sentence, and run it two or three
-times with different words before concluding nothing exists.
-
-Then:
-
-- **A match is the same thing** → do not file a second Problem. Attach the
-  Observation to the existing one as Evidence, with a why-note:
-  `crux evidence link <obs-id> <problem-id> --note "..."`.
-- **A match is adjacent but genuinely different** → file the new Problem, and say
-  in its description how it differs from the one you found.
-- **Nothing matches** → file it.
-
-## When NOT to invoke
-
-- Pure implementation or debugging — code goes in files.
-- User venting / exploring out loud, nothing settled.
-- You're tempted to file something the user didn't actually say.
-- To-dos and reminders. Crux is not a task tracker.
-
-Low-friction intake is a feature, but so is judgment. A blurry thought filed prematurely creates drag on every later reload.
-
-## First-run init
-
-Before the first `crux` command in a session, run these checks in order. Steady state → all no-op.
-
-1. **Bun runtime**: `command -v bun`. If missing, surface install:
-   - macOS/Linux: `curl -fsSL https://bun.sh/install | bash`
-   - Homebrew: `brew install oven-sh/bun/bun`
-   - Windows: `powershell -c "irm bun.sh/install.ps1|iex"`
-   - User must restart shell after install.
-2. **Plugin deps**: `test -d ${CLAUDE_PLUGIN_ROOT}/node_modules`. Wrapper auto-installs on first invocation; pre-warm with `${CLAUDE_PLUGIN_ROOT}/bin/crux --help`.
-3. **Deployment**: nothing to do. Adoption is anonymous-first (ADR-0013) — the first command that touches the corpus mints a Principal against the default deployment and writes the token into `~/.claude/.crux/config.toml` itself. Do **not** ask for a URL or a token. Only if the user runs their own deployment: `${CLAUDE_PLUGIN_ROOT}/bin/crux init --url "..." --token "..."`. There is no local database — every command is an HTTP call.
-4. **User config**: nothing to do, and nothing to ask for. The actor on every request is the Principal the token resolves to, not the local `[user]` block — `crux user init` writes local config and makes no request to the deployment.
-5. **Agent bus**: `TeamCreate` with `team_name: "crux"`. If team already exists, skip. Then write runtime pointer:
-   ```sh
-   CRUX_HOME="${CRUX_HOME:-$HOME/.claude/.crux}"
-   mkdir -p "$CRUX_HOME"
-   SESSION_ID=$(cat "$CRUX_HOME/session-id" 2>/dev/null)
-   cat > "$CRUX_HOME/runtime.json" <<EOF
-   {
-     "teamName": "crux",
-     "inboxPath": "$HOME/.claude/teams/crux/inboxes/team-lead.json",
-     "sessionId": "$SESSION_ID",
-     "updatedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-   }
-   EOF
-   ```
-6. **Web UI**: `lsof -i :3210 | grep LISTEN`. If down, start:
-   ```sh
-   ${CLAUDE_PLUGIN_ROOT}/bin/crux web start
-   ```
-   Polls until ready and opens browser automatically.
-
-## Load context before contributing
-
-There is no one command that loads the whole corpus, deliberately: a digest that
-inlines every Observation behind every Problem costs more the more you have
-filed, which inverts the point. Walk the cheap reads instead, and stop as soon
-as you know enough. Each is flat in the size of the corpus.
+There is no single command that loads everything, deliberately — a digest that inlined
+every Observation behind every Problem grew with the corpus and stopped being cheaper
+than re-deriving it. Walk the cheap reads and stop when you know enough. Each is flat
+in the size of the corpus:
 
 ```sh
 crux workstream list                       # which corpora exist, by slug
-crux problem list -w <slug> --status now   # the field: id, stage, title per line
-crux problem show 42                       # one Problem, with its Attempts and Outcome
+crux problem list -w <slug> --status now   # the field: id, stage, title
+crux problem show 42                       # one Problem, with Attempts and Outcome
 ```
 
-`--status` takes one of `now`, `next`, `later`, `unscheduled`, `done`,
-`abandoned`; omit it for every Problem in the Workstream. For intake mode
-`--status now` is the right anchor — active Problems, so you do not file
-Observations that duplicate in-flight work.
-
-Go a layer deeper only for a Problem that has earned it:
+Deeper, only for a Problem that has earned it:
 
 ```sh
-crux evidence list 42                 # the Evidence links behind a Problem
-crux attempt list 42                  # work on it happening in another tracker
-crux observation show OBS-17          # one Observation, in full
+crux evidence list 42                      # what supports it, and why
+crux attempt list 42                       # work elsewhere, with closing notes
+crux observation list -w <slug> --unlinked # intake nobody has synthesized
+crux abandonment list -w <slug>            # dead ends, with reasons
 ```
 
-`crux observation list -w <slug>` is every Observation in the Workstream;
-`crux observation list -w <slug> --unlinked` narrows it to the ones not yet
-linked to a Problem, which is the queue `/crux:review` works from.
+Read `attempt list` before proposing a direction — a closed Attempt's note says why an
+approach ended, and re-proposing one that was dropped for a reason still standing is
+the specific waste Crux exists to prevent.
 
-If you do not know which slug to pass, run `crux workstream list` and choose one. Never guess, and never fall back to "the last one" — there is no such thing any more, which is the point.
+---
 
-## Attempts (work happening elsewhere)
+## Workstream
 
-Crux does not own the build. When work about a Problem starts in another tracker
-— an issue, a PR, a board card — record it as an Attempt: a pointer, not a copy.
+A coherent area of focus — per client, per product. The container everything else
+lives in. Slugs are kebab-case area names: `crux`, `farm-app`, `client-acme`.
 
 ```sh
-crux attempt add --problem 42 --ref https://tracker/ENG-412 --label "Batch the writes"
+crux workstream list
+crux workstream add --slug crux --title "Crux" --description "Building Crux itself."
+crux workstream show WS-crux
+crux workstream rename WS-crux --title "..."
+```
+
+If you do not know which slug to pass, run `crux workstream list` and ask. Never guess,
+and never fall back to "the last one" — there is no such thing.
+
+## Observation
+
+Atomic intake. Cheap to create, never deleted. The thing you file mid-conversation
+when something worth remembering surfaces.
+
+```sh
+crux observation add -w crux --content "..." \
+  --source "where this came from" \
+  --source-type internal \
+  --tag "perf,d1"
+crux observation list -w crux
+crux observation list -w crux --unlinked        # the review queue
+crux observation show OBS-17
+crux observation archive OBS-17 --rationale "..."
+```
+
+`--source-type` is one of `internal`, `competitive`, `external`, `analysis`,
+`customer_report`, `metric_signal`.
+
+**Use the comma-separated form for `--tag`.** The repeatable form silently keeps only
+the last value.
+
+**Duplication among Observations is by design.** They are cheap, and two people
+noticing the same thing twice is signal. Do not deduplicate them.
+
+**File when:** the user articulates a claim, a constraint, a measurement, or a
+source-grounded observation worth keeping.
+
+**Do not file when:** it is pure implementation or debugging (code goes in files); the
+user is thinking out loud and nothing is settled; it is a to-do or reminder (Crux is
+not a task tracker); or you are tempted to file something the user did not say. Cheap
+intake is a feature, but so is judgment — a blurry thought filed early is drag on every
+later reload.
+
+**Archive** is terminal, takes no `-w` (the id names the row), and is for misfiles,
+duplicates, and evaporated relevance. Archived rows drop out of default queues but
+stay visible under any Problem's Evidence with the rationale inlined.
+
+## Problem
+
+A synthesized "there is a thing worth solving." Titles are a noun phrase naming the
+gap, one sentence; the description is the paragraph.
+
+### Search first — always
+
+```sh
+crux search "<a few distinctive words>"
+```
+
+Never file a Problem without searching. A near-twin splits one thing's Evidence across
+two rows and neither reads as load-bearing afterwards. Search covers Problem titles and
+descriptions and Observation content, across **every** Workstream by default
+(`-w <slug>` narrows, `--limit` caps at 20 of each kind). Matching is case-insensitive
+substring and not word-aware, so search a distinctive stem (`auth`, `onboard`) rather
+than a sentence, and try two or three wordings before concluding nothing exists.
+
+- **Same thing** → do not file. Attach as Evidence instead.
+- **Adjacent but genuinely different** → file, and say in the description how it differs.
+- **Nothing matches** → file it.
+
+```sh
+crux problem add -w crux --title "..." --description "..."
+crux problem list -w crux --status now
+crux problem show 42
+```
+
+`--status` is one of `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
+
+**A Problem cannot be edited after filing.** Write the description to survive
+revision: state what is observed and name what is still undecided, rather than baking
+in a conclusion the Evidence may overturn.
+
+### Scheduling
+
+```sh
+crux problem schedule 42 --stage now      # now | next | later
+crux problem unschedule 42
+```
+
+Problems start unscheduled. Schedule only when the user has expressed genuine intent —
+`now` is actively in flight, `next` is queued, `later` is acknowledged but not soon.
+Leave it unscheduled rather than guess. A stage is a schedule, not a direction.
+
+### Evidence
+
+Links an Observation to a Problem with a why-note. Both ids are positional.
+
+```sh
+crux evidence link OBS-17 42 --note "why this supports it"
+crux evidence list 42
+```
+
+When an Observation supports an existing Problem, link it — do not rewrite the Problem
+statement to absorb the new weight. Evidence preserves the origin trail; Problem
+statements stay stable.
+
+### Abandonment
+
+```sh
+crux problem abandon 42 --rationale "..."
+crux abandonment list -w crux
+```
+
+Terminal, and a real event rather than deletion. The graveyard keeps its dignity:
+abandoned ≠ deleted, and the rationale travels forward so a later session does not
+re-derive the dead end.
+
+## Attempt
+
+A pointer to work about a Problem happening in another tracker. **Crux does not own the
+build.**
+
+```sh
+crux attempt add --problem 42 --ref ENG-412 --label "Batch the writes"
 crux attempt list 42
-crux attempt close ATT-001 --status shipped --note "Landed, but backpressure is still unsolved"
-crux attempt drift -w <slug>  # active Problems with no open Attempt
+crux attempt close ATT-001 --status shipped --note "why it ended that way"
+crux attempt drift -w crux
 ```
 
-- **Never describe the work here.** There is no description field and the server
-  refuses a payload carrying one — what the work _is_ lives in the system `--ref`
-  points at, and a second copy would rot.
-- `--note` on close is the one thing the tracker never keeps: _why_ the approach
-  ended the way it did. A closed ticket says "won't do"; it never says the
-  approach could not handle the load.
-- Closing an Attempt as `shipped` does **not** complete the Problem. Something
-  shipping is a fact about the world; the Problem being gone is a judgment
-  somebody makes.
-- The status is a coarse local marker and goes stale — nothing polls the tracker.
-  The `ref` is authoritative.
+**File it when the work starts, not when it finishes.** `attempt drift` reports
+Problems staged as active with no *open* Attempt — the signal that a stage was set and
+nothing is happening. Filing late destroys the one thing the entity produces.
 
-## Archive (intake hygiene)
+- **There is no description field**, and that refusal is load-bearing. What the work
+  *is* lives in the system `--ref` points at; a second copy in Crux is the one that
+  rots.
+- **`--note` on close is the whole point.** It is the judgment the tracker never keeps:
+  a closed ticket says "won't do", it never says the approach could not handle the load.
+  Required, on both `shipped` and `dropped`.
+- **Status is a coarse local marker and goes stale.** Nothing polls the tracker; the
+  `ref` is authoritative. `shipped` means the approach ended by landing, not that
+  anything reached production.
+- **A shipped Attempt does not complete the Problem.** Something shipping is a fact
+  about the world; the Problem being gone is a judgment somebody makes.
 
-Observations are never deleted — origin trail is permanent — but misfiles happen. Use archive when:
+## Outcome — completing the Problem
 
-- Typo, test row, wrong workstream
-- Obvious duplicate of existing row
-- Relevance evaporated mid-conversation
+Recording the Outcome **is** completing the Problem. One act, one command, one Outcome
+per Problem, terminal:
 
-Archive is terminal — no un-archive. Archived rows hide from default queues but remain visible under any Problem's Evidence with rationale inlined.
+```sh
+crux problem complete 42 \
+  --observed-impact "what actually changed, measured" \
+  --learnings "what is worth keeping" \
+  --follow-up-problems 43,44
+```
 
-## Slugs and titles
+There is no other way to reach `done`, and no way to record an Outcome without
+completing the Problem. A Problem leaves the board only through a door that demands a
+reason: `done` carries an Outcome, `abandoned` carries a rationale, neither is a silent
+flip.
 
-- Workstream slug: kebab-case area name — `crux`, `farm-app`, `client-acme`.
-- Titles are one sentence. Descriptions are the paragraph.
+`--observed-impact` is required, and that requirement is the discipline: you cannot
+complete a Problem without having observed something. If the fix shipped but you have
+not checked whether the Problem is gone, **do not record an Outcome yet**.
+
+The Outcome is *informed by* the Attempts but is not the sum of them. A Problem can
+have three shipped Attempts and still be open — that is the honest state, and it is
+what the model exists to express. Equally, a Problem can resolve for a reason none of
+the Attempts caused, and *that* is the most valuable thing in the record.
+
+`--follow-up-problems` takes ids that already exist, and can only be set here. Read
+back with `crux outcome show <id>` / `crux outcome list`.
+
+---
+
+## The human's view — readable, never drivable
+
+```sh
+crux view get     # what they are looking at: state + context
+crux view path    # the endpoint serving it
+```
+
+One view is shared by every client holding this Principal's token, so moving it would
+move the page under whoever is reading it. There is no `view send`, no `view next`, no
+`view reset`, and no `workstream select`.
+
+**Never take a default from the view.** `context.workstreamId` is where *they* are, not
+where your write belongs. That comes from `-w <slug>`, chosen from `workstream list`,
+every time.
 
 ## Attribution
 
-`reporter_id` comes from `~/.config/crux/config.toml`. If a command fails with "no user configured," run `crux user init`.
+Everything you file belongs to the Principal the token resolves to, which the server
+determines from the request — never from local config. `crux user init` writes a local
+`[user]` block and makes no request; it does not set authorship. **You are a tool, not
+an actor:** a human owns Principals, and every attribution resolves to one. Keep the
+"Claude noticed this" versus "the user said this" distinction in the content or tags,
+never in the identity.
 
-**You (Claude) are not a User.** Everything you file is attributed to the human. Preserve the "Claude noticed this" vs "user said this" distinction in tags/phrasing, not in the reporter field.
+## When a write refuses with `CAPACITY_EXCEEDED` (exit 27)
 
-## When a write refuses with CAPACITY_EXCEEDED (exit 27)
+The Principal has spent its free allowance of Observations. **Writes pause; every read
+keeps working**, so reloading context is unaffected. The error's `details` carry `cap`,
+`observations` and `claimUrl`.
 
-The Principal has spent its free allowance of Observations, so **writes** are
-paused; every read still works, so context reloads are unaffected. The refusal's
-`details` carry `cap`, `observations` and `claimUrl`.
-
-Say so in the conversation where it happened — this is the moment the wall
-matters — and offer the fix, which is one command:
+Say so in the conversation where it happened — this is the moment the wall matters —
+and offer the one command that lifts it:
 
 ```sh
 crux claim <their-email>
 ```
 
-That mails a link to the address; opening it lifts the cap. Ask for the address
-rather than guessing one, and say what the link does: an address nobody has
-names this Principal, an address that already has an identity here links this
-Principal to it, and neither rewrites anything already filed. The `claimUrl` in
-the error explains the same thing in the browser.
+That mails a link; opening it is what attaches the address. Ask for the address rather
+than guessing. An address nobody here has *names* this Principal; an address that
+already has an identity here *links* this Principal to it. Neither rewrites anything
+already filed, and claiming is also what makes a corpus recoverable — the deployment
+stores only the token's hash, so losing `config.toml` strands everything filed under it.
 
-Do not retry the command, do not mint a fresh Principal to route around it, and
-do not silently drop what the user asked to file: tell them it was not filed,
-and hold the content so it can be filed once the cap is lifted.
-
-## The human's view — readable, not drivable
-
-The view-state machine tracks what the human is looking at in the browser and
-the TUI. You may read it; you may not move it.
-
-```sh
-crux view get --json        # what they are looking at: state + context
-crux view path              # the endpoint serving it
-```
-
-There is no `view send`, no `view next` and no `view reset`, and no
-`workstream select`. One view is shared by every agent holding this Principal's
-token, so a command that moved it would move the page under whoever is reading
-it, and two agents would fight over the screen.
-
-Nor does it gate you: what you may file does not depend on where the human is
-looking. The allow-list in `allowedActions` describes their surface, not yours.
-
-**The view is never a source of defaults.** Do not read `context.workstreamId`
-out of `view get` and use it as the Workstream for a write — that reinstates the
-shared-state collision in your own reasoning instead of in the CLI. The
-Workstream comes from `-w <slug>`, chosen from `crux workstream list`, every
-time.
-
-## Browse (TUI fallback)
-
-When web UI isn't running, `crux browse` opens an interactive terminal UI. It follows the human's view-state — it is the one surface that does.
+Do not retry, do not mint a fresh Principal to route around it, and do not silently
+drop what the user asked to file. Tell them it was not filed, and hold the content.
