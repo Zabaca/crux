@@ -1,6 +1,6 @@
 # Crux — Glossary
 
-Canonical vocabulary for this repo. Terms land here when they get resolved in a design session; see `docs/adr/` for the decisions behind them. Domain terms only — system internals (view-state, dispatch) stay in code and specs.
+Canonical vocabulary for this repo. Terms land here when they get resolved in a design session; see `docs/adr/` for the decisions behind them. Domain terms only — system internals (dispatch, and view-state — which is a human at a screen rather than shared state, [ADR-0014](docs/adr/0014-view-state-is-the-humans.md)) stay in code and specs.
 
 ## Entities
 
@@ -13,7 +13,7 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 - **Abandonment** — giving up on a Problem itself, with the reason. The graveyard keeps its dignity: abandoned ≠ deleted.
 - **Outcome** — what became of a Problem; closes the loop. One per Problem, terminal, and recording it *is* what marks the Problem done. May spawn follow-up Problems.
 
-- **Principal** — the identity a client acts as: a token, not a person. Minted automatically on first use, it owns everything filed through it and is the unit both tenancy and capacity are scoped to (ADR-0013).
+- **Principal** — the identity a client acts as: a token, not a person. Minted automatically on first use, it owns everything filed through it and is the unit both tenancy and capacity are scoped to (ADR-0013). Not an agent either: every client configured with the same token is the same Principal, which is why nothing that must differ per agent — the Workstream being written to, the screen being looked at — may be keyed by it (ADR-0014).
 - **Claim** — attaching a human to a Principal by email. It names an unclaimed Principal, or links one to a human who already exists; it never rewrites the rows the Principal authored, so a person may own many Principals.
 - **Capacity** — the cap on how many Observations an unclaimed Principal may file. Reaching it refuses *writes* only; reads never stop working. A nudge toward claiming, explicitly not a security control.
 - **Workspace** — a crux deployment and the Members in it. It names the deployment in the header and is *not* a schema entity; since ADR-0013 it is also no longer the boundary of what anyone can see — that is the Principal.

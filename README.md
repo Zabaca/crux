@@ -293,9 +293,10 @@ naming the broken links and orphans.
   [ADR-0010: sign-in is a magic link](docs/adr/0010-sign-in-is-a-magic-link.md),
   [ADR-0011: removal revokes access, not identity](docs/adr/0011-removal-revokes-access-not-identity.md),
   [ADR-0012: Crux does not own the build](docs/adr/0012-crux-does-not-own-the-build.md),
-  [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md).
+  [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md),
+  [ADR-0014: view-state belongs to whoever is looking at it](docs/adr/0014-view-state-is-the-humans.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
-  [agent-driven view control](docs/agent-driven-view-control-spec.md).
+  [agent-driven view control](docs/agent-driven-view-control-spec.md) (superseded by ADR-0014).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
   [model selection](docs/model-selection.md).
 - Runbooks — [rebuild the production database empty](docs/runbooks/rebuild-production-database.md).
