@@ -475,6 +475,26 @@ describe("read pages", () => {
     expect((await get("/w/other", { headers: { cookie } })).status).toBe(404);
   });
 
+  test("a Member who owns nothing renders an empty page, not a redirect", async () => {
+    const { cookie } = await inviteAndJoin("empty@example.com", "Owns Nothing");
+    // Hand the seeded Workstream back, so this Member is signed in with an
+    // empty corpus. Since the membership check and the scope are one statement
+    // now, "still a Member" and "owns nothing" arrive together — and the two
+    // have to stay distinguishable, or a Member with nothing filed yet would be
+    // bounced to `/signin` on their first visit.
+    await db.update(workstreams).set({ ownerId: "USR-james" }).where(eq(workstreams.id, "WS-crux"));
+
+    const res = await get("/", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("No Workstreams yet.");
+    // Signed in, on the Member view — not the stranger's homepage.
+    expect(body).toContain("Owns Nothing");
+
+    // And the Workstream they no longer own is missing, not forbidden.
+    expect((await get("/w/crux", { headers: { cookie } })).status).toBe(404);
+  });
+
   test("a Problem URL resolves to the Problem, its Evidence and its Attempts", async () => {
     const { cookie } = await inviteAndJoin("reader@example.com", "Reader");
 
@@ -547,9 +567,18 @@ describe("read pages", () => {
 
   test("a URL naming nothing is a 404 page, not a crash", async () => {
     const { cookie } = await inviteAndJoin("missing@example.com", "Missing");
-    const res = await get("/w/crux/problems/9999", { headers: { cookie } });
-    expect(res.status).toBe(404);
-    expect(await res.text()).toContain("Not found");
+    // The slug and the id are now read concurrently, so a URL where *neither*
+    // names anything reaches the id read that used to be skipped once the slug
+    // had already failed. It still has to be a 404 page rather than a 500.
+    for (const path of [
+      "/w/crux/problems/9999",
+      "/w/nope/problems/9999",
+      "/w/nope/problems/not-a-number",
+    ]) {
+      const res = await get(path, { headers: { cookie } });
+      expect(res.status, path).toBe(404);
+      expect(await res.text()).toContain("Not found");
+    }
   });
 
   test("corpus text is escaped, not interpolated as markup", async () => {

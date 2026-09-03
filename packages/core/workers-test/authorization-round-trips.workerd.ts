@@ -17,34 +17,18 @@ import { eq } from "drizzle-orm";
 import { beforeEach, describe, expect, test } from "vitest";
 
 import { createD1Db, type CruxDb } from "../src/db/client.js";
+import { countingD1 as counting } from "../src/db/test-utils.js";
 import { applyD1Schema } from "../src/db/d1/index.js";
 import { users, workstreams } from "../src/db/schema.js";
 import { mintToken } from "../src/auth/tokens.js";
-import { authenticateAndResolveScope, resolveScope } from "../src/auth/principals.js";
+import {
+  authenticateAndResolveScope,
+  resolveActiveScope,
+  resolveScope,
+} from "../src/auth/principals.js";
 import { query } from "../src/reads/index.js";
 
 let db: CruxDb;
-
-/** A D1 binding that records every statement prepared against it. */
-function counting(binding: D1Database): { db: CruxDb; statements: string[] } {
-  const statements: string[] = [];
-  const proxy = new Proxy(binding, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
-      if (prop === "prepare") {
-        return (sql: string) => {
-          statements.push(sql);
-          return (value as D1Database["prepare"]).call(target, sql);
-        };
-      }
-      if (prop === "batch") {
-        return (list: D1PreparedStatement[]) => (value as D1Database["batch"]).call(target, list);
-      }
-      return typeof value === "function" ? value.bind(target) : value;
-    },
-  });
-  return { db: createD1Db(proxy), statements };
-}
 
 beforeEach(async () => {
   await reset();
@@ -134,6 +118,51 @@ describe("the read the API actually serves", () => {
     )) as Array<{ id: string }>;
 
     expect(result.map((w) => w.id)).toEqual(["WS-mine"]);
+  });
+});
+
+describe("the browser door's membership half", () => {
+  test("an active Principal who owns nothing is a Member with an empty corpus", async () => {
+    // One row through the left joins, carrying the Principal as its own owner
+    // and a null Workstream. The distinction from "no rows" is the whole reason
+    // the browser can drop its separate `isActiveMember` query: this renders an
+    // empty page, and null redirects.
+    await db.insert(users).values({ id: "USR-bare", slug: "bare", name: "bare" });
+
+    const { db: counted, statements } = counting(env.DB);
+    const scope = await resolveActiveScope(counted, { id: "USR-bare" });
+
+    expect(statements).toHaveLength(1);
+    expect(scope).not.toBeNull();
+    expect(scope?.ownerIds).toEqual(["USR-bare"]);
+    expect(scope?.workstreamIds).toEqual([]);
+  });
+
+  test("a removed Principal is not a Member, in the same one statement", async () => {
+    const id = await principal("removed-viewer");
+    await db.update(users).set({ removedAt: Date.now() }).where(eq(users.id, id));
+
+    const { db: counted, statements } = counting(env.DB);
+
+    expect(await resolveActiveScope(counted, { id })).toBeNull();
+    expect(statements).toHaveLength(1);
+  });
+
+  test("a session naming a row that is gone is not a Member either", async () => {
+    expect(await resolveActiveScope(db, { id: "USR-never-existed" })).toBeNull();
+  });
+
+  test("a removed root leaves the Principal a Member with nothing to read", async () => {
+    // Not null: the Principal itself is still in the Workspace, so it renders —
+    // empty. Collapsing this into "not a Member" would bounce a signed-in
+    // person to `/signin` because somebody else was removed.
+    const root = await principal("removed-root-b");
+    await principal("still-here", root);
+    await db.update(users).set({ removedAt: Date.now() }).where(eq(users.id, root));
+
+    const scope = await resolveActiveScope(db, { id: "USR-still-here" });
+    expect(scope).not.toBeNull();
+    expect(scope?.workstreamIds).toEqual([]);
   });
 });
 

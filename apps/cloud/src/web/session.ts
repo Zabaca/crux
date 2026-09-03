@@ -1,6 +1,6 @@
 /**
- * The session gate for callers that need a viewer and nothing else: the Astro
- * pages, and `/v1` when the browser writes through it.
+ * The session gate for callers that need a viewer and what that viewer may
+ * read: the Astro pages, and `/v1` when the browser writes through it.
  *
  * `router.ts` has the sign-in, sign-out and invite flows and so holds the Better
  * Auth instance itself; everything else gets a viewer from here. The point is
@@ -11,7 +11,8 @@
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { createAuth } from "@crux/core/auth/better-auth";
 import { resendSender, type EmailSender } from "@crux/core/auth/email";
-import { isActiveMember } from "@crux/core/auth/membership";
+import { resolveActiveScope, type Scope } from "@crux/core/auth/principals";
+import type { ReadContext } from "@crux/core/reads";
 
 import type { Env } from "../api.js";
 import type { Viewer } from "./layout.js";
@@ -55,33 +56,54 @@ export function signInRedirect(url: URL): Response {
   return new Response(null, { status: 302, headers: { location: `/signin?next=${next}` } });
 }
 
+/** A resolved browser session: who is looking, and what they may read. */
+export type Session = { viewer: Viewer; scope: Scope };
+
 /**
- * Resolve the browser session to a Member, or null. This is the session half of
- * the identity story whose other half is `authenticateAndResolveScope` — both land on a
- * row in `users` (ADR-0007), and both refuse a row that has been removed from
- * the Workspace.
+ * Resolve the browser session to a Member and their scope, or null. This is the
+ * session half of the identity story whose other half is
+ * `authenticateAndResolveScope` — both land on a row in `users` (ADR-0007), and
+ * both refuse a row that has been removed from the Workspace.
+ *
+ * The membership check and the scope are one statement, not two. The session
+ * outlives the membership it was minted for, so Better Auth checking the cookie
+ * is not enough — whether the person is still in the Workspace has to be asked
+ * of the corpus on every request (ADR-0011). `resolveActiveScope` asks exactly
+ * that as its `where` clause and answers with the scope as well, so the check
+ * that used to be its own round trip is now a side effect of the one this
+ * request was going to make anyway.
  */
 export async function viewerFor(
   db: CruxDb,
   secret: string,
   origin: string,
   request: Request,
-): Promise<Viewer | null> {
+): Promise<Session | null> {
   // No sender: this instance only reads a session cookie. Nothing it can reach
   // sends mail, so leaving it out is a statement, not an omission.
   const auth = createAuth(db, { secret, baseURL: origin });
   const session = await auth.api.getSession({ headers: request.headers });
   if (!session?.user) return null;
   const u = session.user as { id: string; name: string; email: string | null };
-  // The session outlives the membership it was minted for. Better Auth checks
-  // the cookie; this checks whether the person is still in the Workspace.
-  if (!(await isActiveMember(db, u.id))) return null;
-  return { id: u.id, name: u.name, email: u.email };
+  const scope = await resolveActiveScope(db, { id: u.id });
+  // Null is "no longer a Member", which is not the same as "a Member who owns
+  // nothing" — that arrives as a scope with an empty corpus and renders.
+  if (!scope) return null;
+  return { viewer: { id: u.id, name: u.name, email: u.email }, scope };
 }
 
 /** What an Astro page needs to render inside the shell, or the reason it can't. */
 export type PageContext =
-  | { ok: true; db: CruxDb; viewer: Viewer; workspace: string }
+  | {
+      ok: true;
+      /** Hand this to every `query()` on the page: the scope is resolved once,
+       * here, and re-resolving it per read is what this carries it to avoid. */
+      read: ReadContext;
+      /** The same row as `read.principal`, with the name and address the shell
+       * prints. Reads take `read`; the layout takes this. */
+      viewer: Viewer;
+      workspace: string;
+    }
   | { ok: false; response: Response };
 
 /**
@@ -102,7 +124,12 @@ export async function pageContext(env: WebEnv, request: Request): Promise<PageCo
     };
   }
   const db = createD1Db(env.DB);
-  const viewer = await viewerFor(db, secret, url.origin, request);
-  if (!viewer) return { ok: false, response: signInRedirect(url) };
-  return { ok: true, db, viewer, workspace: workspaceName(env, url) };
+  const session = await viewerFor(db, secret, url.origin, request);
+  if (!session) return { ok: false, response: signInRedirect(url) };
+  return {
+    ok: true,
+    read: { db, principal: session.viewer, scope: session.scope },
+    viewer: session.viewer,
+    workspace: workspaceName(env, url),
+  };
 }

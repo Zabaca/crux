@@ -8,12 +8,7 @@
  * the caller's ViewStateDO. Reads mirror the CLI's `--json` shapes exactly.
  */
 import { createD1Db, type CruxDb } from "@crux/core/db";
-import {
-  authenticateAndResolveScope,
-  mintPrincipal,
-  resolveScope,
-  type Scope,
-} from "@crux/core/auth/principals";
+import { authenticateAndResolveScope, mintPrincipal, type Scope } from "@crux/core/auth/principals";
 import { CLAIM_TTL_MS, createClaim } from "@crux/core/auth/claims";
 import { claimLinkEmail } from "@crux/core/auth/email";
 import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
@@ -152,11 +147,12 @@ async function authenticate(
   if (!env.BETTER_AUTH_SECRET) return null;
   const origin = request.headers.get("origin");
   if (request.method !== "GET" && origin !== url.origin) return null;
-  const viewer = await viewerFor(db, env.BETTER_AUTH_SECRET, url.origin, request);
-  if (!viewer) return null;
   // The browser door has no token row to enter through, so the same joined
-  // query is entered at `users` instead — still one statement (ADR-0007).
-  return { userId: viewer.id, scope: await resolveScope(db, { id: viewer.id }) };
+  // query is entered at `users` instead — still one statement (ADR-0007), and
+  // `viewerFor` has already made it: it is the membership check as well.
+  const session = await viewerFor(db, env.BETTER_AUTH_SECRET, url.origin, request);
+  if (!session) return null;
+  return { userId: session.viewer.id, scope: session.scope };
 }
 
 /** Resolve the per-user ViewStateDO stub. */

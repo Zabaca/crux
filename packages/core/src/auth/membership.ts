@@ -78,12 +78,17 @@ export async function removeMember(
 }
 
 /**
- * Is `userId` still a Member? The gate every session-bearing request passes.
+ * Is `userId` still a Member? The gate on the session-bearing requests that
+ * read nothing from the corpus — the account pages in `router.ts`.
  *
  * A browser session outlives the removal that ended the membership, and so does
  * a sign-in link already sitting in an inbox — Better Auth will happily verify
  * one, since the row it names still exists. Checking the row here is what makes
  * both worthless the moment the stamp lands.
+ *
+ * A request that is going on to read the corpus asks `resolveActiveScope`
+ * instead, which puts the same predicate in the `where` clause of the query it
+ * was making anyway — same gate, on every request, for one fewer round trip.
  */
 export async function isActiveMember(db: CruxDb, userId: string): Promise<boolean> {
   const rows = await db
