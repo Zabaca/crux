@@ -937,8 +937,8 @@ describe("the public homepage", () => {
     // This deployment's vitest config sets the cap to 5, while production sets
     // 200 — so a page that quoted the default would pass here by coincidence
     // and lie in production. Asserting 5 is what pins that it reads the var.
-    expect(body).toContain("5 Observations free");
-    expect(body).not.toContain("200 Observations free");
+    expect(body).toContain("files 5 Observations");
+    expect(body).not.toContain("files 200 Observations");
   });
 
   test("it offers the two doors a stranger can actually open", async () => {

@@ -358,7 +358,10 @@ export async function handleWeb(
   // Workstream list at the same address — the public page is what `/` means
   // only when nobody is signed in (ADR-0013 made that the common case).
   if (path === "/" && !viewer) {
-    return render(landingPage({ observationCap: observationCapFrom(env.CRUX_OBSERVATION_CAP) }));
+    const home = landingPage({ observationCap: observationCapFrom(env.CRUX_OBSERVATION_CAP) });
+    return htmlResponse(
+      page({ title: home.title, viewer, workspace, body: home.body, bodyClass: home.bodyClass }),
+    );
   }
 
   // ---- everything below is Members-only ------------------------------------
