@@ -10,6 +10,7 @@ import { handleApi, type Env } from "./api.js";
 import { handleWeb } from "./web/router.js";
 import { MARK_SVG } from "./web/brand.js";
 import { FAVICON_ICO_BASE64 } from "./web/favicon-ico.js";
+import { agentText } from "./web/agent-text.js";
 
 export type { Env };
 export { ViewStateDO } from "./view-state-do.js";
@@ -101,6 +102,15 @@ export default {
     const { pathname } = new URL(request.url);
 
     if (pathname === "/health") return health(env);
+
+    // The plain-text documents, which are what an agent actually reads
+    // (`web/agent-text.ts`). They come before the session and the database for
+    // the same reason `/health` does: an agent has no cookie and neither
+    // document needs a row. `/` falls through to the page only when the caller
+    // asked for HTML, so a browser is unaffected and everything automated gets
+    // text by default.
+    const asText = agentText(request, new URL(request.url), env);
+    if (asText) return asText;
 
     const icon = favicon(pathname);
     if (icon) return icon;

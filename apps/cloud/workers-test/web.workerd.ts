@@ -17,8 +17,19 @@ let db: CruxDb;
 const BASE = "https://crux.example";
 
 /** Fetch without following redirects, so a session gate is observable. */
+/**
+ * Fetch as a browser does: without following redirects, so a session gate is
+ * observable, and *with* an Accept header, because every browser sends one.
+ * That header is now load-bearing — `/` answers plain text to a caller that
+ * does not ask for HTML (see the agent-text suite below) — so a helper that
+ * omitted it would be testing the agent path while claiming to test the page.
+ */
 function get(path: string, init: RequestInit = {}): Promise<Response> {
-  return SELF.fetch(`${BASE}${path}`, { redirect: "manual", ...init });
+  return SELF.fetch(`${BASE}${path}`, {
+    redirect: "manual",
+    ...init,
+    headers: { accept: "text/html,application/xhtml+xml", ...(init.headers ?? {}) },
+  });
 }
 
 beforeEach(async () => {
@@ -941,11 +952,13 @@ describe("the public homepage", () => {
     expect(body).not.toContain("files 200 Observations");
   });
 
-  test("it offers the two doors a stranger can actually open", async () => {
+  test("it offers the one door a stranger can actually open", async () => {
     const body = await (await get("/")).text();
-    expect(body).toContain('href="/docs"');
     expect(body).toContain('href="/signin"');
-    // And not the signed-in shell's nav.
+    // The doc tree is the repo's own documentation, not the product's, so it
+    // is not offered to somebody who has never used Crux.
+    expect(body).not.toContain('href="/docs"');
+    // Nor the signed-in shell's nav.
     expect(body).not.toContain('href="/members"');
   });
 
@@ -956,5 +969,59 @@ describe("the public homepage", () => {
     const body = await res.text();
     expect(body).not.toContain("A problem registry for AI agents");
     expect(body).toContain("crux");
+  });
+});
+
+/**
+ * The plain-text documents. Crux is operated by agents, so the negotiation
+ * defaults the opposite way from a normal site: text unless HTML was asked
+ * for. What matters is that the default is text, that a browser is unaffected,
+ * and that every command quoted is one the CLI actually accepts.
+ */
+describe("the agent-facing text", () => {
+  test("/ without an Accept header answers text, not markup", async () => {
+    const res = await SELF.fetch(`${BASE}/`);
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/plain");
+    const body = await res.text();
+    expect(body).toContain("crux — a problem registry for AI agents");
+    expect(body).not.toContain("<html");
+  });
+
+  test("a browser still gets the page", async () => {
+    const res = await SELF.fetch(`${BASE}/`, { headers: { accept: "text/html,*/*" } });
+    expect(res.headers.get("content-type")).toContain("text/html");
+    expect(await res.text()).toContain("A problem registry for AI agents");
+  });
+
+  test("/llms.txt is text whatever the caller asks for", async () => {
+    const res = await SELF.fetch(`${BASE}/llms.txt`, { headers: { accept: "text/html" } });
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toContain("text/plain");
+    expect(await res.text()).toContain("## The commands, verbatim");
+  });
+
+  test("both quote this deployment's allowance, not a hard-coded number", async () => {
+    const short = await (await SELF.fetch(`${BASE}/`)).text();
+    const long = await (await SELF.fetch(`${BASE}/llms.txt`)).text();
+    // The test config sets the cap to 5; production sets 200.
+    expect(short).toContain("5 Observations");
+    expect(long).toContain("file 5 Observations");
+    expect(short).not.toContain("200 Observations");
+  });
+
+  test("the commands they quote are the ones the CLI takes", async () => {
+    const long = await (await SELF.fetch(`${BASE}/llms.txt`)).text();
+    // `observation add` is --content, not a positional: the HTML page got this
+    // wrong, and it is the whole reason these documents exist.
+    expect(long).toContain("crux observation add --content");
+    expect(long).not.toMatch(/observation add "/);
+    // Tags are comma-separated; the repeatable form drops all but the last.
+    expect(long).toContain("--tag cli,performance");
+  });
+
+  test("a POST to / is not answered with the document", async () => {
+    const res = await SELF.fetch(`${BASE}/`, { method: "POST" });
+    expect(res.headers.get("content-type") ?? "").not.toContain("text/plain");
   });
 });

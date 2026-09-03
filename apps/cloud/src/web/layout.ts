@@ -314,7 +314,6 @@ export function page(opts: {
         </form>
       </nav>`
     : html`<nav>
-        <a href="/docs">Docs</a>
         <a href="/signin">Sign in</a>
       </nav>`;
 
