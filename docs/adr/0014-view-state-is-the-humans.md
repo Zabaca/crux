@@ -111,3 +111,44 @@ half moves the other's cursor.
 - **A Principal is still not a person and now not an agent either.** It is the
   tenancy and capacity boundary (ADR-0013), shared by every client configured
   with the same token. Anything that must differ per agent cannot be keyed by it.
+
+## Amendment: the object is keyed by the person, not by the Principal
+
+Everything above stands. One thing it did not consider does not: the Durable
+Object was addressed by `idFromName(<the requesting Principal>)`, and since
+ADR-0013 a corpus belongs to a *set* of Principals — a root, plus everything
+claiming has linked to it. Reads were taught about the set; the object key was
+not.
+
+The consequence is silent, which is what made it worth an amendment rather than
+a fix. A person claims a second machine, which is the normal path ADR-0013
+describes. Their browser session resolves to the root; the agent's token acts as
+the linked row. The agent files, `dispatch()` writes view-state into
+`DO(<linked>)` and broadcasts there — correctly — while the open page is
+subscribed to `DO(<root>)`. Nothing is dropped and nothing races. The frame is
+delivered to an object nobody is listening on, and the page just sits there
+until somebody reloads it by hand, so it reads as a flaky stream rather than as
+a structural one.
+
+The key is now the **root** — `coalesce(claimed_by_user_id, id)`, the expression
+the scope query already computes, carried on `Scope.rootId` so it costs no extra
+round trip. One object per human, which is what this ADR said view-state was for
+in the first place: *a fact about a person at a screen*, and the root is the
+person. The alternative — keep the blob per Principal and fan out only the
+notification — leaves two keys with different rules and still has to resolve the
+set at push time.
+
+This cannot widen the tenancy boundary, because the root is the same id
+`ownerIds` is derived from: two Principals share an object only when a claim
+linked them, and a Principal whose root was removed falls back to its own id
+rather than joining a dead root's. It is also not a change for the browser,
+which already resolved to the root.
+
+**It orphans view-state, deliberately.** Whatever sits at `DO(<linked>)` — the
+view snapshot and `recentQueries` — does not follow the re-key, and nothing
+migrates it. Only linked Principals are affected; an unclaimed one is its own
+root and keeps the object it had. That is acceptable because view-state is
+ephemeral and derived: no corpus row lives in the object, the TUI rebuilds the
+snapshot from its next command, and `revision` restarting at zero is read by
+nobody who compares it across time. The one visible effect is a TUI on a linked
+machine opening at the Workstream list once.
