@@ -1,5 +1,24 @@
 # Agent-driven view control — POC spec
 
+> **Superseded (2026-09-03) by [ADR-0014](adr/0014-view-state-is-the-humans.md).**
+> View-state belongs to whoever is looking at it: an agent may read the human's
+> view and may not move it, and it names its Workstream with `-w` rather than
+> inheriting one. Two premises of this document are retired. The anti-goal
+> *"the agent and the user use the same event set. The agent has no privileges
+> the user lacks"* assumed the pairing this spec was written for — one agent,
+> one human, one screen — and under several agents sharing a Principal the
+> symmetry it protects is what lets one agent move another's page. And the
+> file-based bus below — `view-state.json`, the chokidar watcher, the SSE
+> bridge through the Next.js server — does not exist: view-state is a per-user
+> Durable Object behind `/v1/view` ([ADR-0004](adr/0004-cloudflare-stack.md)),
+> `crux view` is read-only (`get` and `path`), and `apps/web/` — the Next.js
+> app the web half below is written against — was deleted rather than ported
+> in that same move.
+>
+> This is kept as the record of a design that was built and retired, and is not
+> edited into agreement with the current one — half-describing two designs is
+> worse than describing one that is over.
+
 A control bus between the agent (CLI), the web UI, and the TUI, built on a file-based XState machine. POC scope.
 
 ## Why
