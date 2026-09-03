@@ -103,14 +103,6 @@ export const QuerySchema = z.discriminatedUnion("kind", [
     workstream: z.string().optional(),
     limit: z.number().int().positive().max(100).optional(),
   }),
-
-  z.object({
-    kind: z.literal("CONTEXT"),
-    workstream: z.string(),
-    stages: z.array(z.string()).optional(),
-    includeExtras: z.boolean().optional(),
-    showArchived: z.boolean().optional(),
-  }),
 ]);
 
 export type QueryRequest = z.infer<typeof QuerySchema>;
@@ -200,7 +192,6 @@ export type SearchResults = {
 /** Read kinds that leave a trace in `recentQueries`, and the entry they write. */
 const RECORDED: Partial<Record<QueryKind, { kind: string; slug: (q: never) => string }>> = {
   PROBLEM_SHOW: { kind: "PROBLEM_SHOW", slug: (q: { id: string | number }) => String(q.id) },
-  CONTEXT: { kind: "CONTEXT_SHOW", slug: (q: { workstream: string }) => q.workstream },
 } as Partial<Record<QueryKind, { kind: string; slug: (q: never) => string }>>;
 
 // ---------------------------------------------------------------------------
@@ -212,6 +203,9 @@ const numeric = (v: string | number): number =>
 
 const STATUS_RANK: Record<string, number> = { now: 0, next: 1, later: 2, done: 4, abandoned: 5 };
 const rankStatus = (s: string | null): number => (s == null ? 3 : (STATUS_RANK[s] ?? 99));
+
+/** The stages a Problem can be said to be *actively* scheduled in. */
+const ACTIVE_STAGES = ["now", "next", "later"] as const;
 
 export type ArchiveBlock = {
   rationale: string | null;
@@ -386,90 +380,6 @@ async function searchCorpus(
       workstreamSlug: slugOf(o.workstreamId),
     })),
   } satisfies SearchResults;
-}
-
-// ---------------------------------------------------------------------------
-// The context digest
-// ---------------------------------------------------------------------------
-
-const SEED_VERSION = "2026-04-21";
-
-const VALID_STAGES = ["now", "next", "later", "unscheduled", "done", "abandoned"] as const;
-
-/** The stages a Problem can be said to be *actively* scheduled in. */
-const ACTIVE_STAGES = ["now", "next", "later"] as const;
-
-/**
- * The transitions a Problem can still take. The two terminal doors are always
- * open on a live Problem — `abandon` carries a rationale, `outcome` carries the
- * record of what became of it, and there is no third way off the board.
- */
-function legalNextTransitions(status: string | null): string[] {
-  if (status === "done" || status === "abandoned") return [];
-  const events: string[] = ["schedule", "abandon", "outcome"];
-  if (status !== null) events.push("unschedule");
-  return events;
-}
-
-async function contextDigest(
-  db: CruxDb,
-  q: Extract<QueryRequest, { kind: "CONTEXT" }>,
-  scope: Scope,
-): Promise<Record<string, unknown>> {
-  const requested = new Set(q.stages?.length ? q.stages : ["now"]);
-  for (const s of requested) {
-    if (!(VALID_STAGES as readonly string[]).includes(s)) {
-      throw new Error(`Invalid stage value: "${s}". Valid values: ${VALID_STAGES.join(", ")}`);
-    }
-  }
-  const showArchived = Boolean(q.showArchived);
-  const wsRow = await requireWorkstreamInScope(db, q.workstream, scope);
-
-  const allProblemsRaw = await db
-    .select()
-    .from(problems)
-    .where(eq(problems.workstreamId, wsRow.id));
-  const allProblems = [...allProblemsRaw].sort((a, b) => {
-    const d = rankStatus(a.status) - rankStatus(b.status);
-    return d !== 0 ? d : a.createdAt - b.createdAt;
-  });
-
-  const digestProblems = await Promise.all(
-    allProblems.map(async (p) => {
-      const abandonRows = await db
-        .select()
-        .from(abandonments)
-        .where(eq(abandonments.problemId, p.id))
-        .limit(1);
-      return {
-        ...p,
-        attempts: await attemptsFor(db, p.id),
-        evidence: await evidenceWithObservations(db, p.id),
-        abandonment: abandonRows[0] ?? null,
-        outcome: await outcomeFor(db, p.id),
-        legal_next_transitions: legalNextTransitions(p.status),
-      };
-    }),
-  );
-
-  const output: Record<string, unknown> = { workstream: wsRow, seed_version: SEED_VERSION };
-  if (requested.has("now")) output.now = digestProblems.filter((p) => p.status === "now");
-  if (requested.has("next")) output.next = digestProblems.filter((p) => p.status === "next");
-  if (requested.has("later")) output.later = digestProblems.filter((p) => p.status === "later");
-  if (requested.has("unscheduled"))
-    output.unscheduled = digestProblems.filter((p) => p.status == null);
-  if (requested.has("done")) output.done = digestProblems.filter((p) => p.status === "done");
-  if (requested.has("abandoned"))
-    output.abandoned = digestProblems.filter((p) => p.status === "abandoned");
-  if (q.includeExtras) {
-    output.recent_observations_unlinked = await unlinkedObservations(
-      db,
-      wsRow.id,
-      showArchived,
-      scope,
-    );
-  }
-  return output;
 }
 
 async function unlinkedObservations(
@@ -850,8 +760,5 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
 
     case "SEARCH":
       return searchCorpus(db, q, scope);
-
-    case "CONTEXT":
-      return contextDigest(db, q, scope);
   }
 }

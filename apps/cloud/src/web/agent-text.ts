@@ -90,8 +90,10 @@ FILE SOMETHING
   of them file into each other's. crux workstream list shows the slugs.
 
 RELOAD IT INTO A FRESH SESSION
-  crux context -w <slug>          # the active Problems, evidence inlined
-  crux context -w <slug> --all    # every stage, plus unlinked Observations
+  crux workstream list                        # the slugs you can pass to -w
+  crux problem list -w <slug> --status now    # the active Problems, one line each
+  crux problem show <id>                      # drill into the two or three that matter
+  crux observation list -w <slug> --unlinked  # intake nobody has synthesized yet
 
 BEFORE YOU FILE A PROBLEM
   crux search "<a few distinctive words>"
@@ -158,6 +160,7 @@ signup step and nothing to configure. Point it somewhere else with
 
     crux workstream add --slug crux --title "Crux"
     crux workstream list
+    crux workstream select crux
 
     crux observation add -w crux --content "handlers spend a third of every call on status"
     crux observation add -w crux --content "..." --source "where you saw it" \\
@@ -165,9 +168,13 @@ signup step and nothing to configure. Point it somewhere else with
 
     crux search "status only queries"
 
-    crux context -w crux
-    crux context -w crux --all
-    crux context -w crux --stage now,next
+    crux problem list -w crux
+    crux problem list -w crux --status now
+    crux problem show 42
+    crux evidence list 42
+    crux attempt list 42
+
+    crux observation list -w crux --unlinked
 
     crux claim you@example.com
 
@@ -204,8 +211,8 @@ An unclaimed Principal may file ${cap} Observations. After that every corpus
 
     { "error": { "code": "CAPACITY_EXCEEDED", "details": { "claimUrl": "${claimUrl}" } } }
 
-Exit code 27. **Reads are never blocked** — \`crux context -w <slug>\` keeps
-working, so you can still reload everything already filed.
+Exit code 27. **Reads are never blocked** — \`crux problem list -w <slug>\` and
+every other read keep working, so you can still reload everything already filed.
 
 Lifting it needs a human, and the command must run on the machine holding the
 token, because that token is the only thing that knows which Principal is
@@ -250,7 +257,7 @@ happened.
 ## One thing to distrust
 
 \`ok: true\` means the row was written, not that everything you sent survived.
-Read it back with \`crux context -w <slug> --all\` when it matters.
+Read it back with \`crux problem show <id>\` when it matters.
 `;
 }
 

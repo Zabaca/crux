@@ -101,7 +101,7 @@ describe("an unclaimed Principal at its cap", () => {
     expect(body.error.message).toContain("https://crux.example/claim");
   });
 
-  test("reads keep working, including the whole context digest", async () => {
+  test("reads keep working across every surface the corpus is read from", async () => {
     const p = await principalWithWorkstream("readable");
     await dispatchAs(p.token, {
       kind: "ADD_PROBLEM",
@@ -120,17 +120,14 @@ describe("an unclaimed Principal at its cap", () => {
     expect(observations.status).toBe(200);
     expect(((await observations.json()) as { result: unknown[] }).result).toHaveLength(CAP);
 
-    const context = await queryAs(p.token, {
-      kind: "CONTEXT",
+    const problems = await queryAs(p.token, {
+      kind: "PROBLEM_LIST",
       workstream: p.slug,
-      stages: ["unscheduled"],
+      status: "unscheduled",
     });
-    expect(context.status).toBe(200);
-    const digest = (await context.json()) as {
-      result: { workstream: { slug: string }; unscheduled: Array<{ title: string }> };
-    };
-    expect(digest.result.workstream.slug).toBe(p.slug);
-    expect(digest.result.unscheduled.map((x) => x.title)).toEqual(["still visible"]);
+    expect(problems.status).toBe(200);
+    const listed = (await problems.json()) as { result: Array<{ title: string }> };
+    expect(listed.result.map((x) => x.title)).toEqual(["still visible"]);
   });
 
   test("refuses every write, not only the metered one", async () => {

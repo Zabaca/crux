@@ -161,13 +161,12 @@ const PROBES: Record<QueryKind, Probe> = {
   OUTCOME_SHOW: (a) => ({ kind: "OUTCOME_SHOW", id: a.outcomeId }),
 
   SEARCH: () => ({ kind: "SEARCH", q: "secret" }),
-  CONTEXT: (a) => ({ kind: "CONTEXT", workstream: a.slug, stages: ["now", "abandoned"] }),
 };
 
 /**
  * Any of `ids` appearing as an `id` or `problemId` anywhere inside `value`.
  *
- * A digest nests rows several levels down — a Problem carries its Evidence,
+ * A read nests rows several levels down — a Problem carries its Evidence,
  * which carries its Observation — so a leak is not necessarily at the top
  * level, and a substring search over the JSON cannot tell an integer id from
  * the same digits inside an epoch timestamp.
