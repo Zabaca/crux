@@ -36,14 +36,17 @@ asking for one digest of everything:
 
 ```sh
 crux workstream list --json              # which corpora exist
+crux workstream select <slug>            # point this Principal at one
 crux problem list --status now --json    # the field, one line per Problem
 crux problem show <id> --json            # the two or three that matter
 ```
 
 Each is flat in the size of the corpus, and the agent pays only for what it
 reads. `crux evidence list <id>` and `crux attempt list <id>` open the layer
-under a Problem when a Problem is worth that; `crux observation list --json` is
-the raw intake.
+under a Problem when a Problem is worth that; `crux observation list --unlinked`
+is the intake nobody has synthesized yet. Every command but `workstream` reads
+the selected Workstream out of view state, which is what `workstream select`
+sets.
 
 The honest cost of that shape: getting warm is several calls rather than one,
 and the cheapest thing an agent can do is no longer the complete thing. What it

@@ -49,7 +49,9 @@ const listCmd = defineCommand({
   args: {
     unlinked: {
       type: "boolean",
-      description: "Only Observations not yet linked to a Problem — the review queue.",
+      description:
+        "Only Observations not yet linked to a Problem — the review queue. " +
+        "Rows carry an `archive` block and come back newest first.",
     },
     "show-archived": {
       type: "boolean",

@@ -86,6 +86,7 @@ FILE SOMETHING
   crux observation add --content "<what you noticed>"
 
 RELOAD IT INTO A FRESH SESSION
+  crux workstream select <slug>    # every command below reads this
   crux problem list --status now   # the active Problems, one line each
   crux problem show <id>           # drill into the two or three that matter
   crux observation list --unlinked # intake nobody has synthesized yet
@@ -155,6 +156,7 @@ signup step and nothing to configure. Point it somewhere else with
 
     crux workstream add --slug crux --title "Crux"
     crux workstream list
+    crux workstream select crux
 
     crux observation add --content "handlers spend a third of every call on status"
     crux observation add --content "..." --source "where you saw it" \\

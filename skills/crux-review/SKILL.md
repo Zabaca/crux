@@ -29,6 +29,7 @@ Problem costs more the more you have filed. Run these two before the first
 action; both are flat in the size of the corpus:
 
 ```sh
+crux workstream select <slug>         # every command below reads this
 crux observation list --unlinked      # the review queue
 crux problem list                     # every Problem, id + stage + title
 ```
@@ -48,7 +49,7 @@ crux attempt list 42                  # work in flight or already tried
 crux abandonment list                 # why the abandoned ones were dropped
 ```
 
-`crux attempt list 42` carries the `closing_note` on each closed Attempt — *why*
+`crux attempt list 42` carries the `closingNote` on each closed Attempt — *why*
 the approach ended that way. Don't re-propose a direction that was dropped for a
 reason still standing.
 
@@ -56,9 +57,9 @@ If no workstream is named and you can't infer one from cwd, ask.
 
 ## Review loop
 
-For each item in `recent_observations_unlinked`, propose one of:
+For each row `crux observation list --unlinked` returns, propose one of:
 
-1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> --problem <id> --note "why this supports it"`. Preferred when fit is clear.
+1. **Link as Evidence** to an existing Problem — `crux evidence link <obs-id> <problem-id> --note "why this supports it"`. Both ids are positional. Preferred when fit is clear.
 2. **Promote to a new Problem** — file `crux problem add` (with the seed Observation linked as Evidence in the same review).
 3. **Archive** — terminal. `crux observation archive` with a rationale. Use for misfiles, duplicates, evaporated relevance.
 4. **Leave** — explicitly defer. Keep the row; no action this pass.

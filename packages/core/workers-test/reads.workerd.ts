@@ -125,6 +125,35 @@ describe("query()", () => {
     expect(unlinked.map((o) => o.id)).toEqual(["OBS-2"]);
   });
 
+  test("OBSERVATION_UNLINKED hides an archived Observation unless asked for it", async () => {
+    await seed();
+    await db.insert(observations).values([
+      { id: "OBS-2", workstreamId: "WS-t", reporterId: "USR-t", content: "still open intake" },
+      {
+        id: "OBS-3",
+        workstreamId: "WS-t",
+        reporterId: "USR-t",
+        content: "ruled out",
+        archivedAt: 1700,
+        archivedById: "USR-t",
+        archiveRationale: "misfiled",
+      },
+    ]);
+
+    const hidden = (await query(
+      { kind: "OBSERVATION_UNLINKED", workstreamId: "t" },
+      { db, principal },
+    )) as Array<{ id: string }>;
+    expect(hidden.map((o) => o.id)).toEqual(["OBS-2"]);
+
+    const shown = (await query(
+      { kind: "OBSERVATION_UNLINKED", workstreamId: "t", showArchived: true },
+      { db, principal },
+    )) as Array<{ id: string; archive: { rationale: string | null } | null }>;
+    expect(shown.map((o) => o.id).sort()).toEqual(["OBS-2", "OBS-3"]);
+    expect(shown.find((o) => o.id === "OBS-3")!.archive).toMatchObject({ rationale: "misfiled" });
+  });
+
   test("a recorded read leaves a trace in recentQueries", async () => {
     const { problemId } = await seed();
     const store = new MemoryViewStore();

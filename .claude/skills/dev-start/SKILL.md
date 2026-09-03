@@ -49,6 +49,7 @@ Writes the `[user]` section of `$CRUX_HOME/config.toml`. The `users` row itself 
 ## 5. Smoke-test a read
 
 ```sh
+bun run crux workstream select crux
 bun run crux problem list --status now --json | jq .
 bun run crux problem show <id> --json | jq .
 ```

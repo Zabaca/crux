@@ -135,9 +135,13 @@ as you know enough. Each is flat in the size of the corpus.
 
 ```sh
 crux workstream list                  # which corpora exist
+crux workstream select <slug>         # every later command reads this
 crux problem list --status now        # the field: id, stage, title per line
 crux problem show 42                  # one Problem, with its Attempts and Outcome
 ```
+
+`workstream select` is not optional: every command below resolves its Workstream
+out of view state, and without it they refuse with *no workstream selected*.
 
 `--status` takes one of `now`, `next`, `later`, `unscheduled`, `done`,
 `abandoned`; omit it for every Problem in the Workstream. For intake mode
