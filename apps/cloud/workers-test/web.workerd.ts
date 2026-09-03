@@ -1027,8 +1027,12 @@ describe("the agent-facing text", () => {
     const long = await (await SELF.fetch(`${BASE}/llms.txt`)).text();
     // `observation add` is --content, not a positional: the HTML page got this
     // wrong, and it is the whole reason these documents exist.
-    expect(long).toContain("crux observation add --content");
+    expect(long).toContain("crux observation add -w crux --content");
     expect(long).not.toMatch(/observation add "/);
+    // And the Workstream is an argument, never a shared default — quoting a
+    // bare `crux context` would teach the collision this exists to close.
+    expect(long).toContain("crux context -w crux");
+    expect(long).not.toMatch(/crux context\n/);
     // Tags are comma-separated; the repeatable form drops all but the last.
     expect(long).toContain("--tag cli,performance");
   });

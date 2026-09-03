@@ -28,6 +28,8 @@ import { viewCommand } from "../commands/view.js";
 import { searchCommand } from "../commands/search.js";
 import { outcomeCommand } from "../commands/outcome.js";
 import { claimCommand } from "../commands/claim.js";
+import { evidenceCommand } from "../commands/evidence.js";
+import { abandonmentCommand } from "../commands/abandonment.js";
 
 type AnyCmd = {
   run?: (ctx: { args: Record<string, unknown>; rawArgs?: string[] }) => Promise<void>;
@@ -97,7 +99,7 @@ const DIGEST = {
   now: [],
 };
 
-/** A `/v1/view` body with a workstream selected — what `wsArg()` needs. */
+/** A `/v1/view` body — what `crux view get` renders. No corpus command reads it. */
 const VIEW_WITH_WS = {
   value: { viewing: "workstream_dashboard" },
   context: { workstreamId: "WS-smoke", problemId: null },
@@ -183,13 +185,18 @@ describe("reads", () => {
     expect(calls).toHaveLength(0);
   });
 
-  test("problem list carries the selected workstream and the status filter", async () => {
+  test("problem list carries the workstream it was given, and the status filter", async () => {
     const calls = stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/query": { result: [] },
     });
 
-    await capture(() => runCmd(problemCommand as AnyCmd, "list", { status: "now", json: true }));
+    await capture(() =>
+      runCmd(problemCommand as AnyCmd, "list", {
+        workstream: "WS-smoke",
+        status: "now",
+        json: true,
+      }),
+    );
 
     expect(calls.map((c) => c.body).at(-1)).toEqual({
       kind: "PROBLEM_LIST",
@@ -200,11 +207,12 @@ describe("reads", () => {
 
   test("context defaults to the `now` bucket and --all opens every one", async () => {
     const calls = stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/query": { result: DIGEST },
     });
 
-    await capture(() => runCmd(contextCommand as AnyCmd, "run", { json: true }));
+    await capture(() =>
+      runCmd(contextCommand as AnyCmd, "run", { workstream: "WS-smoke", json: true }),
+    );
     expect(calls.at(-1)!.body).toEqual({
       kind: "CONTEXT",
       workstream: "WS-smoke",
@@ -214,7 +222,12 @@ describe("reads", () => {
     });
 
     await capture(() =>
-      runCmd(contextCommand as AnyCmd, "run", { all: true, "show-archived": true, json: true }),
+      runCmd(contextCommand as AnyCmd, "run", {
+        workstream: "WS-smoke",
+        all: true,
+        "show-archived": true,
+        json: true,
+      }),
     );
     expect(calls.at(-1)!.body).toEqual({
       kind: "CONTEXT",
@@ -227,11 +240,14 @@ describe("reads", () => {
 
   test("context --stage passes exactly the buckets asked for", async () => {
     const calls = stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/query": { result: DIGEST },
     });
     await capture(() =>
-      runCmd(contextCommand as AnyCmd, "run", { stage: "now, done", json: true }),
+      runCmd(contextCommand as AnyCmd, "run", {
+        workstream: "WS-smoke",
+        stage: "now, done",
+        json: true,
+      }),
     );
     expect((calls.at(-1)!.body as { stages: string[] }).stages).toEqual(["now", "done"]);
   });
@@ -328,25 +344,26 @@ describe("writes", () => {
     });
   });
 
-  test("attempt drift asks for PROBLEM_DRIFT in the selected workstream", async () => {
+  test("attempt drift asks for PROBLEM_DRIFT in the workstream it was given", async () => {
     const calls = stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/query": { result: [] },
     });
 
-    await capture(() => runCmd(attemptCommand as AnyCmd, "drift", { json: true }));
+    await capture(() =>
+      runCmd(attemptCommand as AnyCmd, "drift", { workstream: "WS-smoke", json: true }),
+    );
 
     expect(calls.at(-1)!.body).toEqual({ kind: "PROBLEM_DRIFT", workstream: "WS-smoke" });
   });
 
-  test("observation add splits comma-separated tags and uses the selected workstream", async () => {
+  test("observation add splits comma-separated tags and uses the workstream it was given", async () => {
     const calls = stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/dispatch": { revision: 2, result: { ok: true, id: "OBS-1" } },
     });
 
     await capture(() =>
       runCmd(observationCommand as AnyCmd, "add", {
+        workstream: "WS-smoke",
         content: "Something observed",
         tag: "alpha, beta",
         json: true,
@@ -407,7 +424,6 @@ describe("server rejections reach the terminal unchanged", () => {
 
   test("an ILLEGAL_TRANSITION rejection keeps its code, message and details", async () => {
     stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/dispatch": envelope(
         422,
         "ILLEGAL_TRANSITION",
@@ -431,7 +447,6 @@ describe("server rejections reach the terminal unchanged", () => {
 
   test("a CAPACITY_EXCEEDED rejection keeps the claim link an agent has to quote", async () => {
     stubServer({
-      "GET /v1/view": VIEW_WITH_WS,
       "POST /v1/dispatch": envelope(
         429,
         "CAPACITY_EXCEEDED",
@@ -441,6 +456,7 @@ describe("server rejections reach the terminal unchanged", () => {
     });
 
     const err = (await runCmd(observationCommand as AnyCmd, "add", {
+      workstream: "WS-smoke",
       content: "one too many",
       json: true,
     }).catch((e) => e)) as CruxError;
@@ -547,21 +563,21 @@ describe("api configuration", () => {
           { status: 201 },
         );
       }
-      if (path === "/v1/view") return new Response(JSON.stringify(VIEW_WITH_WS));
       return new Response(JSON.stringify({ revision: 1, result: { ok: true, id: "OBS-001" } }));
     }) as unknown as typeof fetch;
 
     try {
       const out = await capture(() =>
         runCmd(observationCommand as AnyCmd, "add", {
+          workstream: "WS-smoke",
           content: "the corpus is unreachable from a fresh machine",
           json: true,
         }),
       );
       expect(out).toEqual({ ok: true, id: "OBS-001" });
       // Minted once, before anything else, and every later call bears it.
-      expect(seen.map((c) => c.path)).toEqual(["/v1/principals", "/v1/view", "/v1/dispatch"]);
-      expect(seen.slice(1).map((c) => c.auth)).toEqual(["Bearer tok-minted", "Bearer tok-minted"]);
+      expect(seen.map((c) => c.path)).toEqual(["/v1/principals", "/v1/dispatch"]);
+      expect(seen.slice(1).map((c) => c.auth)).toEqual(["Bearer tok-minted"]);
       // Persisted, so the next command reuses the Principal rather than
       // stranding this Observation on a token nobody kept.
       expect(readFileSync(join(home, "config.toml"), "utf8")).toContain("tok-minted");
@@ -612,6 +628,86 @@ describe("api configuration", () => {
 // ---------------------------------------------------------------------------
 // View state lives in the deployment
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Scope comes from the argument, never from shared state
+// ---------------------------------------------------------------------------
+
+describe("the workstream is an argument, not shared state", () => {
+  /**
+   * The collision this closes: view-state is keyed by Principal, a Principal is
+   * one token in one config file, so two agents on one machine used to share a
+   * single "current workstream" and silently misfiled into each other's.
+   */
+  test.each([
+    ["observation", observationCommand, "add", { content: "x" }],
+    ["observation", observationCommand, "list", {}],
+    ["problem", problemCommand, "add", { title: "t", description: "d" }],
+    ["problem", problemCommand, "list", {}],
+    ["context", contextCommand, "run", {}],
+    ["attempt", attemptCommand, "drift", {}],
+    ["abandonment", abandonmentCommand, "list", {}],
+    ["workstream", workstreamCommand, "show", {}],
+  ])("%s %s refuses without one, before any request goes out", async (_name, cmd, sub, args) => {
+    const calls = stubServer({ "POST /v1/query": { result: [] } });
+
+    const err = (await runCmd(cmd as AnyCmd, sub as string, {
+      ...(args as Record<string, unknown>),
+      json: true,
+    }).catch((e) => e)) as CruxError;
+
+    expect(err).toBeInstanceOf(CruxError);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(EXIT_CODES[err.code]).toBe(24);
+    // The message has to carry the fix: the flag, and how to find a slug for it.
+    expect(err.message).toContain("-w <slug>");
+    expect(err.message).toContain("crux workstream list");
+    // No silent default means no request at all — not a request to the wrong one.
+    expect(calls).toHaveLength(0);
+  });
+
+  test.each([
+    ["evidence", evidenceCommand, "link", { observation: "OBS-1" }],
+    ["attempt", attemptCommand, "add", { ref: "https://tracker/1", label: "l" }],
+  ])("%s %s refuses without a problem id", async (_name, cmd, sub, args) => {
+    const calls = stubServer({ "POST /v1/dispatch": { revision: 1, result: { ok: true } } });
+
+    const err = (await runCmd(cmd as AnyCmd, sub as string, {
+      ...(args as Record<string, unknown>),
+      json: true,
+    }).catch((e) => e)) as CruxError;
+
+    expect(err).toBeInstanceOf(CruxError);
+    expect(err.code).toBe("VALIDATION_ERROR");
+    expect(err.message).toContain("crux problem list -w <slug>");
+    expect(calls).toHaveLength(0);
+  });
+
+  test("two commands naming different workstreams each write to the one they named", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": { revision: 1, result: { ok: true, id: "OBS-1" } },
+      "POST /v1/query": { result: [] },
+    });
+
+    await capture(() =>
+      runCmd(observationCommand as AnyCmd, "add", {
+        workstream: "alpha",
+        content: "from agent A",
+        json: true,
+      }),
+    );
+    await capture(() =>
+      runCmd(problemCommand as AnyCmd, "list", { workstream: "beta", json: true }),
+    );
+
+    expect(calls).toHaveLength(2);
+    expect(calls[0]!.body).toMatchObject({
+      kind: "ADD_OBSERVATION",
+      payload: { workstream: "alpha" },
+    });
+    expect(calls[1]!.body).toMatchObject({ kind: "PROBLEM_LIST", workstream: "beta" });
+  });
+});
 
 describe("view", () => {
   test("view get reports the deployment's state without inventing fields", async () => {

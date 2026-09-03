@@ -12,12 +12,20 @@ Crux is a product-thinking residue tool. This skill is the **default intake mode
 `crux` refers to the plugin-bundled binary at `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Always use that explicit path — not on `$PATH`, and each Bash call spawns a fresh shell so aliases don't persist.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context
+${CLAUDE_PLUGIN_ROOT}/bin/crux context -w <slug>
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias kept for back-compat only.
 
-**`-w` flag has been removed.** All commands infer workstream from view-state. If no workstream is in view-state, commands fail with a clear error — run `crux view send SELECT_WORKSTREAM --payload '{"id":"WS-<slug>"}'` first.
+**Every command that acts on a Workstream takes `-w <slug>`.** There is no current Workstream to inherit and no view-state fallback: agents run in parallel against one Principal, so a shared default is how two of them silently file into each other's corpus. Omitting `-w` refuses with `VALIDATION_ERROR` (exit 24) rather than picking one.
+
+Discovery is a read, and it is cheap:
+
+```sh
+${CLAUDE_PLUGIN_ROOT}/bin/crux workstream list
+```
+
+Problem ids resolve the same way — pass them explicitly; `crux problem list -w <slug>` shows them.
 
 The wrapper lazily runs `bun install` on first use, so no separate deps check needed.
 
@@ -47,8 +55,8 @@ When CRUX_COLLAB is absent (default), all commands fall through to direct mode w
 
 ## When to invoke (intake)
 
-- User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add`.
-- An existing Observation was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."`. Terminal.
+- User articulates a claim, observation, source-grounded constraint worth remembering → `crux observation add -w <slug> --content "..."`.
+- An existing Observation was misfiled or became irrelevant → `crux observation archive <obs-id> --rationale "..."`. Terminal — and it takes no `-w`, since the id already names the row.
 
 That's the full intake surface.
 
@@ -60,7 +68,7 @@ signal. Duplication among Problems is the failure this rule exists to prevent: a
 near-twin splits the Evidence for one thing across two rows, and neither reads as
 load-bearing afterwards.
 
-So before `crux problem add`, run:
+So before `crux problem add -w <slug>`, run:
 
 ```sh
 ${CLAUDE_PLUGIN_ROOT}/bin/crux search "<a few distinctive words>"
@@ -131,7 +139,7 @@ Before the first `crux` command in a session, run these checks in order. Steady 
 When user names a workstream, run before adding state:
 
 ```sh
-crux context
+crux context -w <slug>
 ```
 
 This emits **now-only** by default (workstream + seed_version + `now` bucket). For intake mode this is correct — you get active work without the full corpus. Use `--stage` or `--all` to opt into more:
@@ -144,7 +152,7 @@ For intake mode, anchor on:
 - `now[]` — active Problems; avoid filing Observations that duplicate in-flight work.
 - If you need to check unlinked observations, run with `--all` instead.
 
-If no workstream is in context and you can't infer one from cwd, ask before inventing.
+If you do not know which slug to pass, run `crux workstream list` and choose one. Never guess, and never fall back to "the last one" — there is no such thing any more, which is the point.
 
 ## Attempts (work happening elsewhere)
 
@@ -155,7 +163,7 @@ Crux does not own the build. When work about a Problem starts in another tracker
 crux attempt add --problem 42 --ref https://tracker/ENG-412 --label "Batch the writes"
 crux attempt list 42
 crux attempt close ATT-001 --status shipped --note "Landed, but backpressure is still unsolved"
-crux attempt drift            # active Problems with no open Attempt
+crux attempt drift -w <slug>  # active Problems with no open Attempt
 ```
 
 - **Never describe the work here.** There is no description field and the server
@@ -235,4 +243,4 @@ crux view path
 
 ## Browse (TUI fallback)
 
-When web UI isn't running, `crux browse -w <slug>` opens an interactive terminal UI. Same view-state machine.
+When web UI isn't running, `crux browse` opens an interactive terminal UI. It follows the human's view-state — it is the one surface that does.
