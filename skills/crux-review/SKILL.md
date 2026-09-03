@@ -14,7 +14,7 @@ Run this when the user has signaled they're ready to review accumulated state an
 `crux` refers to `${CLAUDE_PLUGIN_ROOT}/bin/crux`. Use the explicit path; not on `$PATH`.
 
 ```sh
-${CLAUDE_PLUGIN_ROOT}/bin/crux context --all
+${CLAUDE_PLUGIN_ROOT}/bin/crux observation list --unlinked
 ```
 
 **JSON is the default output format** — no `--json` flag needed. The `--json` flag is a deprecated no-op alias.
@@ -23,18 +23,34 @@ If first-run init hasn't happened this session (Bun, deps, db, config, team, web
 
 ## Always reload context first
 
-Synthesis without fresh context produces drift. Run before the first action:
+Synthesis without fresh context produces drift. There is no single command that
+loads the whole corpus — a digest that inlines every Observation behind every
+Problem costs more the more you have filed. Run these two before the first
+action; both are flat in the size of the corpus:
 
 ```sh
-crux context --all
+crux observation list --unlinked      # the review queue
+crux problem list                     # every Problem, id + stage + title
 ```
 
 Anchor on:
 
-- `recent_observations_unlinked[]` — primary review queue. Each one is a candidate for either Evidence-linking to an existing Problem or seeding a new Problem.
-- `now[]`, `next[]`, `later[]`, `unscheduled[]` — open Problems by stage, with their Evidence and Attempts. Use to find link targets.
-- `[].attempts[]` — work already in flight or already tried, each with the `closing_note` saying why it ended that way. Don't re-propose a direction that was dropped for a reason still standing.
-- `done[]`, `abandoned[]` — closed Problems, each carrying the Outcome or the Abandonment rationale that closed it. Scan before filing new work.
+- The **unlinked queue** — the primary review queue. Each one is a candidate for either Evidence-linking to an existing Problem or seeding a new Problem. `--show-archived` includes the ones somebody already ruled out.
+- The **Problem list** — open Problems by stage (`--status now|next|later|unscheduled`), which is where you find link targets. Closed ones (`--status done`, `--status abandoned`) are worth a scan before filing new work.
+
+Then open only the Problems that actually look like link targets — do not pull
+the whole tree up front:
+
+```sh
+crux problem show 42                  # the Problem, its Attempts and its Outcome
+crux evidence list 42                 # what is already linked to it, and why
+crux attempt list 42                  # work in flight or already tried
+crux abandonment list                 # why the abandoned ones were dropped
+```
+
+`crux attempt list 42` carries the `closing_note` on each closed Attempt — *why*
+the approach ended that way. Don't re-propose a direction that was dropped for a
+reason still standing.
 
 If no workstream is named and you can't infer one from cwd, ask.
 
@@ -103,7 +119,7 @@ When what became of a Problem is known, `crux outcome add --problem <id>` record
 
 ## Reload mid-review
 
-If review runs long and the user adds new intake or another session writes, re-run `crux context --json --all` before continuing. State drifts.
+If review runs long and the user adds new intake or another session writes, re-run `crux observation list --unlinked` before continuing. State drifts.
 
 ## View control bus
 

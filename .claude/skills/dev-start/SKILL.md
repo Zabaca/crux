@@ -46,13 +46,15 @@ bun run crux user init --name "Your Name" --email "you@example.com"
 
 Writes the `[user]` section of `$CRUX_HOME/config.toml`. The `users` row itself belongs to the deployment — it is created when a Member is invited and a token minted, and the token is what identifies the actor on every request.
 
-## 5. Smoke-test context
+## 5. Smoke-test a read
 
 ```sh
-bun run crux context -w crux --json | jq .
+bun run crux problem list --status now --json | jq .
+bun run crux problem show <id> --json | jq .
 ```
 
-Expect PRB-thinking-residue-gap with its evidence and attempts inlined, plus `legal_next_transitions`.
+Expect the thinking-residue-gap Problem in the list, and `problem show` to carry
+its Attempts and its Outcome. `crux evidence list <id>` is the layer under it.
 
 ## Troubleshooting
 

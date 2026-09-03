@@ -82,13 +82,24 @@ export function landingPage(opts: { observationCap: number }): {
           </div>
           <div class="land-show">
             ${shell([
-              { cmd: "crux context" },
+              { cmd: "crux problem list --status now" },
               {
                 out: raw(
-                  'now: <span class="hi">3</span> problems · evidence inlined\n' +
-                    'attempts: <span class="hi">2</span> open · 1 dropped, with the reason\n' +
-                    "abandoned: 1 · and why we gave up on it",
+                  '<span class="hi">41</span>  now  handlers spend a third of every call on status\n' +
+                    '<span class="hi">42</span>  now  overnight context loss between sessions\n' +
+                    '<span class="hi">47</span>  now  parallel engagements drift unnoticed',
                 ),
+              },
+              { cmd: "crux problem show 42" },
+              {
+                out: raw(
+                  'attempts: <span class="hi">2</span> open · 1 dropped, with the reason\n' +
+                    "outcome: none yet — it is still on the board",
+                ),
+              },
+              { cmd: "crux evidence list 42" },
+              {
+                out: raw('<span class="hi">4</span> links · each with the note saying why'),
               },
             ])}
             <p class="land-under">Open Problems · Evidence · Attempts · The graveyard</p>
@@ -178,8 +189,8 @@ export function landingPage(opts: { observationCap: number }): {
           ${rule(
             `${cap} free`,
             html`<b>An unclaimed Principal files ${cap} Observations.</b> Then writes pause and
-              reads keep working — <code>crux context</code> never stops. Claim it with an email to
-              carry on.`,
+              reads keep working — <code>crux problem list</code> never stops. Claim it with an
+              email to carry on.`,
           )}
           ${rule(
             "Yours alone",

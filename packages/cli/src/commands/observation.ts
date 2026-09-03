@@ -47,16 +47,29 @@ const addCmd = defineCommand({
 const listCmd = defineCommand({
   meta: { name: "list", description: "List observations in a workstream." },
   args: {
+    unlinked: {
+      type: "boolean",
+      description: "Only Observations not yet linked to a Problem — the review queue.",
+    },
+    "show-archived": {
+      type: "boolean",
+      description: "With --unlinked, include archived Observations.",
+    },
     json: { type: "boolean" },
   },
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const wsVal = await wsArg();
     hintCtx(wsVal);
-    const rows = await api().query<ObservationRow[]>({
-      kind: "OBSERVATION_LIST",
-      workstream: wsVal,
-    });
+    const rows = await api().query<ObservationRow[]>(
+      args.unlinked
+        ? {
+            kind: "OBSERVATION_UNLINKED",
+            workstreamId: wsVal,
+            showArchived: Boolean(args["show-archived"]),
+          }
+        : { kind: "OBSERVATION_LIST", workstream: wsVal },
+    );
     emit(rows, rows.map((r) => `${r.id}\t${r.content.slice(0, 60)}`).join("\n") || "(none)");
   },
 });

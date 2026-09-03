@@ -90,14 +90,14 @@ describe("persistence merge: loadViewMetaFromBlob returns merged shape", () => {
       children: {},
       revision: 7,
       lastAction: { kind: "ADD_ATTEMPT", ts: 1700 },
-      recentQueries: [{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }],
+      recentQueries: [{ kind: "PROBLEM_SHOW", slug: "42", ts: 1500 }],
     });
 
     expect(meta.value).toEqual({ viewing: "problem_detail" });
     expect(meta.context).toEqual({ workstreamId: "WS-crux", problemId: "42" });
     expect(meta.revision).toBe(7);
     expect(meta.lastAction).toEqual({ kind: "ADD_ATTEMPT", ts: 1700 });
-    expect(meta.recentQueries).toEqual([{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 1500 }]);
+    expect(meta.recentQueries).toEqual([{ kind: "PROBLEM_SHOW", slug: "42", ts: 1500 }]);
   });
 
   test("a sidecar-only blob (no XState fields) returns defaults for value/context", () => {
@@ -118,7 +118,7 @@ describe("persistence merge: computeSaveStateBlob preserves sidecar fields", () 
       {
         revision: 5,
         lastAction: { kind: "ADD_PROBLEM", ts: 1000 },
-        recentQueries: [{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 999 }],
+        recentQueries: [{ kind: "PROBLEM_SHOW", slug: "42", ts: 999 }],
       },
       makeSnap(),
     );
@@ -128,7 +128,7 @@ describe("persistence merge: computeSaveStateBlob preserves sidecar fields", () 
     expect(after.status).toBe("active");
     expect(after.revision).toBe(5);
     expect(after.lastAction).toEqual({ kind: "ADD_PROBLEM", ts: 1000 });
-    expect(after.recentQueries).toEqual([{ kind: "CONTEXT_SHOW", slug: "WS-crux", ts: 999 }]);
+    expect(after.recentQueries).toEqual([{ kind: "PROBLEM_SHOW", slug: "42", ts: 999 }]);
   });
 
   test("interleaved: state → sidecar → state keeps all fields populated", () => {

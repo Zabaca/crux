@@ -86,8 +86,9 @@ FILE SOMETHING
   crux observation add --content "<what you noticed>"
 
 RELOAD IT INTO A FRESH SESSION
-  crux context          # the active Problems, evidence inlined
-  crux context --all    # every stage, plus unlinked Observations
+  crux problem list --status now   # the active Problems, one line each
+  crux problem show <id>           # drill into the two or three that matter
+  crux observation list --unlinked # intake nobody has synthesized yet
 
 BEFORE YOU FILE A PROBLEM
   crux search "<a few distinctive words>"
@@ -161,9 +162,13 @@ signup step and nothing to configure. Point it somewhere else with
 
     crux search "status only queries"
 
-    crux context
-    crux context --all
-    crux context --stage now,next
+    crux problem list
+    crux problem list --status now
+    crux problem show 42
+    crux evidence list 42
+    crux attempt list 42
+
+    crux observation list --unlinked
 
     crux claim you@example.com
 
@@ -191,8 +196,8 @@ An unclaimed Principal may file ${cap} Observations. After that every corpus
 
     { "error": { "code": "CAPACITY_EXCEEDED", "details": { "claimUrl": "${claimUrl}" } } }
 
-Exit code 27. **Reads are never blocked** — \`crux context\` keeps working, so
-you can still reload everything already filed.
+Exit code 27. **Reads are never blocked** — \`crux problem list\` and every other
+read keep working, so you can still reload everything already filed.
 
 Lifting it needs a human, and the command must run on the machine holding the
 token, because that token is the only thing that knows which Principal is
@@ -237,7 +242,7 @@ happened.
 ## One thing to distrust
 
 \`ok: true\` means the row was written, not that everything you sent survived.
-Read it back with \`crux context --all\` when it matters.
+Read it back with \`crux problem show <id>\` when it matters.
 `;
 }
 

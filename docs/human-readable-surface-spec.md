@@ -25,6 +25,15 @@
 > 2 and 3 is now the Problem's **Attempts**, and Outcome hangs off the Problem.
 > The Solution status ordering under **Order** goes with them.
 >
+> **Superseded again (2026-09-03).** `crux context` is deleted: the digest it
+> emitted inlined every Observation behind every Problem, so it grew with the
+> corpus and stopped being cheaper than re-deriving context. Where the text
+> below names it — the **Why**, and the archive-semantics and data-source
+> clauses of the **Shared technical contract** — read it as the flat reads that
+> replaced it: `PROBLEM_LIST`/`PROBLEM_SUMMARIES` to see the field,
+> `PROBLEM_DETAIL` to drill in, `OBSERVATION_UNLINKED` for the intake queue,
+> which is where the archive-hiding default now lives.
+>
 > The TUI half (`crux browse`) is otherwise unchanged and still accurate.
 
 This doc is the authoritative spec for two parallel implementations of a human-browseable view of Crux state: a Next.js web UI under `apps/web/` and an ink-based TUI under `packages/cli/src/commands/browse.ts`. Both ship in this repo and are read-only for v1.

@@ -31,13 +31,26 @@ The entity model is the product. Workflow transitions — schedule a Problem, fi
 
 Claude Code is the primary surface. You discuss problems and the work against them in conversation, and Claude files entries inline through the `crux` CLI at natural pause points — not as end-of-session ceremony. The CLI is optimized for Claude to run and parse: `--json` on every read command, structured errors with stable codes, meaningful exit codes.
 
-To reload context into a fresh session:
+To reload context into a fresh session, walk three cheap reads rather than
+asking for one digest of everything:
 
 ```sh
-crux context -w <workstream> --json
+crux workstream list --json              # which corpora exist
+crux problem list --status now --json    # the field, one line per Problem
+crux problem show <id> --json            # the two or three that matter
 ```
 
-That emits a model-shaped digest: open Problems (sorted by priority), their Evidence with inlined Observations, their Attempts, Abandonment, Outcome. Drop it into a new conversation and Claude starts warm.
+Each is flat in the size of the corpus, and the agent pays only for what it
+reads. `crux evidence list <id>` and `crux attempt list <id>` open the layer
+under a Problem when a Problem is worth that; `crux observation list --json` is
+the raw intake.
+
+The honest cost of that shape: getting warm is several calls rather than one,
+and the cheapest thing an agent can do is no longer the complete thing. What it
+buys is that the cost stops growing with the corpus — the digest that used to
+answer this in one call inlined every Observation behind every Problem, which
+made the command whose whole purpose was to be cheaper than re-deriving context
+more expensive than re-deriving it.
 
 For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt. "All workstreams" means all of *yours*: every read is scoped to the Principal that made the request, and one Principal's corpus is invisible to another's ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
@@ -138,7 +151,7 @@ For contributors working on Crux itself:
 bun install
 bun run crux user init --name "Your Name" --email "you@example.com"
 bun run crux init --url https://<your-deployment> --token <token>
-bun run crux context -w crux --json
+bun run crux problem list --status now --json
 ```
 
 `bun run build` derives the doc tree and runs `astro build`; `bun run test`
