@@ -1,9 +1,8 @@
 import { defineCommand } from "citty";
 import { emit, setJsonMode } from "../output.js";
 import type { ReviseOutcomePayload } from "@crux/core/actions";
-import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
-import { formatRevisions } from "../revisions.js";
+import { emitRevised, revisionsCommand } from "../revisions.js";
 
 const listCmd = defineCommand({
   meta: { name: "list", description: "List all outcomes." },
@@ -48,19 +47,14 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_OUTCOME", payload });
-    const { changedFields } = result as { changedFields: string[] };
-    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
+    emitRevised(result, args.id);
   },
 });
 
-const revisionsCmd = defineCommand({
-  meta: { name: "revisions", description: "What an outcome used to say." },
-  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const rows = await api().query<RevisionEntry[]>({ kind: "OUTCOME_REVISIONS", id: args.id });
-    emit(rows, formatRevisions(rows));
-  },
+const revisionsCmd = revisionsCommand({
+  kind: "OUTCOME_REVISIONS",
+  noun: "an outcome",
+  idHint: "OUT-###",
 });
 
 export const outcomeCommand = defineCommand({

@@ -9,7 +9,7 @@ import type {
 import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
-import { formatRevisions } from "../revisions.js";
+import { emitRevised, formatRevisions } from "../revisions.js";
 
 type WorkstreamRow = { id: string; slug: string; title: string };
 
@@ -110,8 +110,7 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_WORKSTREAM", payload });
-    const { changedFields } = result as { changedFields: string[] };
-    emit(result, `revised ${payload.workstream} — ${changedFields.join(", ")}`);
+    emitRevised(result, payload.workstream);
   },
 });
 

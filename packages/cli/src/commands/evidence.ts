@@ -2,10 +2,9 @@ import { defineCommand } from "citty";
 import { OkWithIdOutput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
 import type { AddEvidencePayload, ReviseEvidencePayload } from "@crux/core/actions";
-import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
 import { requireProblem } from "../require-args.js";
-import { formatRevisions } from "../revisions.js";
+import { emitRevised, revisionsCommand } from "../revisions.js";
 
 const linkCmd = defineCommand({
   meta: { name: "link", description: "Link an observation to a problem as evidence." },
@@ -69,19 +68,14 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_EVIDENCE", payload });
-    const { changedFields } = result as { changedFields: string[] };
-    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
+    emitRevised(result, args.id);
   },
 });
 
-const revisionsCmd = defineCommand({
-  meta: { name: "revisions", description: "What an evidence link used to say." },
-  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const rows = await api().query<RevisionEntry[]>({ kind: "EVIDENCE_REVISIONS", id: args.id });
-    emit(rows, formatRevisions(rows));
-  },
+const revisionsCmd = revisionsCommand({
+  kind: "EVIDENCE_REVISIONS",
+  noun: "an evidence link",
+  idHint: "EVD-###",
 });
 
 export const evidenceCommand = defineCommand({

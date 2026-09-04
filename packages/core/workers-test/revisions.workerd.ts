@@ -302,6 +302,30 @@ describe("REVISE_EVIDENCE", () => {
     ).rejects.toThrow();
   });
 
+  test("every read that shows the note shows the marker with it", async () => {
+    const problemId = await seedProblem();
+    const id = await seedEvidence(problemId, "a note");
+
+    await send({ kind: "REVISE_EVIDENCE", payload: { id, note: "a truer note" } });
+
+    // Not just the listing: the Problem page and the Observation page both nest
+    // the note, and a corrected note shown as though it were original is the
+    // failure the marker exists to prevent (ADR-0017).
+    const detail = (await query(
+      { kind: "PROBLEM_DETAIL", id: problemId },
+      { db, principal: OWNER },
+    )) as {
+      evidence: { id: string; revision: { count: number } | null }[];
+    };
+    expect(detail.evidence.map((e) => [e.id, e.revision?.count ?? null])).toEqual([[id, 1]]);
+
+    const obs = (await query(
+      { kind: "OBSERVATION_DETAIL", id: "OBS-001" },
+      { db, principal: OWNER },
+    )) as { evidenceLinks: { id: string; revision: { count: number } | null }[] };
+    expect(obs.evidenceLinks.map((e) => [e.id, e.revision?.count ?? null])).toEqual([[id, 1]]);
+  });
+
   test("an Evidence link nobody has revised has no marker and an empty history", async () => {
     const problemId = await seedProblem();
     const id = await seedEvidence(problemId, "a note");

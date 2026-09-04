@@ -1,12 +1,31 @@
+import { defineCommand } from "citty";
+
 import type { RevisionEntry } from "@crux/core/reads";
+import { api } from "./api-client.js";
+import { emit, setJsonMode } from "./output.js";
 
 /**
- * A row's history as one line per correction (ADR-0017).
+ * The two halves of correcting a row that are the same for every entity
+ * (ADR-0017): what a `revise` prints, and the whole of a `revisions` command.
+ *
+ * The `revise` commands themselves stay hand-written — each names its own
+ * fields, which is the point of not having one polymorphic verb — but what they
+ * do with the answer is identical, and five copies of it is five places for the
+ * wording to drift.
+ */
+
+/** What a `revise` says it did: the row, and which of its fields moved. */
+export function emitRevised(result: unknown, id: string): void {
+  const { changedFields } = result as { changedFields: string[] };
+  emit(result, `revised ${id} — ${changedFields.join(", ")}`);
+}
+
+/**
+ * A row's history as one line per correction.
  *
  * The *values* a revision replaced are in the JSON; the human line names the
  * fields, when, and why — enough to decide which entry to look at, which is all
- * a history read is for. Every entity's `revisions` command prints the same
- * shape, because they are all reading the same table.
+ * a history read is for.
  */
 export function formatRevisions(rows: RevisionEntry[]): string {
   return (
@@ -17,4 +36,24 @@ export function formatRevisions(rows: RevisionEntry[]): string {
       )
       .join("\n") || "(none)"
   );
+}
+
+/**
+ * The `revisions` subcommand for one entity. They differ only in the named read
+ * they issue and in what the id is called, so the command itself is built rather
+ * than written out five times.
+ */
+export function revisionsCommand(opts: { kind: string; noun: string; idHint: string }) {
+  return defineCommand({
+    meta: { name: "revisions", description: `What ${opts.noun} used to say.` },
+    args: {
+      id: { type: "positional", required: true, description: opts.idHint },
+      json: { type: "boolean" },
+    },
+    async run({ args }) {
+      if (args.json) setJsonMode(true);
+      const rows = await api().query<RevisionEntry[]>({ kind: opts.kind, id: args.id });
+      emit(rows, formatRevisions(rows));
+    },
+  });
 }

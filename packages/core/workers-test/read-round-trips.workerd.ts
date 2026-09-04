@@ -23,6 +23,7 @@ import { createD1Db, type CruxDb } from "../src/db/client.js";
 import { countingD1 } from "../src/db/test-utils.js";
 import { applyD1Schema } from "../src/db/d1/index.js";
 import {
+  abandonments,
   attempts,
   evidence,
   observations,
@@ -114,11 +115,11 @@ describe("PROBLEM_DETAIL", () => {
     // the ones that can overlap, and all four do.
     expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(4);
 
-    // Seven statements, three deep: the Problem, then the four together, then
-    // the second hop two of them own (the Observations behind the Evidence, and
-    // the Outcome's follow-up Problems). Serialized, the same seven were seven
-    // round trips.
-    expect(counted.statements).toHaveLength(7);
+    // Eight statements, three deep: the Problem, then the four together, then
+    // the second hop two of them own — the Observations behind the Evidence,
+    // which the Evidence revision marker rides alongside, and the Outcome's
+    // follow-up Problems. Serialized, the same eight were eight round trips.
+    expect(counted.statements).toHaveLength(8);
   });
 
   test("still answers the same thing, and still refuses another tenant's Problem", async () => {
@@ -202,5 +203,105 @@ describe("PROBLEM_SHOW", () => {
     // Five, three deep: the scope check, then the Attempts, the Outcome and
     // the marker together, then the follow-up Problems the Outcome names.
     expect(counted.statements).toHaveLength(5);
+  });
+});
+
+describe("the other reads that carry a marker", () => {
+  /** One revision against `entity`/`entityId`, so every marker below is non-null. */
+  async function seedRevision(entity: string, entityId: string): Promise<void> {
+    await db.insert(revisions).values({
+      id: `REV-${entity}`,
+      entity,
+      entityId,
+      changed: JSON.stringify({ title: "what it used to say" }),
+      revisedById: OWNER,
+      revisedAt: Date.now(),
+    });
+  }
+
+  test("WORKSTREAM_SHOW issues the marker alongside the row, not after it", async () => {
+    await seedRevision("workstream", WS);
+
+    const counted = countingD1(env.DB);
+    const shown = (await query(
+      { kind: "WORKSTREAM_SHOW", id: WS },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { revision: { count: number } | null };
+
+    expect(shown.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
+    // The marker keys on the id the caller named, so it never waited on the row.
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(2);
+    expect(counted.statements).toHaveLength(2);
+  });
+
+  test("ABANDONMENT_SHOW does the same", async () => {
+    const id = await seedProblem();
+    await db.insert(abandonments).values({
+      id: `ABN-${id}`,
+      problemId: id,
+      rationale: "gave up",
+      abandonedById: OWNER,
+    });
+    await seedRevision("abandonment", `ABN-${id}`);
+
+    const counted = countingD1(env.DB);
+    const shown = (await query(
+      { kind: "ABANDONMENT_SHOW", id: `ABN-${id}` },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { revision: { count: number } | null };
+
+    expect(shown.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(2);
+  });
+
+  test("OUTCOME_SHOW puts the marker in the wave the follow-ups already ride", async () => {
+    // `seedProblem` is what files OUT-1, so the Outcome exists to be shown.
+    await seedProblem();
+    await seedRevision("outcome", "OUT-1");
+
+    const counted = countingD1(env.DB);
+    const shown = (await query(
+      { kind: "OUTCOME_SHOW", id: "OUT-1" },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { revision: { count: number } | null; followUpProblemIds: number[] };
+
+    expect(shown.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
+    expect(shown.followUpProblemIds).toEqual([]);
+    // The row first — it is what the scope check needs — then the follow-ups
+    // and the marker together.
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(2);
+    expect(counted.statements).toHaveLength(3);
+  });
+
+  test("EVIDENCE_LIST pays one statement for the whole listing's markers", async () => {
+    const id = await seedProblem();
+    await db.insert(observations).values({
+      id: "OBS-2",
+      workstreamId: WS,
+      content: "another signal",
+      reporterId: OWNER,
+    });
+    await db.insert(evidence).values({
+      id: "EVD-2",
+      problemId: id,
+      observationId: "OBS-2",
+      note: "why also",
+      createdById: OWNER,
+    });
+    await seedRevision("evidence", "EVD-1");
+
+    const counted = countingD1(env.DB);
+    const rows = (await query(
+      { kind: "EVIDENCE_LIST", problem: id },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { id: string; revision: { count: number } | null }[];
+
+    expect(rows.map((r) => [r.id, r.revision?.count ?? null])).toEqual([
+      ["EVD-1", 1],
+      ["EVD-2", null],
+    ]);
+    // Three: the scope check, the listing, and one grouped marker read for both
+    // rows — not one per row (ADR-0017).
+    expect(counted.statements).toHaveLength(3);
   });
 });

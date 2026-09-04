@@ -357,9 +357,10 @@ async function revisionMarkerFor(
 /**
  * The same marker for a whole listing, in one statement rather than one per row.
  *
- * `EVIDENCE_LIST` is the only read that shows an Evidence row, so the marker has
- * to ride the listing; paying a round trip per row for it would be the shape
- * ADR-0017 rejected in the other direction.
+ * Every read that shows an Evidence note carries the marker — the listing here,
+ * and the two that nest Evidence under a Problem or an Observation — so it has
+ * to be answerable for a page of rows at once. Paying a round trip per row
+ * would be the shape ADR-0017 rejected, in the other direction.
  */
 async function revisionMarkersFor(
   db: CruxDb,
@@ -378,7 +379,6 @@ async function revisionMarkersFor(
     .where(and(eq(revisions.entity, entity), inArray(revisions.entityId, entityIds.map(String))))
     .groupBy(revisions.entityId);
   for (const r of rows) {
-    if (!r.count) continue;
     byId.set(r.entityId, { count: Number(r.count), lastRevisedAt: Number(r.last) });
   }
   return byId;
@@ -429,18 +429,36 @@ async function outcomeFor(db: CruxDb, problemId: number): Promise<OutcomeWithFol
   return { ...row, followUpProblemIds: followUps.map((f) => f.problemId) };
 }
 
-/** Evidence for a Problem with each linked Observation (and its archive block). */
+/**
+ * Evidence for a Problem with each linked Observation (and its archive block),
+ * and whether each note was corrected.
+ *
+ * The marker joins the hop the Observations already cost rather than adding one
+ * of its own: wherever an Evidence note is shown, it is shown with the marker
+ * (ADR-0017).
+ */
 async function evidenceWithObservations(db: CruxDb, problemId: number, sortByCreatedAt = false) {
   const evRows = await db.select().from(evidence).where(eq(evidence.problemId, problemId));
   if (sortByCreatedAt) evRows.sort((a, b) => a.createdAt - b.createdAt);
   const obsIds = evRows.map((e) => e.observationId);
-  const obsRows = obsIds.length
-    ? await db.select().from(observations).where(inArray(observations.id, obsIds))
-    : [];
+  const [obsRows, markers] = await Promise.all([
+    obsIds.length
+      ? db.select().from(observations).where(inArray(observations.id, obsIds))
+      : Promise.resolve([]),
+    revisionMarkersFor(
+      db,
+      "evidence",
+      evRows.map((e) => e.id),
+    ),
+  ]);
   const obsById = new Map(obsRows.map((o) => [o.id, o]));
   return evRows.map((e) => {
     const obs = obsById.get(e.observationId);
-    return { ...e, observation: obs ? { ...obs, archive: toArchive(obs) } : null };
+    return {
+      ...e,
+      revision: markers.get(e.id) ?? null,
+      observation: obs ? { ...obs, archive: toArchive(obs) } : null,
+    };
   });
 }
 
@@ -670,11 +688,16 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       return db.select().from(workstreams).where(inArray(workstreams.id, scope.workstreamIds));
 
     case "WORKSTREAM_SHOW": {
-      const rows = await db.select().from(workstreams).where(eq(workstreams.id, q.id)).limit(1);
+      // One wave: the marker keys on the id the caller already named, so it
+      // does not wait on the row it decorates (ADR-0017).
+      const [rows, revision] = await Promise.all([
+        db.select().from(workstreams).where(eq(workstreams.id, q.id)).limit(1),
+        revisionMarkerFor(db, "workstream", q.id),
+      ]);
       if (rows.length === 0 || !scope.has(rows[0]!.id)) {
         throw new NotFoundError(`workstream not found: ${q.id}`, { id: q.id });
       }
-      return { ...rows[0]!, revision: await revisionMarkerFor(db, "workstream", rows[0]!.id) };
+      return { ...rows[0]!, revision };
     }
 
     case "WORKSTREAM_REVISIONS": {
@@ -749,12 +772,25 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
           ),
         );
       const probIds = evRows.map((e) => e.problemId);
-      const probRows = probIds.length
-        ? await db.select().from(problems).where(inArray(problems.id, probIds))
-        : [];
+      // The marker rides the hop the Problems already cost, for the same reason
+      // it rides the Observations in `evidenceWithObservations`.
+      const [probRows, markers] = await Promise.all([
+        probIds.length
+          ? db.select().from(problems).where(inArray(problems.id, probIds))
+          : Promise.resolve([]),
+        revisionMarkersFor(
+          db,
+          "evidence",
+          evRows.map((e) => e.id),
+        ),
+      ]);
       const probById = new Map(probRows.map((p) => [p.id, p]));
       const evidenceLinks = evRows
-        .map((e) => ({ ...e, problem: probById.get(e.problemId)! }))
+        .map((e) => ({
+          ...e,
+          revision: markers.get(e.id) ?? null,
+          problem: probById.get(e.problemId)!,
+        }))
         .filter((e) => e.problem);
       return {
         observation: { ...obs, archive: toArchive(obs) },
@@ -903,8 +939,7 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
               .select()
               .from(evidence)
               .where(inArray(evidence.problemId, problemsInScope(db, scope)));
-      // The listing is where an Evidence row is looked at, so the marker rides
-      // it — one statement for the whole page (ADR-0017).
+      // One grouped statement for the whole page, not one per row (ADR-0017).
       const markers = await revisionMarkersFor(
         db,
         "evidence",
@@ -981,19 +1016,23 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
     }
 
     case "ABANDONMENT_SHOW": {
-      const rows = await db
-        .select()
-        .from(abandonments)
-        .where(
-          and(
-            eq(abandonments.id, q.id),
-            inArray(abandonments.problemId, problemsInScope(db, scope)),
-          ),
-        )
-        .limit(1);
+      // Same wave, same reason as WORKSTREAM_SHOW: the marker keys on `q.id`.
+      const [rows, revision] = await Promise.all([
+        db
+          .select()
+          .from(abandonments)
+          .where(
+            and(
+              eq(abandonments.id, q.id),
+              inArray(abandonments.problemId, problemsInScope(db, scope)),
+            ),
+          )
+          .limit(1),
+        revisionMarkerFor(db, "abandonment", q.id),
+      ]);
       if (rows.length === 0)
         throw new NotFoundError(`abandonment not found: ${q.id}`, { id: q.id });
-      return { ...rows[0]!, revision: await revisionMarkerFor(db, "abandonment", q.id) };
+      return { ...rows[0]!, revision };
     }
 
     case "ABANDONMENT_REVISIONS": {

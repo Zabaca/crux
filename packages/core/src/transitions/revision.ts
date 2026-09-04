@@ -71,7 +71,13 @@ function previousValues(
 ): Record<string, string | null> {
   const previous: Record<string, string | null> = {};
   for (const [field, next] of Object.entries(updates)) {
-    if (next === undefined || !(field in current)) continue;
+    if (next === undefined) continue;
+    // A field the row does not have is a wiring mistake, and the one failure
+    // ADR-0017 names by name: input accepted, not honoured, success reported.
+    // The `.strict()` payloads are the outer guard; this is the belt.
+    if (!(field in current)) {
+      throw new ValidationError(`no such field to revise: ${field}`, { field });
+    }
     const was = current[field] ?? null;
     if (next === was) continue;
     previous[field] = was;
@@ -88,16 +94,19 @@ function previousValues(
  * builds is what keeps each entity's fields typed — the polymorphism stops at
  * the storage row this function writes.
  */
-async function applyRevision(
-  db: CruxDb,
-  entity: RevisableEntity,
-  entityId: string | number,
-  current: Record<string, string | null>,
-  updates: Record<string, string | undefined>,
-  reason: string | undefined,
-  userId: string,
-  updateRow: (changedFields: string[], now: number) => BatchItem<"sqlite">,
-): Promise<RevisionResult> {
+async function applyRevision(args: {
+  db: CruxDb;
+  entity: RevisableEntity;
+  entityId: string | number;
+  /** What the row says now, field by field — the values the history will keep. */
+  current: Record<string, string | null>;
+  /** Every revisable field as an explicit key; an unnamed one carries `undefined`. */
+  updates: Record<string, string | undefined>;
+  reason: string | undefined;
+  userId: string;
+  updateRow: (changedFields: string[], now: number) => BatchItem<"sqlite">;
+}): Promise<RevisionResult> {
+  const { db, entity, entityId, current, updates, reason, userId, updateRow } = args;
   const previous = previousValues(current, updates);
   const changedFields = Object.keys(previous);
   if (changedFields.length === 0) {
@@ -169,21 +178,21 @@ export async function reviseProblem(
   const row = (await db.select().from(problems).where(eq(problems.id, problemId)).limit(1))[0];
   if (!row) throw new NotFoundError(`Problem not found: ${problemId}`, { problemId });
 
-  return applyRevision(
+  return applyRevision({
     db,
-    "problem",
-    problemId,
-    { title: row.title, description: row.description },
-    named,
+    entity: "problem",
+    entityId: problemId,
+    current: { title: row.title, description: row.description },
+    updates: named,
     reason,
     userId,
-    (changed, now) => {
+    updateRow: (changed, now) => {
       const set: Partial<typeof problems.$inferInsert> = { updatedAt: now };
       if (changed.includes("title")) set.title = updates.title;
       if (changed.includes("description")) set.description = updates.description;
       return db.update(problems).set(set).where(eq(problems.id, problemId));
     },
-  );
+  });
 }
 
 export type EvidenceRevision = {
@@ -210,9 +219,20 @@ export async function reviseEvidence(
   const row = (await db.select().from(evidence).where(eq(evidence.id, evidenceId)).limit(1))[0];
   if (!row) throw new NotFoundError(`evidence not found: ${evidenceId}`, { id: evidenceId });
 
-  return applyRevision(db, "evidence", evidenceId, { note: row.note }, named, reason, userId, () =>
-    db.update(evidence).set({ note: updates.note }).where(eq(evidence.id, evidenceId)),
-  );
+  return applyRevision({
+    db,
+    entity: "evidence",
+    entityId: evidenceId,
+    current: { note: row.note },
+    updates: named,
+    reason,
+    userId,
+    updateRow: (changed) => {
+      const set: Partial<typeof evidence.$inferInsert> = {};
+      if (changed.includes("note")) set.note = updates.note;
+      return db.update(evidence).set(set).where(eq(evidence.id, evidenceId));
+    },
+  });
 }
 
 export type OutcomeRevision = {
@@ -242,21 +262,21 @@ export async function reviseOutcome(
   const row = (await db.select().from(outcomes).where(eq(outcomes.id, outcomeId)).limit(1))[0];
   if (!row) throw new NotFoundError(`outcome not found: ${outcomeId}`, { id: outcomeId });
 
-  return applyRevision(
+  return applyRevision({
     db,
-    "outcome",
-    outcomeId,
-    { observedImpact: row.observedImpact, learnings: row.learnings },
-    named,
+    entity: "outcome",
+    entityId: outcomeId,
+    current: { observedImpact: row.observedImpact, learnings: row.learnings },
+    updates: named,
     reason,
     userId,
-    (changed) => {
+    updateRow: (changed) => {
       const set: Partial<typeof outcomes.$inferInsert> = {};
       if (changed.includes("observedImpact")) set.observedImpact = updates.observedImpact;
       if (changed.includes("learnings")) set.learnings = updates.learnings;
       return db.update(outcomes).set(set).where(eq(outcomes.id, outcomeId));
     },
-  );
+  });
 }
 
 export type AbandonmentRevision = {
@@ -285,20 +305,20 @@ export async function reviseAbandonment(
   if (!row)
     throw new NotFoundError(`abandonment not found: ${abandonmentId}`, { id: abandonmentId });
 
-  return applyRevision(
+  return applyRevision({
     db,
-    "abandonment",
-    abandonmentId,
-    { rationale: row.rationale },
-    named,
+    entity: "abandonment",
+    entityId: abandonmentId,
+    current: { rationale: row.rationale },
+    updates: named,
     reason,
     userId,
-    () =>
-      db
-        .update(abandonments)
-        .set({ rationale: updates.rationale })
-        .where(eq(abandonments.id, abandonmentId)),
-  );
+    updateRow: (changed) => {
+      const set: Partial<typeof abandonments.$inferInsert> = {};
+      if (changed.includes("rationale")) set.rationale = updates.rationale;
+      return db.update(abandonments).set(set).where(eq(abandonments.id, abandonmentId));
+    },
+  });
 }
 
 export type WorkstreamRevision = {
@@ -330,19 +350,19 @@ export async function reviseWorkstream(
   )[0];
   if (!row) throw new NotFoundError(`workstream not found: ${workstreamId}`, { id: workstreamId });
 
-  return applyRevision(
+  return applyRevision({
     db,
-    "workstream",
-    workstreamId,
-    { title: row.title, description: row.description },
-    named,
+    entity: "workstream",
+    entityId: workstreamId,
+    current: { title: row.title, description: row.description },
+    updates: named,
     reason,
     userId,
-    (changed, now) => {
+    updateRow: (changed, now) => {
       const set: Partial<typeof workstreams.$inferInsert> = { updatedAt: now };
       if (changed.includes("title")) set.title = updates.title;
       if (changed.includes("description")) set.description = updates.description;
       return db.update(workstreams).set(set).where(eq(workstreams.id, workstreamId));
     },
-  );
+  });
 }
