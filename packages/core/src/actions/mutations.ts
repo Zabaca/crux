@@ -259,7 +259,7 @@ export async function runMutation(
     case "REVISE_PROBLEM": {
       const p = action.payload;
       const prob = await requireProblemInScope(db, p.id, scope);
-      const { revisionId, changed } = await reviseProblem(
+      const { revisionId, changedFields } = await reviseProblem(
         prob.id,
         { title: p.title, description: p.description },
         p.reason,
@@ -267,7 +267,7 @@ export async function runMutation(
         db,
       );
       return {
-        result: { ok: true, id: prob.id, revisionId, changed },
+        result: { ok: true, id: prob.id, revisionId, changedFields },
         workstreamId: prob.workstreamId,
       };
     }

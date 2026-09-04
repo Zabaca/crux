@@ -315,7 +315,17 @@ async function revisionMarkerFor(
   return { count: Number(row.count), lastRevisedAt: Number(row.last) };
 }
 
-/** A row's history, newest first. */
+/** The `###` of a `REV-###`, for ordering two revisions filed in the same millisecond. */
+const revisionSeq = (id: string): number => Number(id.replace(/^REV-/, "")) || 0;
+
+/**
+ * A row's history, newest first.
+ *
+ * Two revisions filed in the same millisecond carry the same `revised_at`, so
+ * the id is what breaks the tie — `REV-###` is monotonic by construction.
+ * It is compared as the number it encodes rather than as text, because the
+ * suffix is padded to three digits and `"REV-1000"` sorts below `"REV-999"`.
+ */
 async function revisionsFor(
   db: CruxDb,
   entity: string,
@@ -325,14 +335,16 @@ async function revisionsFor(
     .select()
     .from(revisions)
     .where(and(eq(revisions.entity, entity), eq(revisions.entityId, String(entityId))))
-    .orderBy(desc(revisions.revisedAt), desc(revisions.id));
-  return rows.map((r) => ({
-    id: r.id,
-    changed: JSON.parse(r.changed) as Record<string, string>,
-    reason: r.reason,
-    revisedById: r.revisedById,
-    revisedAt: r.revisedAt,
-  }));
+    .orderBy(desc(revisions.revisedAt));
+  return [...rows]
+    .sort((a, b) => b.revisedAt - a.revisedAt || revisionSeq(b.id) - revisionSeq(a.id))
+    .map((r) => ({
+      id: r.id,
+      changed: JSON.parse(r.changed) as Record<string, string>,
+      reason: r.reason,
+      revisedById: r.revisedById,
+      revisedAt: r.revisedAt,
+    }));
 }
 
 /** The Problem's Outcome, with its follow-up Problems inlined — null until it is done. */

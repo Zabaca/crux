@@ -23,8 +23,12 @@ export type RevisableEntity = "problem";
 export type RevisionResult = {
   /** The revision row that recorded the previous values. */
   revisionId: string;
-  /** Which fields actually changed, in the order they were checked. */
-  changed: string[];
+  /**
+   * Which fields actually changed. Names only — the *values* they used to hold
+   * are what the history read answers with, and calling both `changed` would
+   * put two different meanings one command apart.
+   */
+  changedFields: string[];
 };
 
 /**
@@ -88,8 +92,8 @@ export async function reviseProblem(
   if (!row) throw new NotFoundError(`Problem not found: ${problemId}`, { problemId });
 
   const previous = previousValues({ title: row.title, description: row.description }, updates);
-  const changed = Object.keys(previous);
-  if (changed.length === 0) {
+  const changedFields = Object.keys(previous);
+  if (changedFields.length === 0) {
     throw new ValidationError(`revision leaves Problem ${problemId} unchanged`, {
       problemId,
       fields: Object.keys(updates).filter((f) => updates[f as keyof ProblemRevision] !== undefined),
@@ -99,8 +103,8 @@ export async function reviseProblem(
   const now = Date.now();
   const revisionId = await nextRevisionId(db);
   const set: Partial<typeof problems.$inferInsert> = { updatedAt: now };
-  if (changed.includes("title")) set.title = updates.title;
-  if (changed.includes("description")) set.description = updates.description;
+  if (changedFields.includes("title")) set.title = updates.title;
+  if (changedFields.includes("description")) set.description = updates.description;
 
   await runBatch(db, [
     db.insert(revisions).values({
@@ -115,5 +119,5 @@ export async function reviseProblem(
     db.update(problems).set(set).where(eq(problems.id, problemId)),
   ]);
 
-  return { revisionId, changed };
+  return { revisionId, changedFields };
 }

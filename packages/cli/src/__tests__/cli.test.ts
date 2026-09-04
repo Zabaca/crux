@@ -406,7 +406,7 @@ describe("writes", () => {
     const calls = stubServer({
       "POST /v1/dispatch": {
         revision: 1,
-        result: { ok: true, id: 7, revisionId: "REV-001", changed: ["title"] },
+        result: { ok: true, id: 7, revisionId: "REV-001", changedFields: ["title"] },
       },
     });
 

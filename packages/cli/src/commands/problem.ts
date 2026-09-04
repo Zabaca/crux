@@ -9,19 +9,11 @@ import type {
   CompleteProblemPayload,
   ReviseProblemPayload,
 } from "@crux/core/actions";
+import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
 
 type ProblemRow = { id: number; status: string | null; title: string };
-
-/** One history entry, as `PROBLEM_REVISIONS` answers with it. */
-type RevisionEntry = {
-  id: string;
-  changed: Record<string, string>;
-  reason: string | null;
-  revisedById: string;
-  revisedAt: number;
-};
 
 const addCmd = defineCommand({
   meta: { name: "add", description: "Add a problem to a workstream." },
@@ -101,8 +93,8 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_PROBLEM", payload });
-    const { changed } = result as { changed: string[] };
-    emit(result, `revised ${args.id} — ${changed.join(", ")}`);
+    const { changedFields } = result as { changedFields: string[] };
+    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
   },
 });
 
