@@ -262,6 +262,17 @@ describe("REVISE_OBSERVATION", () => {
     expect(await obsHistoryOf(id)).toEqual([]);
   });
 
+  test("refuses blanking the content, which would destroy the raw signal", async () => {
+    const id = await seedObservation();
+
+    await expect(reviseObs(id, { content: "   " })).rejects.toMatchObject({
+      code: "INVARIANT_VIOLATION",
+    });
+
+    expect((await obsShowOf(id)).content).toBe("the digest takes 4 seconds");
+    expect(await obsHistoryOf(id)).toEqual([]);
+  });
+
   test("an archived Observation is still revisable, and stays archived", async () => {
     // The two claims are orthogonal (ADR-0017): archiving says the row stopped
     // being live, revision says it was wrong. A retired row is still reachable
@@ -406,11 +417,13 @@ describe("REVISE_ATTEMPT", () => {
     expect(await attHistoryOf(id)).toEqual([]);
   });
 
-  test("refuses correcting a ref to nothing, the way filing one does", async () => {
+  test("refuses correcting a ref to nothing, with the code filing one raises", async () => {
     const id = await seedAttempt();
 
+    // `createAttempt` raises INVARIANT_VIOLATION for the same rule: one
+    // invariant answering with two codes is two rules to a caller parsing them.
     await expect(reviseAtt(id, { ref: "   " })).rejects.toMatchObject({
-      code: "VALIDATION_ERROR",
+      code: "INVARIANT_VIOLATION",
     });
 
     expect((await attListed(id)).ref).toBe("https://tracker.example/WRONG-1");

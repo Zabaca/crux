@@ -137,7 +137,8 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_OBSERVATION", payload });
-    emit(result, `revised ${args.id}`);
+    const { changedFields } = result as { changedFields: string[] };
+    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
   },
 });
 

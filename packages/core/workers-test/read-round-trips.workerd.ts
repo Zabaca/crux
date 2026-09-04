@@ -204,3 +204,34 @@ describe("PROBLEM_SHOW", () => {
     expect(counted.statements).toHaveLength(5);
   });
 });
+
+describe("OBSERVATION_SHOW", () => {
+  test("the revision marker joins the wave rather than costing a hop after it", async () => {
+    await db.insert(observations).values({
+      id: "OBS-001",
+      workstreamId: WS,
+      reporterId: OWNER,
+      content: "the digest takes 12 seconds",
+    });
+    await db.insert(revisions).values({
+      id: "REV-001",
+      entity: "observation",
+      entityId: "OBS-001",
+      changed: JSON.stringify({ content: "the digest takes 4 seconds" }),
+      revisedById: OWNER,
+      revisedAt: Date.now(),
+    });
+
+    const counted = countingD1(env.DB);
+    const shown = (await query(
+      { kind: "OBSERVATION_SHOW", id: "OBS-001" },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { revision: { count: number } | null };
+
+    expect(shown.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
+    // The row and the marker together — two statements, one deep. The scope
+    // check here is the row itself, so there is no third.
+    expect(counted.statements).toHaveLength(2);
+    expect(counted.peakConcurrency()).toBe(2);
+  });
+});

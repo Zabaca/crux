@@ -350,19 +350,23 @@ async function revisionMarkerFor(
 }
 
 /**
- * The same marker for a set of rows, in one statement rather than one per row.
+ * The same marker for every row of one kind, in one statement.
  *
  * `ATTEMPT_LIST` is the read that shows an Attempt, so it is where an Attempt's
  * marker belongs — and a listing that paid a round trip per row would be the
  * N+1 the single-row helper above quietly becomes when it is called in a loop.
+ *
+ * It groups the whole entity kind rather than naming the ids it wants, on
+ * purpose: an unfiltered `attempt list` is corpus-wide, so an `IN (…)` here
+ * would bind one parameter per Attempt and eventually cross D1's cap on a read
+ * that works today. Revisions are a side record almost nothing writes to, so
+ * scanning them by `entity` is the cheaper half of that trade. The caller only
+ * ever looks up ids it already resolved in scope.
  */
 async function revisionMarkersFor(
   db: CruxDb,
   entity: string,
-  entityIds: string[],
 ): Promise<Map<string, RevisionMarker>> {
-  const markers = new Map<string, RevisionMarker>();
-  if (entityIds.length === 0) return markers;
   const rows = await db
     .select({
       entityId: revisions.entityId,
@@ -370,8 +374,9 @@ async function revisionMarkersFor(
       last: sql<number>`max(${revisions.revisedAt})`,
     })
     .from(revisions)
-    .where(and(eq(revisions.entity, entity), inArray(revisions.entityId, entityIds)))
+    .where(eq(revisions.entity, entity))
     .groupBy(revisions.entityId);
+  const markers = new Map<string, RevisionMarker>();
   for (const r of rows) {
     if (!r.count) continue;
     markers.set(r.entityId, { count: Number(r.count), lastRevisedAt: Number(r.last) });
@@ -718,16 +723,20 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
     }
 
     case "OBSERVATION_SHOW": {
-      const rows = await db.select().from(observations).where(eq(observations.id, q.id)).limit(1);
+      // One wave, not two: both statements need the id and nothing else, and
+      // the marker joins the read rather than costing a hop after it
+      // (ADR-0017). The marker query touches no tenant-bearing column, so
+      // issuing it before the scope check rejects tells a stranger nothing.
+      const [rows, revision] = await Promise.all([
+        db.select().from(observations).where(eq(observations.id, q.id)).limit(1),
+        revisionMarkerFor(db, "observation", q.id),
+      ]);
       if (rows.length === 0 || !scope.has(rows[0]!.workstreamId)) {
         throw new NotFoundError(`observation not found: ${q.id}`, { id: q.id });
       }
       // The marker, and only the marker: what it used to say is the second
       // read below (ADR-0017).
-      return {
-        ...rows[0]!,
-        revision: await revisionMarkerFor(db, "observation", q.id),
-      } satisfies ObservationWithRevision;
+      return { ...rows[0]!, revision } satisfies ObservationWithRevision;
     }
 
     case "OBSERVATION_REVISIONS": {
@@ -926,11 +935,9 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       const sorted = [...rows].sort(byFiledOrder);
       // `attempt list` is where an Attempt is shown, so it is where the marker
       // goes — one grouped statement for the whole listing, not one per row.
-      const markers = await revisionMarkersFor(
-        db,
-        "attempt",
-        sorted.map((a) => a.id),
-      );
+      const markers = sorted.length
+        ? await revisionMarkersFor(db, "attempt")
+        : new Map<string, RevisionMarker>();
       return sorted.map((a) => ({
         ...a,
         revision: markers.get(a.id) ?? null,

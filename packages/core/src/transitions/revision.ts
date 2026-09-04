@@ -16,7 +16,7 @@ import type { BatchItem } from "drizzle-orm/batch";
 
 import { runBatch, type CruxDb } from "../db/client.js";
 import { attempts, observations, problems, revisions } from "../db/schema.js";
-import { NotFoundError, ValidationError } from "./errors.js";
+import { InvariantError, NotFoundError, ValidationError } from "./errors.js";
 
 /** Which kind of row a revision corrects. Storage is polymorphic; the API is not. */
 export type RevisableEntity = "problem" | "observation" | "attempt";
@@ -154,7 +154,7 @@ export async function reviseProblem(
 }
 
 export type ObservationRevision = {
-  content?: string;
+  content: string;
 };
 
 /**
@@ -178,8 +178,10 @@ export async function reviseObservation(
   userId: string,
   db: CruxDb,
 ): Promise<RevisionResult> {
-  if (updates.content === undefined) {
-    throw new ValidationError(`a revision must name content`, { observationId });
+  if (updates.content.trim() === "") {
+    // An Observation blanked to whitespace is the raw signal destroyed, which
+    // is the one thing lifting the freeze may not be allowed to do (ADR-0017).
+    throw new InvariantError(`an Observation cannot be corrected to nothing`, { observationId });
   }
 
   const row = (
@@ -247,7 +249,10 @@ export async function reviseAttempt(
   // is not a way around the invariant that filing one enforces.
   for (const [field, value] of Object.entries(updates)) {
     if (value !== undefined && value.trim() === "") {
-      throw new ValidationError(`Attempt ${field} cannot be corrected to nothing`, {
+      // `InvariantError`, the code `createAttempt` raises for the same rule:
+      // one invariant that answers with two codes is two rules to a caller
+      // parsing them.
+      throw new InvariantError(`Attempt ${field} cannot be corrected to nothing`, {
         attemptId,
         field,
       });
