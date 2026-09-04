@@ -71,14 +71,32 @@ crux attempt revise <id> --ref "..." --label "..." --note "..." --reason "..."
 crux problem revisions <id>          # and `observation revisions`, `attempt revisions`
 ```
 
+Every prose-bearing row works the same way, through the same pair of verbs:
+`crux evidence revise <EVD-###> --note`, `crux outcome revise <OUT-###>
+--observed-impact --learnings`, `crux abandonment revise <ABN-###> --rationale`,
+and `crux workstream revise -w <slug> --title --description`. The last of those
+has no `--slug`, and asking for one is refused rather than quietly dropped: a
+slug is how a Workstream is addressed — by every `-w`, every URL and every
+reference an agent has stored — rather than something the row said, so
+`crux workstream rename` keeps it ([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)).
+
+Correcting an Outcome or an Abandonment rewrites a terminal judgment, which is
+deliberate. What it does not do is reopen anything: the Problem stays `done` or
+`abandoned`, it still has the one Outcome it is allowed, and the history is what
+makes that safe — a retracted measurement leaves a trace instead of quietly
+becoming a different claim.
+
 Only the fields named change, naming none is a refusal rather than an empty
 write, and `--reason` is optional — the model demands one at terminal doors and
 leaves it optional at reversible ones, and a revision is reversible because you
 can revise again. The row itself stays the single source of current truth; what
 it used to say goes to a `revisions` table that no ordinary read touches.
-`crux problem show`, `crux observation show` and `crux attempt list` carry a
-marker — that the row was revised, and how many times — resolved inside the wave
-those reads already issue, and the history is the second read above
+Every read that shows a revisable row carries a marker — that the row was
+revised, and how many times — resolved inside the wave that read already issues,
+and the history is the second read above: `crux problem show`,
+`crux observation show`, `crux workstream show`, `crux outcome show`,
+`crux abandonment show`, and every row `crux attempt list` and
+`crux evidence list` answer with
 ([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)). The Problem page and the
 Observation page in the browser carry the same marker, on the same terms: it
 joins the wave those pages already issue, a row nobody has corrected shows

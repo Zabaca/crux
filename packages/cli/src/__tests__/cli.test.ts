@@ -133,14 +133,16 @@ describe("reads", () => {
     // Once nothing resolves a default from view-state, `select` only moved the
     // human's screen. `list` to choose, `-w` to act.
     const subs = Object.keys((workstreamCommand as AnyCmd).subCommands ?? {});
-    expect(subs.sort()).toEqual(["add", "list", "rename", "show"]);
+    expect(subs.sort()).toEqual(["add", "list", "rename", "revise", "revisions", "show"]);
   });
 
   test("outcome has no add — the Problem is completed, and that is what records one", async () => {
     // `outcome add` read like filing a child entity; the same call closes the
-    // Problem, so the verb lives on `problem`. What is left here are the reads.
+    // Problem, so the verb lives on `problem`. What is left here are the reads
+    // and `revise`, which corrects the prose without touching the transition
+    // (ADR-0017).
     const subs = Object.keys((outcomeCommand as AnyCmd).subCommands ?? {});
-    expect(subs.sort()).toEqual(["list", "show"]);
+    expect(subs.sort()).toEqual(["list", "revise", "revisions", "show"]);
 
     const rows = [{ id: "OUT-001", problemId: 7, observedImpact: "sessions start warm" }];
     const calls = stubServer({ "POST /v1/query": { result: rows } });
@@ -284,6 +286,29 @@ describe("reads", () => {
 
     expect(calls.map((c) => c.body).at(-1)).toEqual({ kind: "PROBLEM_REVISIONS", id: "7" });
     expect(out).toEqual(history);
+  });
+
+  test("the other four revisions commands each ask for their own history", async () => {
+    const cases: [AnyCmd, Record<string, unknown>, unknown][] = [
+      [evidenceCommand as AnyCmd, { id: "EVD-001" }, { kind: "EVIDENCE_REVISIONS", id: "EVD-001" }],
+      [outcomeCommand as AnyCmd, { id: "OUT-001" }, { kind: "OUTCOME_REVISIONS", id: "OUT-001" }],
+      [
+        abandonmentCommand as AnyCmd,
+        { id: "ABN-7" },
+        { kind: "ABANDONMENT_REVISIONS", id: "ABN-7" },
+      ],
+      [
+        workstreamCommand as AnyCmd,
+        { workstream: "crux" },
+        { kind: "WORKSTREAM_REVISIONS", id: "crux" },
+      ],
+    ];
+
+    for (const [cmd, args, expected] of cases) {
+      const calls = stubServer({ "POST /v1/query": { result: [] } });
+      await capture(() => runCmd(cmd, "revisions", { ...args, json: true }));
+      expect(calls.map((c) => c.body).at(-1)).toEqual(expected);
+    }
   });
 
   test("observation and attempt histories are their own reads", async () => {
@@ -488,6 +513,46 @@ describe("writes", () => {
       kind: "REVISE_PROBLEM",
       payload: { id: "7", title: "a truer title", reason: "the Evidence demoted the cause" },
     });
+  });
+
+  test("the other four revise commands each reach their own action, and send only what they were given", async () => {
+    const cases: [AnyCmd, Record<string, unknown>, unknown][] = [
+      [
+        evidenceCommand as AnyCmd,
+        { id: "EVD-001", note: "a truer note", json: true },
+        { kind: "REVISE_EVIDENCE", payload: { id: "EVD-001", note: "a truer note" } },
+      ],
+      [
+        outcomeCommand as AnyCmd,
+        { id: "OUT-001", "observed-impact": "p95 fell to 1.4s", json: true },
+        { kind: "REVISE_OUTCOME", payload: { id: "OUT-001", observedImpact: "p95 fell to 1.4s" } },
+      ],
+      [
+        abandonmentCommand as AnyCmd,
+        { id: "ABN-7", rationale: "a truer reason", reason: "the first one was wrong", json: true },
+        {
+          kind: "REVISE_ABANDONMENT",
+          payload: { id: "ABN-7", rationale: "a truer reason", reason: "the first one was wrong" },
+        },
+      ],
+      [
+        // No `--slug`: the slug is `rename`'s, and the payload is `.strict()`.
+        workstreamCommand as AnyCmd,
+        { workstream: "crux", title: "Crux itself", json: true },
+        { kind: "REVISE_WORKSTREAM", payload: { workstream: "crux", title: "Crux itself" } },
+      ],
+    ];
+
+    for (const [cmd, args, expected] of cases) {
+      const calls = stubServer({
+        "POST /v1/dispatch": {
+          revision: 1,
+          result: { ok: true, id: "X", revisionId: "REV-001", changedFields: ["f"] },
+        },
+      });
+      await capture(() => runCmd(cmd, "revise", args));
+      expect(calls.at(-1)!.body).toEqual(expected);
+    }
   });
 
   test("observation revise sends the correction, and the reason only when given", async () => {

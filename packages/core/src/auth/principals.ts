@@ -18,7 +18,17 @@ import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/sqlite-core";
 
 import type { CruxDb } from "../db/client.js";
-import { apiTokens, attempts, observations, problems, users, workstreams } from "../db/schema.js";
+import {
+  abandonments,
+  apiTokens,
+  attempts,
+  evidence,
+  observations,
+  outcomes,
+  problems,
+  users,
+  workstreams,
+} from "../db/schema.js";
 import { NotFoundError } from "../transitions/errors.js";
 import { hashToken, mintToken, timingSafeEqualHex } from "./tokens.js";
 
@@ -375,6 +385,47 @@ export async function requireObservationInScope(db: CruxDb, id: string, scope: S
   if (!row || !scope.has(row.workstreamId)) {
     throw new NotFoundError(`observation not found: ${id}`, { id });
   }
+  return row;
+}
+
+/** The Evidence link `id` names, if its Problem is inside the scope. */
+export async function requireEvidenceInScope(db: CruxDb, id: string, scope: Scope) {
+  const row = (
+    await db
+      .select()
+      .from(evidence)
+      .where(and(eq(evidence.id, id), inArray(evidence.problemId, problemsInScope(db, scope))))
+      .limit(1)
+  )[0];
+  if (!row) throw new NotFoundError(`evidence not found: ${id}`, { id });
+  return row;
+}
+
+/** The Outcome `id` names, if its Problem is inside the scope. */
+export async function requireOutcomeInScope(db: CruxDb, id: string, scope: Scope) {
+  const row = (
+    await db
+      .select()
+      .from(outcomes)
+      .where(and(eq(outcomes.id, id), inArray(outcomes.problemId, problemsInScope(db, scope))))
+      .limit(1)
+  )[0];
+  if (!row) throw new NotFoundError(`outcome not found: ${id}`, { id });
+  return row;
+}
+
+/** The Abandonment `id` names, if its Problem is inside the scope. */
+export async function requireAbandonmentInScope(db: CruxDb, id: string, scope: Scope) {
+  const row = (
+    await db
+      .select()
+      .from(abandonments)
+      .where(
+        and(eq(abandonments.id, id), inArray(abandonments.problemId, problemsInScope(db, scope))),
+      )
+      .limit(1)
+  )[0];
+  if (!row) throw new NotFoundError(`abandonment not found: ${id}`, { id });
   return row;
 }
 

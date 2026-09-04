@@ -6,8 +6,7 @@ import type {
   CloseAttemptPayload,
   ReviseAttemptPayload,
 } from "@crux/core/actions";
-import type { RevisionEntry } from "@crux/core/reads";
-import { formatRevisions } from "../revisions.js";
+import { emitRevised, revisionsCommand } from "../revisions.js";
 import { api } from "../api-client.js";
 import { requireProblem, requireWorkstream, workstreamArg } from "../require-args.js";
 
@@ -129,19 +128,14 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_ATTEMPT", payload });
-    const { changedFields } = result as { changedFields: string[] };
-    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
+    emitRevised(result, args.id);
   },
 });
 
-const revisionsCmd = defineCommand({
-  meta: { name: "revisions", description: "What an Attempt used to say." },
-  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const rows = await api().query<RevisionEntry[]>({ kind: "ATTEMPT_REVISIONS", id: args.id });
-    emit(rows, formatRevisions(rows));
-  },
+const revisionsCmd = revisionsCommand({
+  kind: "ATTEMPT_REVISIONS",
+  noun: "an Attempt",
+  idHint: "ATT-###",
 });
 
 const driftCmd = defineCommand({

@@ -206,6 +206,23 @@ because it has to be observed rather than predicted.
 Plain paragraphs, no headings: a description renders as escaped text with newlines
 preserved, so a `##` shows up literally.
 
+Every other prose-bearing row corrects the same way, with the same pair of verbs:
+
+```sh
+crux evidence revise EVD-003 --note "..."          # the why-note
+crux outcome revise OUT-002 --observed-impact "..." --learnings "..."
+crux abandonment revise ABN-42 --rationale "..."
+crux workstream revise -w crux --title "..." --description "..."
+```
+
+`workstream revise` has no `--slug` and refuses one: a slug is how the Workstream
+is addressed, not something it said — `crux workstream rename` is what changes it.
+Revising an Outcome or an Abandonment corrects the prose and nothing else; the
+Problem stays `done` or `abandoned`. `evidence revisions`, `outcome revisions`,
+`abandonment revisions` and `workstream revisions -w <slug>` are the history reads,
+and the marker rides `outcome show`, `abandonment show`, `workstream show` and
+every row of `evidence list`.
+
 ### Scheduling
 
 ```sh

@@ -5,8 +5,7 @@ import type {
   ArchiveObservationPayload,
   ReviseObservationPayload,
 } from "@crux/core/actions";
-import type { RevisionEntry } from "@crux/core/reads";
-import { formatRevisions } from "../revisions.js";
+import { emitRevised, revisionsCommand } from "../revisions.js";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
 
@@ -137,22 +136,14 @@ const reviseCmd = defineCommand({
       ...(args.reason !== undefined ? { reason: args.reason } : {}),
     };
     const { result } = await api().dispatch({ kind: "REVISE_OBSERVATION", payload });
-    const { changedFields } = result as { changedFields: string[] };
-    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
+    emitRevised(result, args.id);
   },
 });
 
-const revisionsCmd = defineCommand({
-  meta: { name: "revisions", description: "What an observation used to say." },
-  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
-  async run({ args }) {
-    if (args.json) setJsonMode(true);
-    const rows = await api().query<RevisionEntry[]>({
-      kind: "OBSERVATION_REVISIONS",
-      id: args.id,
-    });
-    emit(rows, formatRevisions(rows));
-  },
+const revisionsCmd = revisionsCommand({
+  kind: "OBSERVATION_REVISIONS",
+  noun: "an observation",
+  idHint: "OBS-###",
 });
 
 const archiveCmd = defineCommand({

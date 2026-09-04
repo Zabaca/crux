@@ -14,8 +14,11 @@ import {
   findProblemInScope,
   findWorkstreamBySlugInScope,
   randomSuffix,
+  requireAbandonmentInScope,
   requireAttemptInScope,
+  requireEvidenceInScope,
   requireObservationInScope,
+  requireOutcomeInScope,
   requireProblemInScope,
   requireWorkstreamInScope,
   type Scope,
@@ -30,6 +33,10 @@ import {
   archiveObservation,
   renameWorkstream,
   reviseProblem,
+  reviseEvidence,
+  reviseOutcome,
+  reviseAbandonment,
+  reviseWorkstream,
   reviseObservation,
   reviseAttempt,
   CruxError,
@@ -270,6 +277,69 @@ export async function runMutation(
       return {
         result: { ok: true, id: prob.id, revisionId, changedFields },
         workstreamId: prob.workstreamId,
+      };
+    }
+    case "REVISE_EVIDENCE": {
+      const p = action.payload;
+      const row = await requireEvidenceInScope(db, p.id, scope);
+      const prob = await requireProblemInScope(db, row.problemId, scope);
+      const { revisionId, changedFields } = await reviseEvidence(
+        row.id,
+        { note: p.note },
+        p.reason,
+        user.id,
+        db,
+      );
+      return {
+        result: { ok: true, id: row.id, revisionId, changedFields },
+        workstreamId: prob.workstreamId,
+      };
+    }
+    case "REVISE_OUTCOME": {
+      const p = action.payload;
+      const row = await requireOutcomeInScope(db, p.id, scope);
+      const prob = await requireProblemInScope(db, row.problemId, scope);
+      const { revisionId, changedFields } = await reviseOutcome(
+        row.id,
+        { observedImpact: p.observedImpact, learnings: p.learnings },
+        p.reason,
+        user.id,
+        db,
+      );
+      return {
+        result: { ok: true, id: row.id, revisionId, changedFields },
+        workstreamId: prob.workstreamId,
+      };
+    }
+    case "REVISE_ABANDONMENT": {
+      const p = action.payload;
+      const row = await requireAbandonmentInScope(db, p.id, scope);
+      const prob = await requireProblemInScope(db, row.problemId, scope);
+      const { revisionId, changedFields } = await reviseAbandonment(
+        row.id,
+        { rationale: p.rationale },
+        p.reason,
+        user.id,
+        db,
+      );
+      return {
+        result: { ok: true, id: row.id, revisionId, changedFields },
+        workstreamId: prob.workstreamId,
+      };
+    }
+    case "REVISE_WORKSTREAM": {
+      const p = action.payload;
+      const ws = await requireWorkstreamInScope(db, p.workstream, scope);
+      const { revisionId, changedFields } = await reviseWorkstream(
+        ws.id,
+        { title: p.title, description: p.description },
+        p.reason,
+        user.id,
+        db,
+      );
+      return {
+        result: { ok: true, id: ws.id, revisionId, changedFields },
+        workstreamId: ws.id,
       };
     }
     case "ADD_OBSERVATION": {

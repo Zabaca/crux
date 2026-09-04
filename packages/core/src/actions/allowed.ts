@@ -23,7 +23,7 @@ const GLOBALS: (ViewActionKind | MutationActionKind)[] = [
 const VIEW_ALLOWED: Record<string, AllowedActions> = {
   workstream_list: {
     allowedView: ["SELECT_WORKSTREAM"],
-    allowedMutation: ["ADD_WORKSTREAM", "RENAME_WORKSTREAM"],
+    allowedMutation: ["ADD_WORKSTREAM", "RENAME_WORKSTREAM", "REVISE_WORKSTREAM"],
     globals: GLOBALS,
   },
   workstream_dashboard: {
@@ -45,6 +45,9 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
       "CLOSE_ATTEMPT",
       "ADD_EVIDENCE",
       "REVISE_PROBLEM",
+      "REVISE_EVIDENCE",
+      "REVISE_OUTCOME",
+      "REVISE_ABANDONMENT",
       "REVISE_ATTEMPT",
       "COMPLETE_PROBLEM",
       "SCHEDULE_PROBLEM",
