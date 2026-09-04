@@ -19,7 +19,7 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { createD1Db, type CruxDb } from "@crux/core/db";
 import { countingD1 } from "@crux/core/db/test-utils";
 import { applyD1Schema } from "@crux/core/db/d1";
-import { observations, problems, users, workstreams } from "@crux/core/db/schema";
+import { evidence, observations, problems, users, workstreams } from "@crux/core/db/schema";
 import { resolveActiveScope, type Scope } from "@crux/core/auth/principals";
 // Statically, for the reason web.workerd.ts gives: better-auth is a large graph
 // and loading it inside a test's own timeout is a flake waiting for a loaded CI
@@ -29,7 +29,7 @@ import { createAuth } from "@crux/core/auth/better-auth";
 import { eq } from "drizzle-orm";
 
 import { boardData } from "../src/web/board.js";
-import { observationListPage } from "../src/web/read-pages.js";
+import { observationListPage, problemPage } from "../src/web/read-pages.js";
 import { pageContext } from "../src/web/session.js";
 
 let db: CruxDb;
@@ -166,6 +166,34 @@ describe("the board's read composition", () => {
     const page = await observationListPage(read, "crux");
     expect(page.body.value).toContain("OBS-1");
     expect(page.body.value).toContain("the product changed");
+  });
+
+  test("an archived Observation stays under a Problem's Evidence, marked as retired", async () => {
+    const [p] = await db
+      .select({ id: problems.id })
+      .from(problems)
+      .where(eq(problems.workstreamId, "WS-crux"));
+    await db.insert(evidence).values({
+      id: "EVD-1",
+      observationId: "OBS-1",
+      problemId: p!.id,
+      note: "this is why",
+      createdById: VIEWER,
+    });
+    await db
+      .update(observations)
+      .set({ archivedAt: 1700, archivedById: VIEWER, archiveRationale: "the product changed" })
+      .where(eq(observations.id, "OBS-1"));
+
+    const page = await problemPage(
+      { db, principal: { id: VIEWER }, scope: await scopeForViewer() },
+      "crux",
+      String(p!.id),
+    );
+    // Still there — hiding it would gut the Problem's argument — but a reader
+    // must not mistake it for a live signal.
+    expect(page.body.value).toContain("OBS-1");
+    expect(page.body.value).toContain("archived — the product changed");
   });
 
   test("the Workstream it does own comes back whole", async () => {

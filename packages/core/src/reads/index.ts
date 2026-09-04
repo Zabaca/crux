@@ -430,11 +430,7 @@ async function unlinkedObservations(
   const rows = await db
     .select()
     .from(observations)
-    .where(
-      showArchived
-        ? eq(observations.workstreamId, workstreamId)
-        : and(eq(observations.workstreamId, workstreamId), isNull(observations.archivedAt)),
-    );
+    .where(and(eq(observations.workstreamId, workstreamId), liveOnly(showArchived)));
   // "Linked" means linked to a Problem this Principal can see. The scan stays
   // unfiltered by Observation — an `inArray` over every Observation id in the
   // Workstream is the parameter limit this deployment would hit first — and is

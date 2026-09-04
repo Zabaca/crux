@@ -196,6 +196,18 @@ export async function problemPage(
                           : ""
                       }
                     </div>
+                    ${
+                      // An archived Observation stays here on purpose — the
+                      // Evidence link asserts it supports this Problem — so the
+                      // page has to say that it was retired, and why. Reading a
+                      // retired row as though it were live is the failure this
+                      // marker exists to stop (ADR-0017).
+                      e.observation?.archive
+                        ? html`<div class="m mono" style="color:var(--faint)">
+                            archived — ${e.observation.archive.rationale ?? "no rationale recorded"}
+                          </div>`
+                        : ""
+                    }
                   </div>`,
                 )
           }

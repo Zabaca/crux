@@ -70,8 +70,8 @@ crux search "<a few distinctive words>"
 
 That searches Problem titles and descriptions and Observation content, every
 Workstream by default (`--workstream <slug>` narrows it, `--show-archived`
-widens it), and answers with the matching rows plus the slug of the Workstream each belongs to — enough to judge
-whether it is the same thing. Duplication is handled by finding, not by merging:
+widens it), and answers with the matching rows plus the slug of the Workstream
+each belongs to — enough to judge whether it is the same thing. Duplication is handled by finding, not by merging:
 Observations are deliberately cheap and duplication among them is by design,
 while a near-twin Problem splits one thing's Evidence across two rows. The skill
 requires the search and prefers attaching Evidence to the Problem it finds.
