@@ -1,12 +1,12 @@
 /**
- * `PROBLEM_DETAIL` asks four independent questions, and the test is that it
+ * `PROBLEM_DETAIL` asks five independent questions, and the test is that it
  * asks them at once.
  *
  * Everything under a Problem — its Attempts, its Evidence, whether it was
- * abandoned, what became of it — needs the Problem's id and nothing else. They
- * were awaited one at a time, which is what building an object literal in order
- * does, and on D1 that is four sequential round trips for four reads that never
- * needed ordering.
+ * abandoned, what became of it, whether it has been corrected — needs the
+ * Problem's id and nothing else. They were awaited one at a time, which is what
+ * building an object literal in order does, and on D1 that is five sequential
+ * round trips for five reads that never needed ordering.
  *
  * `PROBLEM_SHOW` is held to the same rule, which is what the revision marker
  * had to be built into rather than added after (ADR-0017).
@@ -100,25 +100,37 @@ async function seedProblem(): Promise<number> {
 }
 
 describe("PROBLEM_DETAIL", () => {
-  test("issues its four independent reads together, not one after another", async () => {
+  test("issues its five independent reads together, not one after another", async () => {
     const id = await seedProblem();
+    await db.insert(revisions).values({
+      id: "REV-001",
+      entity: "problem",
+      entityId: String(id),
+      changed: JSON.stringify({ title: "slow reads" }),
+      revisedById: OWNER,
+      revisedAt: Date.now(),
+    });
 
     const counted = countingD1(env.DB);
-    await query(
+    const detail = (await query(
       { kind: "PROBLEM_DETAIL", id },
       { db: counted.db, principal: { id: OWNER }, scope },
-    );
+    )) as { revision: { count: number } | null };
+
+    // The marker the Problem page shows, answered inside the same wave.
+    expect(detail.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
 
     // The scope check has to come first — it is what decides whether this
-    // Principal may see the Problem at all — so the four that follow it are
-    // the ones that can overlap, and all four do.
-    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(4);
+    // Principal may see the Problem at all — so the five that follow it are
+    // the ones that can overlap, and all five do.
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(5);
 
-    // Seven statements, three deep: the Problem, then the four together, then
-    // the second hop two of them own (the Observations behind the Evidence, and
-    // the Outcome's follow-up Problems). Serialized, the same seven were seven
-    // round trips.
-    expect(counted.statements).toHaveLength(7);
+    // Eight statements, three deep: the Problem, then the five together
+    // (the revision marker among them, which is what keeps the browser's
+    // marker free — ADR-0017), then the second hop two of them own (the
+    // Observations behind the Evidence, and the Outcome's follow-up Problems).
+    // Serialized, the same eight were eight round trips.
+    expect(counted.statements).toHaveLength(8);
   });
 
   test("still answers the same thing, and still refuses another tenant's Problem", async () => {
@@ -132,12 +144,16 @@ describe("PROBLEM_DETAIL", () => {
       evidence: Array<{ observation: { id: string } | null }>;
       abandonment: unknown;
       outcome: { id: string } | null;
+      revision: unknown;
     };
     expect(detail.attempts).toHaveLength(1);
     expect(detail.evidence).toHaveLength(1);
     expect(detail.evidence[0]!.observation?.id).toBe("OBS-1");
     expect(detail.abandonment).toBeNull();
     expect(detail.outcome?.id).toBe("OUT-1");
+    // Nobody has corrected this Problem, so the marker is null rather than a
+    // zero — which is what lets the page render nothing at all (ADR-0017).
+    expect(detail.revision).toBeNull();
 
     // A Principal with no claim on this Workstream reads it as missing, which
     // is the same answer a Problem that never existed gets (ADR-0013).
@@ -151,7 +167,7 @@ describe("PROBLEM_DETAIL", () => {
     ).toBeNull();
   });
 
-  test("a Problem with nothing hanging off it is still one wave, not four", async () => {
+  test("a Problem with nothing hanging off it is still one wave, not five", async () => {
     const inserted = await db
       .insert(problems)
       .values({
@@ -169,10 +185,58 @@ describe("PROBLEM_DETAIL", () => {
       { db: counted.db, principal: { id: OWNER }, scope },
     );
 
-    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(4);
-    // Five: the Problem, then the four. Neither second hop happens — there are
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(5);
+    // Six: the Problem, then the five. Neither second hop happens — there are
     // no Observations to fetch and no Outcome to fetch follow-ups for.
-    expect(counted.statements).toHaveLength(5);
+    expect(counted.statements).toHaveLength(6);
+  });
+});
+
+describe("OBSERVATION_DETAIL", () => {
+  test("the revision marker rides the row's own statement", async () => {
+    await db.insert(observations).values({
+      id: "OBS-002",
+      workstreamId: WS,
+      reporterId: OWNER,
+      content: "the digest takes 12 seconds",
+    });
+    await db.insert(revisions).values({
+      id: "REV-002",
+      entity: "observation",
+      entityId: "OBS-002",
+      changed: JSON.stringify({ content: "the digest takes 4 seconds" }),
+      revisedById: OWNER,
+      revisedAt: Date.now(),
+    });
+
+    const counted = countingD1(env.DB);
+    const detail = (await query(
+      { kind: "OBSERVATION_DETAIL", id: "OBS-002" },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { revision: { count: number } | null };
+
+    // The Observation page renders this marker, and it must not have cost the
+    // page a hop to get it (ADR-0017): the row and the marker go together.
+    expect(detail.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(2);
+    // Three, two deep: the row and the marker together, then the Evidence this
+    // Observation supports. The scope check here is the row itself, so there is
+    // no fourth.
+    expect(counted.statements).toHaveLength(3);
+  });
+
+  test("a row nobody has revised answers a null marker, not an error", async () => {
+    await db.insert(observations).values({
+      id: "OBS-003",
+      workstreamId: WS,
+      reporterId: OWNER,
+      content: "never corrected",
+    });
+    const detail = (await query(
+      { kind: "OBSERVATION_DETAIL", id: "OBS-003" },
+      { db, principal: { id: OWNER }, scope },
+    )) as { revision: unknown };
+    expect(detail.revision).toBeNull();
   });
 });
 

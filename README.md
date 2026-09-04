@@ -79,7 +79,11 @@ it used to say goes to a `revisions` table that no ordinary read touches.
 `crux problem show`, `crux observation show` and `crux attempt list` carry a
 marker — that the row was revised, and how many times — resolved inside the wave
 those reads already issue, and the history is the second read above
-([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)).
+([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)). The Problem page and the
+Observation page in the browser carry the same marker, on the same terms: it
+joins the wave those pages already issue, a row nobody has corrected shows
+nothing at all, and there is no diff viewer — what changed, and the optional
+reason it changed, are the `revisions` read and stay there.
 Correcting a row is not the same claim as archiving one: revision says *what I
 wrote was wrong*, archiving says *what I wrote was right and has stopped being
 live*.
