@@ -22,7 +22,10 @@ Nothing about the product is restated here, because a second copy is the one tha
 - [`CLAUDE.md`](../../CLAUDE.md) — what Crux is, how it deploys, the layout. Root of the doc tree.
 - [`CONTEXT.md`](../../CONTEXT.md) — the glossary. Canonical vocabulary; use these words exactly.
 - [`docs/adr/`](../../docs/adr/) — the decisions and, more usefully, the arguments behind them.
-- [`skills/crux/SKILL.md`](../../skills/crux/SKILL.md) — how to drive the CLI. Do not duplicate it here.
+- [`skills/crux/SKILL.md`](../../skills/crux/SKILL.md) — how to drive the CLI. Do not duplicate
+  it here — and load it before the first `crux` command, not after something goes wrong. It
+  is not injected. Driving the CLI from memory of `CLAUDE.md` is driving it from a strict
+  subset, and the no-duplication rule above is what guarantees that.
 
 Read the ADR before proposing something that contradicts one. Several "obvious"
 improvements are things that were tried and deliberately reversed — ADR-0012 deleted an
@@ -38,7 +41,7 @@ Four stores already exist, and picking wrong is how knowledge gets lost.
 | **the crux corpus** | findings about the product | "`--tag` repeated silently keeps only the last value" |
 | **the doc tree** | decisions, and the argument for them | an ADR; a line in `CONTEXT.md` |
 | **Fredrin tickets** | work somebody will do | "collapse the auth preamble" |
-| **this file** | how *you* should operate | "measure before claiming a cause" |
+| **this file** | how *you* should operate — curated by a human, never by you | "measure before claiming a cause" |
 
 The rule: **findings go to the corpus, not here.** If you learn something true about
 Crux, that is an Observation — searchable, linkable as Evidence, visible in the
@@ -80,6 +83,13 @@ ruled out at one point and was the largest remaining cost an hour later — the 
 reads that measured identical at 922/950ms measured 671/466ms once a bigger cost was
 gone. Re-check what you eliminated after anything lands.
 
+**Verify the frame, not just the rows.** Every check has a boundary, and the boundary is
+what goes unchecked. Three mistakes in one session, all the same shape: enumerating five
+of six Problem stages hid the corpus's newest synthesis and nearly filed its duplicate;
+reading the last twelve CI runs and calling them "that day's failures" named the wrong
+failure; calling a commit unreleased without `git merge-base --is-ancestor`. Before
+reporting what a query returned, say what it excluded.
+
 **Shipping is not solving.** A merged ticket is not a deployed one — `/release` is the
 only path to production and a merge deploys nothing. A deployed fix is not a solved
 Problem either; that needs a measurement. `--observed-impact` is required for exactly
@@ -103,21 +113,21 @@ Live list. Add only what actually caught you.
 - `main` moves under you when other agents merge. Re-fetch immediately before
   committing, not once at the start.
 
-## Keeping this file current
+## This file is not yours to edit
 
-You may propose changes to this file. You may not write them silently.
+You do not update this file — not silently, and not by proposing a diff mid-task.
 
-When something here turns out wrong, or a mistake is worth not repeating, **show the
-diff and say what it cost**, then let the human decide. The value is in the review; an
-unreviewed file accumulates until it contradicts itself, which is the exact failure that
-put four dead commands in a shipped skill.
+What you learn about *how to work on Crux* is an Observation like everything else.
+File it. A rule that would have prevented a mistake you actually made, or a line here
+that turned out to be false, is exactly the kind of thing the corpus is for: it is
+searchable, it can be linked as Evidence, and it is visible to somebody other than you.
 
-Only two kinds of edit qualify:
+A line arrives in this file the way a Problem arrives on the board — somebody
+synthesized it, from evidence, on purpose. That is a deliberate act with a human in it,
+and it is not yours. An instruction file that edits itself accumulates until it
+contradicts itself, which is the exact failure that put four dead commands in a shipped
+skill.
 
-1. **A rule that would have prevented a mistake you actually made.** Not one you can
-   imagine making.
-2. **A correction** — something stated here that is no longer true.
-
-Everything else is a finding, and findings go to the corpus. If you are unsure which it
-is, ask whether it is about *Crux* or about *how to work on Crux*. Only the second
-belongs here.
+So the honest version of the old rule is stronger than it was: **everything is a
+finding.** You no longer have to decide whether something is about Crux or about working
+on Crux. Both go to the corpus.
