@@ -133,7 +133,7 @@ cheaper than quoting a retired row as though it were live.
 ## Problem
 
 A synthesized "there is a thing worth solving." Titles are a noun phrase naming the
-gap, one sentence; the description is the paragraph.
+gap, one sentence.
 
 ### Search first — always
 
@@ -174,6 +174,27 @@ not the same as the world having moved on, which is what archiving says. Still w
 the description to survive revision: state what is observed and name what is still
 undecided, rather than baking in a conclusion the Evidence may overturn. `problem show`
 carries a marker when a Problem has been revised; the history itself is the second read.
+
+**Write it to survive that anyway.** A revision is a correction with a history, not a
+cheap rewrite — it costs a `--reason` and it leaves what the row used to say sitting in
+the record. Four moves, in order, as plain paragraphs:
+
+1. **What is observed.** The situation, and the rows, measurements or commands behind
+   it — concrete enough that somebody else could re-derive it.
+2. **What it costs.** Why this is worth solving rather than merely true: who pays, when,
+   and whether the cost grows. A Problem with no impact is an Observation.
+3. **How it differs from its nearest neighbour.** Only when the search turned one up.
+   Name it, and say what makes this one not that one.
+4. **What is not asserted.** The undecided part — candidate causes you have not
+   measured, mechanisms you are not yet claiming. This is what lets the row survive
+   being revised by its own Evidence, and it is the move most often skipped.
+
+Do not state the fix, or what you expect to be true once it is solved. What became of a
+Problem is the Outcome's job, and `--observed-impact` is required there precisely
+because it has to be observed rather than predicted.
+
+Plain paragraphs, no headings: a description renders as escaped text with newlines
+preserved, so a `##` shows up literally.
 
 Every other prose-bearing row corrects the same way, with the same pair of verbs:
 
