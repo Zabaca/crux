@@ -45,6 +45,7 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
       "CLOSE_ATTEMPT",
       "ADD_EVIDENCE",
       "REVISE_PROBLEM",
+      "REVISE_ATTEMPT",
       "COMPLETE_PROBLEM",
       "SCHEDULE_PROBLEM",
       "UNSCHEDULE_PROBLEM",
@@ -54,7 +55,7 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
   },
   intake_queue: {
     allowedView: ["BACK"],
-    allowedMutation: ["ARCHIVE_OBSERVATION", "ADD_OBSERVATION"],
+    allowedMutation: ["ARCHIVE_OBSERVATION", "REVISE_OBSERVATION", "ADD_OBSERVATION"],
     globals: GLOBALS,
   },
 };

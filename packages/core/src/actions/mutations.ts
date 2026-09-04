@@ -10,7 +10,6 @@
  */
 import type { CruxDb } from "../db/client.js";
 import { workstreams, problems, observations, outcomes, attempts } from "../db/schema.js";
-import { eq } from "drizzle-orm";
 import {
   findProblemInScope,
   findWorkstreamBySlugInScope,
@@ -31,6 +30,8 @@ import {
   archiveObservation,
   renameWorkstream,
   reviseProblem,
+  reviseObservation,
+  reviseAttempt,
   CruxError,
   ReferentialError,
   type RoadmapStage,
@@ -313,11 +314,42 @@ export async function runMutation(
       });
       return { result: { ok: true, id }, workstreamId: prob.workstreamId };
     }
-    case "RENAME_OBSERVATION": {
+    case "REVISE_OBSERVATION": {
       const p = action.payload;
       const obs = await requireObservationInScope(db, p.id, scope);
-      await db.update(observations).set({ content: p.content }).where(eq(observations.id, p.id));
-      return { result: { ok: true, id: p.id }, workstreamId: obs.workstreamId };
+      const { revisionId, changedFields } = await reviseObservation(
+        p.id,
+        { content: p.content },
+        p.reason,
+        user.id,
+        db,
+      );
+      return {
+        result: { ok: true, id: p.id, revisionId, changedFields },
+        workstreamId: obs.workstreamId,
+      };
+    }
+    case "REVISE_ATTEMPT": {
+      const p = action.payload;
+      // An Attempt is reached through its Problem, which is what carries the
+      // Workstream: an Attempt this Principal cannot see is one that does not
+      // exist, the same refusal every other scoped read makes.
+      const att = await requireAttemptInScope(db, p.id, scope);
+      const { revisionId, changedFields } = await reviseAttempt(
+        p.id,
+        { ref: p.ref, label: p.label, closingNote: p.closingNote },
+        p.reason,
+        user.id,
+        db,
+      );
+      // As in `CLOSE_ATTEMPT`: the row names its Problem, not its Workstream,
+      // and a Problem gone missing under it leaves the event Workstream-less
+      // rather than guessing.
+      const revisedProb = await findProblemInScope(db, att.problemId, scope);
+      return {
+        result: { ok: true, id: p.id, revisionId, changedFields },
+        workstreamId: revisedProb?.workstreamId ?? null,
+      };
     }
     default: {
       const _exhaustive: never = action;
