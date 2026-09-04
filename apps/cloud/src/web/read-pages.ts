@@ -196,6 +196,18 @@ export async function problemPage(
                           : ""
                       }
                     </div>
+                    ${
+                      // An archived Observation stays here on purpose — the
+                      // Evidence link asserts it supports this Problem — so the
+                      // page has to say that it was retired, and why. Reading a
+                      // retired row as though it were live is the failure this
+                      // marker exists to stop (ADR-0017).
+                      e.observation?.archive
+                        ? html`<div class="m mono" style="color:var(--faint)">
+                            archived — ${e.observation.archive.rationale ?? "no rationale recorded"}
+                          </div>`
+                        : ""
+                    }
                   </div>`,
                 )
           }
@@ -295,9 +307,13 @@ export async function observationListPage(
 ): Promise<{ title: string; body: Html; workstream: WorkstreamRow }> {
   const ws = await ask<WorkstreamRow | null>(read, { kind: "WORKSTREAM_BY_SLUG", slug });
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
+  // The one caller that asks for archived rows: this page *is* the triage
+  // view, and the Archived group is one of its three. Every other reader of
+  // `OBSERVATION_SUMMARIES` takes the default, which leaves them out.
   const rows = await ask<ObservationSummary[]>(read, {
     kind: "OBSERVATION_SUMMARIES",
     workstreamId: ws.id,
+    showArchived: true,
   });
 
   const archived = rows.filter((o) => o.archive);
