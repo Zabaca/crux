@@ -5,7 +5,7 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 ## Entities
 
 - **Workstream** — a coherent area of focus (per client, per product). Everything below belongs to exactly one Workstream.
-- **Observation** — atomic intake: a raw signal worth keeping. Cheap to create; never deleted — corrected or retired by *archiving* (with a rationale), so history stays intact.
+- **Observation** — atomic intake: a raw signal worth keeping. Cheap to create; never deleted — *revised* if it was wrong when written, *archived* (with a rationale) once it stops being live. The two are different claims and the corpus keeps them apart.
 - **Problem** — a synthesized "there's a thing worth solving," distilled from Observations. The durable artifact: Crux keeps Problems, not the work done about them (ADR-0012).
 - **Evidence** — the link from an Observation to a Problem, carrying a why-note. An Observation *is not* Evidence until it's linked with a reason.
 - **Attempt** — a pointer to work happening somewhere else about a Problem: a `ref` into a tracker, a label, and one of `open`, `shipped`, `dropped`. Deliberately holds no description of the work — that lives in the linked system — and its status is a coarse local marker, not a mirror (ADR-0012).
@@ -28,6 +28,9 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 - **Unscheduled** — filed but not yet placed on the roadmap (status null). Not a bug, not a backlog: simply awaiting scheduling.
 - **Terminal door** — the rule that a Problem may only leave the board through a transition that demands a reason: `abandoned` carries a rationale, `done` carries an Outcome. There is no silent completion, and a shipped Attempt never closes a Problem on its own (ADR-0012).
 - **Drift** — a Problem staged as active with no open Attempt against it. What the corpus is meant to make visible: a stage is a schedule, not a direction.
+- **Revision** — a correction to a row that was wrong when it was written. Any row may be revised; the row is edited in place and what it previously said is kept, so a correction never costs the record it corrects.
+- **Rename** — changing what a row is *called* rather than what it said: a Workstream's slug, which every `-w`, every URL and every stored reference points at (ADR-0016). A separate verb from revision on purpose, so re-addressing a corpus is never mistaken for fixing a sentence.
+- **Archiving** — retiring a row that was accurate and has stopped being live, with a rationale. The world moved; the record did not become wrong. Not a correction, and never a deletion.
 
 ## Doc conventions
 

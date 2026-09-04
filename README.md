@@ -388,7 +388,8 @@ naming the broken links and orphans.
   [ADR-0013: adoption is anonymous-first](docs/adr/0013-anonymous-first-adoption.md),
   [ADR-0014: view-state belongs to whoever is looking at it](docs/adr/0014-view-state-is-the-humans.md),
   [ADR-0015: a release is a command, not a merge](docs/adr/0015-a-release-is-a-command-not-a-merge.md),
-  [ADR-0016: a slug belongs to its owner](docs/adr/0016-a-slug-belongs-to-its-owner.md).
+  [ADR-0016: a slug belongs to its owner](docs/adr/0016-a-slug-belongs-to-its-owner.md),
+  [ADR-0017: a row may be corrected](docs/adr/0017-a-row-may-be-corrected.md).
 - Specs — [human-readable surface](docs/human-readable-surface-spec.md),
   [agent-driven view control](docs/agent-driven-view-control-spec.md) (superseded by ADR-0014).
 - Notes — [Claude agent teams internals](docs/claude-agent-teams.md),
