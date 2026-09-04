@@ -58,9 +58,10 @@ does not say, and what matters here:
   grep usually does not.
 - **Search before filing a Problem, and mean it.** Two or three wordings, distinctive
   stems. A near-twin splits Evidence and neither row reads as load-bearing after.
-- **Say what is not asserted.** A Problem cannot be edited after filing, so the
-  description has to survive its own Evidence overturning it. Name the undecided part
-  rather than baking in a conclusion.
+- **Say what is not asserted.** A Problem can be revised (ADR-0017), but a revision costs
+  a `--reason` and leaves what the row used to say in the record, so the description
+  still has to survive its own Evidence overturning it. Name the undecided part rather
+  than baking in a conclusion.
 - **Do not file the user's thinking-out-loud.** If they have not settled it, it is not
   an Observation. Cheap intake is a feature; so is judgment.
 
@@ -104,8 +105,9 @@ annoying to use, not from reading its source.
 Live list. Add only what actually caught you.
 
 - `--tag` must be comma-separated; the repeatable form silently keeps the last value.
-- A Problem's description cannot be edited, and neither can an Attempt's `ref`.
-  Getting a pointer wrong costs a terminal transition.
+- An Attempt's `ref` cannot be edited, and there is no `attempt revise`. Getting a
+  pointer wrong still costs a terminal transition — close it `dropped` and refile.
+  A Problem *can* be revised now (`crux problem revise`, ADR-0017); an Attempt cannot.
 - `--json` is a deprecated no-op; JSON is already the default.
 - Production is reachable for read-only D1 queries via `sops -d packages/infra/environments/production/secrets.yaml`
   and `wrangler d1 execute crux-production --remote`. Use it to confirm rather than
