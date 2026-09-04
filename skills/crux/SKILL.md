@@ -45,9 +45,13 @@ in the size of the corpus:
 
 ```sh
 crux workstream list                       # which corpora exist, by slug
-crux problem list -w <slug> --status now   # the field: id, stage, title
+crux problem list -w <slug>                # every Problem: id, stage, title
 crux problem show 42                       # one Problem, with Attempts and Outcome
 ```
+
+`--status now` narrows that to the field, but reload unfiltered: a Problem is filed
+unscheduled and stays there until someone stages it, so filtering by stage hides the
+newest synthesis — the thing a fresh session most needs and least expects to be missing.
 
 Deeper, only for a Problem that has earned it:
 

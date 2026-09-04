@@ -29,16 +29,22 @@ The entity model is the product. Workflow transitions — schedule a Problem, fi
 
 ## How it works
 
-Claude Code is the primary surface. You discuss problems and the work against them in conversation, and Claude files entries inline through the `crux` CLI at natural pause points — not as end-of-session ceremony. The CLI is optimized for Claude to run and parse: `--json` on every read command, structured errors with stable codes, meaningful exit codes.
+Claude Code is the primary surface. You discuss problems and the work against them in conversation, and Claude files entries inline through the `crux` CLI at natural pause points — not as end-of-session ceremony. The CLI is optimized for Claude to run and parse: JSON output by default on every read command — `--json` is still accepted and ignored, so do not reach for it — structured errors with stable codes, meaningful exit codes.
 
 To reload context into a fresh session, walk three cheap reads rather than
 asking for one digest of everything:
 
 ```sh
-crux workstream list --json                     # which corpora exist, by slug
-crux problem list -w <slug> --status now --json # the field, one line per Problem
-crux problem show <id> --json                   # the two or three that matter
+crux workstream list                    # which corpora exist, by slug
+crux problem list -w <slug>             # every Problem: id, stage, title
+crux problem show <id>                  # the two or three that matter
 ```
+
+A Problem is filed **unscheduled** and stays there until somebody stages it, so
+the middle read is deliberately unfiltered: `--status now` narrows it to the
+field, and narrowing by stage is what hides the newest synthesis. The six stages
+are `unscheduled`, `now`, `next`, `later`, `done` and `abandoned`; an
+unrecognised value is not refused, it simply matches nothing.
 
 Each is flat in the size of the corpus, and the agent pays only for what it
 reads. `crux evidence list <id>` and `crux attempt list <id>` open the layer
@@ -145,7 +151,7 @@ and view-state lives in a Durable Object behind `/v1/view`, one per human —
 keyed by the root Principal, so every Principal a claim linked into one person
 pushes to and listens on the same object ([ADR-0014](docs/adr/0014-view-state-is-the-humans.md)). Both
 entry points are in core — `query()` beside `dispatch()` — so an invariant and a
-`--json` shape each exist in exactly one place, which is the only arrangement
+JSON shape each exist in exactly one place, which is the only arrangement
 that survives two people writing at once.
 
 A read that is *recorded* — `PROBLEM_SHOW` is the only one — also appends to a
@@ -178,7 +184,7 @@ For contributors working on Crux itself:
 bun install
 bun run crux user init --name "Your Name" --email "you@example.com"
 bun run crux init --url https://<your-deployment> --token <token>
-bun run crux problem list -w crux --status now --json
+bun run crux problem list -w crux
 ```
 
 `bun run build` derives the doc tree and runs `astro build`; `bun run test`
@@ -341,7 +347,7 @@ succeeded and the deploy did not.
 - [`.claude-plugin/`](.claude-plugin/) — plugin and marketplace manifests (this repo is itself a one-plugin marketplace).
 - [`skills/crux/`](skills/crux/) — the Crux skill that teaches Claude when and how to operate the CLI.
 - [`packages/core`](packages/core) — the engine: schema, transitions, `dispatch()` and `query()`, identity, and the doc-tree walker. Nothing here is CLI-only.
-- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, the HTTP client every command goes through, the Zod schemas its `--json` output and its typed arguments are checked against, and the `config.toml` loader.
+- [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, the HTTP client every command goes through, the Zod schemas its JSON output and its typed arguments are checked against, and the `config.toml` loader.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding, the production database rebuild
   (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, and the favicon
