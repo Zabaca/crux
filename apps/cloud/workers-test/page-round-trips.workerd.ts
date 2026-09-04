@@ -26,7 +26,10 @@ import { resolveActiveScope, type Scope } from "@crux/core/auth/principals";
 // runner. Imported here it is paid during collection.
 import { createAuth } from "@crux/core/auth/better-auth";
 
+import { eq } from "drizzle-orm";
+
 import { boardData } from "../src/web/board.js";
+import { observationListPage } from "../src/web/read-pages.js";
 import { pageContext } from "../src/web/session.js";
 
 let db: CruxDb;
@@ -146,6 +149,23 @@ describe("the board's read composition", () => {
     expect(
       await boardData({ db, principal: { id: VIEWER }, scope: await scopeForViewer() }, "theirs"),
     ).toBeNull();
+  });
+
+  test("an archived Observation leaves the board and stays on the intake page", async () => {
+    await db
+      .update(observations)
+      .set({ archivedAt: 1700, archivedById: VIEWER, archiveRationale: "the product changed" })
+      .where(eq(observations.id, "OBS-1"));
+    const read = { db, principal: { id: VIEWER }, scope: await scopeForViewer() };
+
+    // The board takes the default, so a retired row stops being counted there.
+    expect((await boardData(read, "crux"))?.observations).toEqual([]);
+
+    // The intake page is the exception, and asks for them: its Archived group
+    // is one of the three states it exists to show, rationale included.
+    const page = await observationListPage(read, "crux");
+    expect(page.body.value).toContain("OBS-1");
+    expect(page.body.value).toContain("the product changed");
   });
 
   test("the Workstream it does own comes back whole", async () => {

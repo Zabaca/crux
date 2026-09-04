@@ -63,7 +63,11 @@ export const QuerySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("WORKSTREAM_BY_SLUG"), slug: z.string() }),
   z.object({ kind: z.literal("WORKSTREAM_SUMMARIES") }),
 
-  z.object({ kind: z.literal("OBSERVATION_LIST"), workstream: z.string() }),
+  z.object({
+    kind: z.literal("OBSERVATION_LIST"),
+    workstream: z.string(),
+    showArchived: z.boolean().optional(),
+  }),
   z.object({ kind: z.literal("OBSERVATION_SHOW"), id: z.string() }),
   z.object({ kind: z.literal("OBSERVATION_DETAIL"), id: z.string() }),
   z.object({
@@ -71,7 +75,11 @@ export const QuerySchema = z.discriminatedUnion("kind", [
     workstreamId: z.string(),
     showArchived: z.boolean().optional(),
   }),
-  z.object({ kind: z.literal("OBSERVATION_SUMMARIES"), workstreamId: z.string() }),
+  z.object({
+    kind: z.literal("OBSERVATION_SUMMARIES"),
+    workstreamId: z.string(),
+    showArchived: z.boolean().optional(),
+  }),
 
   z.object({
     kind: z.literal("PROBLEM_LIST"),
@@ -103,6 +111,7 @@ export const QuerySchema = z.discriminatedUnion("kind", [
     q: z.string().min(1),
     workstream: z.string().optional(),
     limit: z.number().int().positive().max(100).optional(),
+    showArchived: z.boolean().optional(),
   }),
 ]);
 
@@ -229,6 +238,24 @@ function toArchive(row: {
 }
 
 /**
+ * The predicate every default listing of Observations carries.
+ *
+ * Archiving is the recorded judgment that a row has stopped being live, so a
+ * read that lists or searches Observations must not hand one back as though it
+ * still were — that is how a retired row silently informed a live conclusion
+ * (ADR-0017). Naming a row is a different question from listing them, so
+ * `OBSERVATION_SHOW`, `OBSERVATION_DETAIL` and everything reached through
+ * Evidence are deliberately *not* filtered: an Evidence link is an assertion
+ * that this Observation supports this Problem, and hiding it would gut the
+ * Problem's argument rather than protect it.
+ *
+ * `undefined` rather than a tautology when archived rows are wanted, so the
+ * caller can drop it out of an `and()` without a no-op clause in the SQL.
+ */
+const liveOnly = (showArchived: boolean | undefined) =>
+  showArchived ? undefined : isNull(observations.archivedAt);
+
+/**
  * Oldest first, breaking ties on the id.
  *
  * `created_at` defaults to `(unixepoch() * 1000)` — whole seconds scaled up —
@@ -351,10 +378,21 @@ async function searchCorpus(
     .orderBy(desc(problems.createdAt))
     .limit(limit);
 
+  // Archived Observations are out unless asked for, which makes this search
+  // weaker on purpose: a retired row no longer surfaces to the search an agent
+  // runs before filing, so a near-duplicate Observation gets likelier.
+  // Duplication among Observations is cheap and by design; a stale row quietly
+  // informing a live conclusion is the failure that has already happened
+  // (ADR-0017).
   const observationRows = await db
     .select()
     .from(observations)
-    .where(scoped(observations.workstreamId, substringMatch(observations.content, q.q)))
+    .where(
+      and(
+        scoped(observations.workstreamId, substringMatch(observations.content, q.q)),
+        liveOnly(q.showArchived),
+      ),
+    )
     .orderBy(desc(observations.createdAt))
     .limit(limit);
 
@@ -557,7 +595,14 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
 
     case "OBSERVATION_LIST": {
       const ws = await requireWorkstreamInScope(db, q.workstream, scope);
-      return db.select().from(observations).where(eq(observations.workstreamId, ws.id));
+      const rows = await db
+        .select()
+        .from(observations)
+        .where(and(eq(observations.workstreamId, ws.id), liveOnly(q.showArchived)));
+      // The archive block rides along even here, where the rows are otherwise
+      // raw: an archived row is only ever shown because somebody asked for it,
+      // and what they need to see with it is why it was retired.
+      return rows.map((o) => ({ ...o, archive: toArchive(o) }) satisfies ObservationWithArchive);
     }
 
     case "OBSERVATION_SHOW": {
@@ -603,7 +648,10 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
 
     case "OBSERVATION_SUMMARIES": {
       const wsId = (await requireWorkstreamInScope(db, q.workstreamId, scope)).id;
-      const rows = await db.select().from(observations).where(eq(observations.workstreamId, wsId));
+      const rows = await db
+        .select()
+        .from(observations)
+        .where(and(eq(observations.workstreamId, wsId), liveOnly(q.showArchived)));
       // Every Evidence row this Principal can see, unfiltered by Observation —
       // the same shape `unlinkedObservations` uses above, and for the same
       // reason: the alternative is an `inArray` over every Observation id in the

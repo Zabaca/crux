@@ -295,9 +295,13 @@ export async function observationListPage(
 ): Promise<{ title: string; body: Html; workstream: WorkstreamRow }> {
   const ws = await ask<WorkstreamRow | null>(read, { kind: "WORKSTREAM_BY_SLUG", slug });
   if (!ws) throw new PageNotFound(`no Workstream with slug ${slug}`);
+  // The one caller that asks for archived rows: this page *is* the triage
+  // view, and the Archived group is one of its three. Every other reader of
+  // `OBSERVATION_SUMMARIES` takes the default, which leaves them out.
   const rows = await ask<ObservationSummary[]>(read, {
     kind: "OBSERVATION_SUMMARIES",
     workstreamId: ws.id,
+    showArchived: true,
   });
 
   const archived = rows.filter((o) => o.archive);
