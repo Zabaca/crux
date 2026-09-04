@@ -124,32 +124,10 @@ function readTurns(path: string, tail: number) {
     return turns;
   }
   for (const line of lines) {
-    let d: {
-      type?: string;
-      timestamp?: string;
-      message?: { content?: unknown };
-    };
     try {
-      d = JSON.parse(line);
+      turns.push(...textBlocks(JSON.parse(line)));
     } catch {
       continue;
-    }
-    const content = d.message?.content;
-    if (!Array.isArray(content)) continue;
-    for (const b of content) {
-      if (
-        b &&
-        typeof b === "object" &&
-        (b as { type?: string }).type === "text" &&
-        typeof (b as { text?: string }).text === "string" &&
-        (b as { text: string }).text.trim()
-      ) {
-        turns.push({
-          role: d.type ?? "?",
-          ts: d.timestamp ?? null,
-          text: (b as { text: string }).text.trim(),
-        });
-      }
     }
   }
   return turns.slice(-tail);
