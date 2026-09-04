@@ -8,17 +8,27 @@
  * a row used to say.
  *
  * `entity` and the stringified `entityId` are what make one table serve every
- * kind of row. The *caller* stays typed: `reviseProblem` names the two fields a
- * Problem has, so a `content` can never be handed to one.
+ * kind of row. The *callers* stay typed: `reviseProblem` names the two fields a
+ * Problem has, so a `content` can never be handed to one, and `reviseWorkstream`
+ * cannot reach a slug at all.
  */
 import { eq } from "drizzle-orm";
 
+import type { BatchItem } from "drizzle-orm/batch";
+
 import { runBatch, type CruxDb } from "../db/client.js";
-import { problems, revisions } from "../db/schema.js";
+import {
+  abandonments,
+  evidence,
+  outcomes,
+  problems,
+  revisions,
+  workstreams,
+} from "../db/schema.js";
 import { NotFoundError, ValidationError } from "./errors.js";
 
 /** Which kind of row a revision corrects. Storage is polymorphic; the API is not. */
-export type RevisableEntity = "problem";
+export type RevisableEntity = "problem" | "evidence" | "outcome" | "abandonment" | "workstream";
 
 export type RevisionResult = {
   /** The revision row that recorded the previous values. */
@@ -49,18 +59,89 @@ async function nextRevisionId(db: CruxDb): Promise<string> {
  * A field the caller did not name is untouched; a field whose new value already
  * equals the current one is not a change, and a call that changes nothing is a
  * refusal rather than a write that reports success without one.
+ *
+ * A previous value may be `null` — an Evidence note, an Outcome's learnings and
+ * a Workstream's description are all nullable — and that is a value the history
+ * has to keep, not an absence to skip: "it used to say nothing" is exactly what
+ * a reader is asking.
  */
 function previousValues(
-  current: Record<string, string>,
+  current: Record<string, string | null>,
   updates: Record<string, string | undefined>,
-): Record<string, string> {
-  const previous: Record<string, string> = {};
+): Record<string, string | null> {
+  const previous: Record<string, string | null> = {};
   for (const [field, next] of Object.entries(updates)) {
-    const was = current[field];
-    if (next === undefined || was === undefined || next === was) continue;
+    if (next === undefined || !(field in current)) continue;
+    const was = current[field] ?? null;
+    if (next === was) continue;
     previous[field] = was;
   }
   return previous;
+}
+
+/**
+ * The half of a revision that is the same whichever row is being corrected:
+ * refuse a call that names nothing, work out what is actually changing, refuse
+ * one that changes nothing, and write the side record and the row together.
+ *
+ * The caller supplies `updateRow` rather than a table, because the `set` it
+ * builds is what keeps each entity's fields typed — the polymorphism stops at
+ * the storage row this function writes.
+ */
+async function applyRevision(
+  db: CruxDb,
+  entity: RevisableEntity,
+  entityId: string | number,
+  current: Record<string, string | null>,
+  updates: Record<string, string | undefined>,
+  reason: string | undefined,
+  userId: string,
+  updateRow: (changedFields: string[], now: number) => BatchItem<"sqlite">,
+): Promise<RevisionResult> {
+  const previous = previousValues(current, updates);
+  const changedFields = Object.keys(previous);
+  if (changedFields.length === 0) {
+    throw new ValidationError(`revision leaves ${entity} ${entityId} unchanged`, {
+      id: entityId,
+      fields: Object.keys(updates).filter((f) => updates[f] !== undefined),
+    });
+  }
+
+  const now = Date.now();
+  const revisionId = await nextRevisionId(db);
+  await runBatch(db, [
+    db.insert(revisions).values({
+      id: revisionId,
+      entity,
+      entityId: String(entityId),
+      changed: JSON.stringify(previous),
+      reason,
+      revisedById: userId,
+      revisedAt: now,
+    }),
+    updateRow(changedFields, now),
+  ]);
+
+  return { revisionId, changedFields };
+}
+
+/**
+ * A revision that names no field is a refusal, not an empty write.
+ *
+ * Every caller passes each of its revisable fields as an explicit key — an
+ * omitted one carrying `undefined` — so the keys are the field list this
+ * refusal quotes back.
+ */
+function requireSomeField(
+  entityId: string | number,
+  updates: Record<string, string | undefined>,
+): void {
+  if (Object.values(updates).every((v) => v === undefined)) {
+    throw new ValidationError(
+      `a revision must name at least one of ${Object.keys(updates).join(", ")}`,
+      { id: entityId },
+    );
+  }
 }
 
 export type ProblemRevision = {
@@ -82,42 +163,186 @@ export async function reviseProblem(
   userId: string,
   db: CruxDb,
 ): Promise<RevisionResult> {
-  if (updates.title === undefined && updates.description === undefined) {
-    throw new ValidationError(`a revision must name at least one of title, description`, {
-      problemId,
-    });
-  }
+  const named = { title: updates.title, description: updates.description };
+  requireSomeField(problemId, named);
 
   const row = (await db.select().from(problems).where(eq(problems.id, problemId)).limit(1))[0];
   if (!row) throw new NotFoundError(`Problem not found: ${problemId}`, { problemId });
 
-  const previous = previousValues({ title: row.title, description: row.description }, updates);
-  const changedFields = Object.keys(previous);
-  if (changedFields.length === 0) {
-    throw new ValidationError(`revision leaves Problem ${problemId} unchanged`, {
-      problemId,
-      fields: Object.keys(updates).filter((f) => updates[f as keyof ProblemRevision] !== undefined),
-    });
-  }
+  return applyRevision(
+    db,
+    "problem",
+    problemId,
+    { title: row.title, description: row.description },
+    named,
+    reason,
+    userId,
+    (changed, now) => {
+      const set: Partial<typeof problems.$inferInsert> = { updatedAt: now };
+      if (changed.includes("title")) set.title = updates.title;
+      if (changed.includes("description")) set.description = updates.description;
+      return db.update(problems).set(set).where(eq(problems.id, problemId));
+    },
+  );
+}
 
-  const now = Date.now();
-  const revisionId = await nextRevisionId(db);
-  const set: Partial<typeof problems.$inferInsert> = { updatedAt: now };
-  if (changedFields.includes("title")) set.title = updates.title;
-  if (changedFields.includes("description")) set.description = updates.description;
+export type EvidenceRevision = {
+  note?: string;
+};
 
-  await runBatch(db, [
-    db.insert(revisions).values({
-      id: revisionId,
-      entity: "problem" satisfies RevisableEntity,
-      entityId: String(problemId),
-      changed: JSON.stringify(previous),
-      reason,
-      revisedById: userId,
-      revisedAt: now,
-    }),
-    db.update(problems).set(set).where(eq(problems.id, problemId)),
-  ]);
+/**
+ * Correct the why-note on an Evidence link.
+ *
+ * The link itself — which Observation supports which Problem — is not revisable:
+ * that is an assertion, not a sentence, and unmaking it is a different act with
+ * a different name. Only the note the assertion carries can be wrong.
+ */
+export async function reviseEvidence(
+  evidenceId: string,
+  updates: EvidenceRevision,
+  reason: string | undefined,
+  userId: string,
+  db: CruxDb,
+): Promise<RevisionResult> {
+  const named = { note: updates.note };
+  requireSomeField(evidenceId, named);
 
-  return { revisionId, changedFields };
+  const row = (await db.select().from(evidence).where(eq(evidence.id, evidenceId)).limit(1))[0];
+  if (!row) throw new NotFoundError(`evidence not found: ${evidenceId}`, { id: evidenceId });
+
+  return applyRevision(db, "evidence", evidenceId, { note: row.note }, named, reason, userId, () =>
+    db.update(evidence).set({ note: updates.note }).where(eq(evidence.id, evidenceId)),
+  );
+}
+
+export type OutcomeRevision = {
+  observedImpact?: string;
+  learnings?: string;
+};
+
+/**
+ * Correct what an Outcome measured, or what was learned from it.
+ *
+ * This rewrites a terminal judgment, deliberately (ADR-0017). What it does not
+ * touch is the transition: the Problem stays `done`, the Outcome stays the one
+ * Outcome its Problem is allowed, and `recordOutcome` still refuses a second.
+ * A retracted measurement leaves a trace in the history instead of quietly
+ * becoming a different claim.
+ */
+export async function reviseOutcome(
+  outcomeId: string,
+  updates: OutcomeRevision,
+  reason: string | undefined,
+  userId: string,
+  db: CruxDb,
+): Promise<RevisionResult> {
+  const named = { observedImpact: updates.observedImpact, learnings: updates.learnings };
+  requireSomeField(outcomeId, named);
+
+  const row = (await db.select().from(outcomes).where(eq(outcomes.id, outcomeId)).limit(1))[0];
+  if (!row) throw new NotFoundError(`outcome not found: ${outcomeId}`, { id: outcomeId });
+
+  return applyRevision(
+    db,
+    "outcome",
+    outcomeId,
+    { observedImpact: row.observedImpact, learnings: row.learnings },
+    named,
+    reason,
+    userId,
+    (changed) => {
+      const set: Partial<typeof outcomes.$inferInsert> = {};
+      if (changed.includes("observedImpact")) set.observedImpact = updates.observedImpact;
+      if (changed.includes("learnings")) set.learnings = updates.learnings;
+      return db.update(outcomes).set(set).where(eq(outcomes.id, outcomeId));
+    },
+  );
+}
+
+export type AbandonmentRevision = {
+  rationale?: string;
+};
+
+/**
+ * Correct why a Problem was given up on.
+ *
+ * As with an Outcome, the prose changes and the judgment does not: the Problem
+ * stays `abandoned`, and nothing here is a route back onto the board.
+ */
+export async function reviseAbandonment(
+  abandonmentId: string,
+  updates: AbandonmentRevision,
+  reason: string | undefined,
+  userId: string,
+  db: CruxDb,
+): Promise<RevisionResult> {
+  const named = { rationale: updates.rationale };
+  requireSomeField(abandonmentId, named);
+
+  const row = (
+    await db.select().from(abandonments).where(eq(abandonments.id, abandonmentId)).limit(1)
+  )[0];
+  if (!row)
+    throw new NotFoundError(`abandonment not found: ${abandonmentId}`, { id: abandonmentId });
+
+  return applyRevision(
+    db,
+    "abandonment",
+    abandonmentId,
+    { rationale: row.rationale },
+    named,
+    reason,
+    userId,
+    () =>
+      db
+        .update(abandonments)
+        .set({ rationale: updates.rationale })
+        .where(eq(abandonments.id, abandonmentId)),
+  );
+}
+
+export type WorkstreamRevision = {
+  title?: string;
+  description?: string;
+};
+
+/**
+ * Correct a Workstream's title or description.
+ *
+ * The slug is deliberately absent and unreachable from here: it is not
+ * something the row said but how the row is addressed — by every `-w`, every
+ * URL and every reference an agent has stored — and it carries tenancy meaning
+ * under ADR-0016. `RENAME_WORKSTREAM` keeps it, so re-addressing a corpus can
+ * never be mistaken for fixing a sentence.
+ */
+export async function reviseWorkstream(
+  workstreamId: string,
+  updates: WorkstreamRevision,
+  reason: string | undefined,
+  userId: string,
+  db: CruxDb,
+): Promise<RevisionResult> {
+  const named = { title: updates.title, description: updates.description };
+  requireSomeField(workstreamId, named);
+
+  const row = (
+    await db.select().from(workstreams).where(eq(workstreams.id, workstreamId)).limit(1)
+  )[0];
+  if (!row) throw new NotFoundError(`workstream not found: ${workstreamId}`, { id: workstreamId });
+
+  return applyRevision(
+    db,
+    "workstream",
+    workstreamId,
+    { title: row.title, description: row.description },
+    named,
+    reason,
+    userId,
+    (changed, now) => {
+      const set: Partial<typeof workstreams.$inferInsert> = { updatedAt: now };
+      if (changed.includes("title")) set.title = updates.title;
+      if (changed.includes("description")) set.description = updates.description;
+      return db.update(workstreams).set(set).where(eq(workstreams.id, workstreamId));
+    },
+  );
 }

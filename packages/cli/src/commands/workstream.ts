@@ -1,9 +1,15 @@
 import { defineCommand } from "citty";
 import { OkWithIdOutput, RenameOutput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
-import type { AddWorkstreamPayload, RenameWorkstreamPayload } from "@crux/core/actions";
+import type {
+  AddWorkstreamPayload,
+  RenameWorkstreamPayload,
+  ReviseWorkstreamPayload,
+} from "@crux/core/actions";
+import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
+import { formatRevisions } from "../revisions.js";
 
 type WorkstreamRow = { id: string; slug: string; title: string };
 
@@ -79,11 +85,61 @@ const renameCmd = defineCommand({
   },
 });
 
+/**
+ * Correcting a Workstream's title or description (ADR-0017).
+ *
+ * There is no `--slug`: a slug is how the Workstream is addressed rather than
+ * something it said, and `rename` keeps it (ADR-0016). The deployment refuses
+ * one too — the payload is `.strict()` — so the two halves agree.
+ */
+const reviseCmd = defineCommand({
+  meta: { name: "revise", description: "Correct a workstream's title or description." },
+  args: {
+    ...workstreamArg(),
+    title: { type: "string" },
+    description: { type: "string" },
+    reason: { type: "string", description: "why the correction was made (optional)" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const payload: ReviseWorkstreamPayload = {
+      workstream: requireWorkstream(args.workstream),
+      ...(args.title !== undefined ? { title: args.title } : {}),
+      ...(args.description !== undefined ? { description: args.description } : {}),
+      ...(args.reason !== undefined ? { reason: args.reason } : {}),
+    };
+    const { result } = await api().dispatch({ kind: "REVISE_WORKSTREAM", payload });
+    const { changedFields } = result as { changedFields: string[] };
+    emit(result, `revised ${payload.workstream} — ${changedFields.join(", ")}`);
+  },
+});
+
+const revisionsCmd = defineCommand({
+  meta: { name: "revisions", description: "What a workstream used to say." },
+  args: { ...workstreamArg(), json: { type: "boolean" } },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const rows = await api().query<RevisionEntry[]>({
+      kind: "WORKSTREAM_REVISIONS",
+      id: requireWorkstream(args.workstream),
+    });
+    emit(rows, formatRevisions(rows));
+  },
+});
+
 export const workstreamCommand = defineCommand({
   meta: { name: "workstream", description: "Workstreams." },
   // There is no `select`. Pointing the human's screen at a Workstream was the
   // only thing it did once nothing resolved a default from view-state, and one
   // shared screen is not something parallel agents can share. Discovery
   // replaces selection: `list` to choose, `-w` to act.
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, rename: renameCmd },
+  subCommands: {
+    add: addCmd,
+    list: listCmd,
+    show: showCmd,
+    rename: renameCmd,
+    revise: reviseCmd,
+    revisions: revisionsCmd,
+  },
 });

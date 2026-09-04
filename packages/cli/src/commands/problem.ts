@@ -12,6 +12,7 @@ import type {
 import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
+import { formatRevisions } from "../revisions.js";
 
 type ProblemRow = { id: number; status: string | null; title: string };
 
@@ -104,15 +105,7 @@ const revisionsCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     const rows = await api().query<RevisionEntry[]>({ kind: "PROBLEM_REVISIONS", id: args.id });
-    emit(
-      rows,
-      rows
-        .map(
-          (r) =>
-            `${r.id}\t${new Date(r.revisedAt).toISOString()}\t${Object.keys(r.changed).join(", ")}${r.reason ? `\t${r.reason}` : ""}`,
-        )
-        .join("\n") || "(none)",
-    );
+    emit(rows, formatRevisions(rows));
   },
 });
 

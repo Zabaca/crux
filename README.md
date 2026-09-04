@@ -62,12 +62,27 @@ more expensive than re-deriving it.
 
 For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt. "All workstreams" means all of _yours_: every read is scoped to the Principal that made the request, and one Principal's corpus is invisible to another's ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
-A Problem that turns out to be wrong is corrected rather than left standing:
+A row that turns out to be wrong is corrected rather than left standing:
 
 ```sh
 crux problem revise <id> --title "..." --description "..." --reason "..."
 crux problem revisions <id>
 ```
+
+Every prose-bearing row works the same way, through the same pair of verbs:
+`crux evidence revise <EVD-###> --note`, `crux outcome revise <OUT-###>
+--observed-impact --learnings`, `crux abandonment revise <ABN-###> --rationale`,
+and `crux workstream revise -w <slug> --title --description`. The last of those
+has no `--slug`, and asking for one is refused rather than quietly dropped: a
+slug is how a Workstream is addressed — by every `-w`, every URL and every
+reference an agent has stored — rather than something the row said, so
+`crux workstream rename` keeps it ([ADR-0016](docs/adr/0016-a-slug-belongs-to-its-owner.md)).
+
+Correcting an Outcome or an Abandonment rewrites a terminal judgment, which is
+deliberate. What it does not do is reopen anything: the Problem stays `done` or
+`abandoned`, it still has the one Outcome it is allowed, and the history is what
+makes that safe — a retracted measurement leaves a trace instead of quietly
+becoming a different claim.
 
 Only the fields named change, naming none is a refusal rather than an empty
 write, and `--reason` is optional — the model demands one at terminal doors and
@@ -76,7 +91,8 @@ can revise again. The row itself stays the single source of current truth; what
 it used to say goes to a `revisions` table that no ordinary read touches.
 `crux problem show` carries a marker — that the row was revised, and how many
 times — resolved inside the wave that read already issues, and the history is
-the second read above ([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)).
+the second read above; so do `crux workstream show`, `crux outcome show`,
+`crux abandonment show`, and every row `crux evidence list` answers with ([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)).
 Correcting a row is not the same claim as archiving one: revision says *what I
 wrote was wrong*, archiving says *what I wrote was right and has stopped being
 live*.

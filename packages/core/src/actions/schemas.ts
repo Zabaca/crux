@@ -118,6 +118,67 @@ export const ReviseProblemAction = z.object({
     })
     .strict(),
 });
+/**
+ * Correcting the why-note on an Evidence link (ADR-0017). The link itself —
+ * which Observation supports which Problem — is not here: that is an assertion,
+ * not a sentence.
+ */
+export const ReviseEvidenceAction = z.object({
+  kind: z.literal("REVISE_EVIDENCE"),
+  payload: z
+    .object({
+      id: z.string(),
+      note: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+});
+/**
+ * Correcting an Outcome (ADR-0017) — a terminal judgment, deliberately made
+ * rewritable. The transition is not reachable from here: no `problem`, no
+ * `status`, no follow-ups, so the Problem stays `done` and stays limited to the
+ * one Outcome it already has.
+ */
+export const ReviseOutcomeAction = z.object({
+  kind: z.literal("REVISE_OUTCOME"),
+  payload: z
+    .object({
+      id: z.string(),
+      observedImpact: z.string().optional(),
+      learnings: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+});
+/** Correcting why a Problem was given up on. Not a route back onto the board. */
+export const ReviseAbandonmentAction = z.object({
+  kind: z.literal("REVISE_ABANDONMENT"),
+  payload: z
+    .object({
+      id: z.string(),
+      rationale: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+});
+/**
+ * Correcting a Workstream's title or description (ADR-0017).
+ *
+ * There is no `slug`, and `.strict()` is what makes that a refusal rather than
+ * a silently dropped key: a slug is how the row is addressed rather than
+ * something it said, and `RENAME_WORKSTREAM` keeps it (ADR-0016).
+ */
+export const ReviseWorkstreamAction = z.object({
+  kind: z.literal("REVISE_WORKSTREAM"),
+  payload: z
+    .object({
+      workstream: z.string(),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+});
 export const AddObservationAction = z.object({
   kind: z.literal("ADD_OBSERVATION"),
   payload: z.object({
@@ -167,6 +228,10 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   CloseAttemptAction,
   CompleteProblemAction,
   ReviseProblemAction,
+  ReviseEvidenceAction,
+  ReviseOutcomeAction,
+  ReviseAbandonmentAction,
+  ReviseWorkstreamAction,
   AddObservationAction,
   ArchiveObservationAction,
   AddEvidenceAction,
@@ -204,6 +269,10 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "CLOSE_ATTEMPT",
   "COMPLETE_PROBLEM",
   "REVISE_PROBLEM",
+  "REVISE_EVIDENCE",
+  "REVISE_OUTCOME",
+  "REVISE_ABANDONMENT",
+  "REVISE_WORKSTREAM",
   "ADD_OBSERVATION",
   "ARCHIVE_OBSERVATION",
   "ADD_EVIDENCE",
@@ -230,6 +299,10 @@ export type AddAttemptPayload = z.infer<typeof AddAttemptAction>["payload"];
 export type CloseAttemptPayload = z.infer<typeof CloseAttemptAction>["payload"];
 export type CompleteProblemPayload = z.infer<typeof CompleteProblemAction>["payload"];
 export type ReviseProblemPayload = z.infer<typeof ReviseProblemAction>["payload"];
+export type ReviseEvidencePayload = z.infer<typeof ReviseEvidenceAction>["payload"];
+export type ReviseOutcomePayload = z.infer<typeof ReviseOutcomeAction>["payload"];
+export type ReviseAbandonmentPayload = z.infer<typeof ReviseAbandonmentAction>["payload"];
+export type ReviseWorkstreamPayload = z.infer<typeof ReviseWorkstreamAction>["payload"];
 export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];
 export type AddWorkstreamPayload = z.infer<typeof AddWorkstreamAction>["payload"];
 export type RenameWorkstreamPayload = z.infer<typeof RenameWorkstreamAction>["payload"];

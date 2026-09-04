@@ -137,6 +137,7 @@ const PROBES: Record<QueryKind, Probe> = {
   WORKSTREAM_GET: (a) => ({ kind: "WORKSTREAM_GET", id: a.workstreamId }),
   WORKSTREAM_BY_SLUG: (a) => ({ kind: "WORKSTREAM_BY_SLUG", slug: a.slug }),
   WORKSTREAM_SUMMARIES: () => ({ kind: "WORKSTREAM_SUMMARIES" }),
+  WORKSTREAM_REVISIONS: (a) => ({ kind: "WORKSTREAM_REVISIONS", id: a.workstreamId }),
 
   OBSERVATION_LIST: (a) => ({ kind: "OBSERVATION_LIST", workstream: a.slug }),
   OBSERVATION_SHOW: (a) => ({ kind: "OBSERVATION_SHOW", id: a.observationId }),
@@ -153,13 +154,16 @@ const PROBES: Record<QueryKind, Probe> = {
   PROBLEM_DRIFT: (a) => ({ kind: "PROBLEM_DRIFT", workstream: a.slug }),
 
   EVIDENCE_LIST: () => ({ kind: "EVIDENCE_LIST" }),
+  EVIDENCE_REVISIONS: (a) => ({ kind: "EVIDENCE_REVISIONS", id: a.evidenceId }),
   ATTEMPT_LIST: () => ({ kind: "ATTEMPT_LIST" }),
 
   ABANDONMENT_LIST: (a) => ({ kind: "ABANDONMENT_LIST", workstream: a.slug }),
   ABANDONMENT_SHOW: (a) => ({ kind: "ABANDONMENT_SHOW", id: a.abandonmentId }),
+  ABANDONMENT_REVISIONS: (a) => ({ kind: "ABANDONMENT_REVISIONS", id: a.abandonmentId }),
 
   OUTCOME_LIST: () => ({ kind: "OUTCOME_LIST" }),
   OUTCOME_SHOW: (a) => ({ kind: "OUTCOME_SHOW", id: a.outcomeId }),
+  OUTCOME_REVISIONS: (a) => ({ kind: "OUTCOME_REVISIONS", id: a.outcomeId }),
 
   SEARCH: () => ({ kind: "SEARCH", q: "secret" }),
 };

@@ -41,6 +41,9 @@ import {
   findProblemInScope,
   findWorkstreamBySlugInScope,
   problemsInScope,
+  requireAbandonmentInScope,
+  requireEvidenceInScope,
+  requireOutcomeInScope,
   requireProblemInScope,
   requireWorkstreamInScope,
   scopeFor,
@@ -63,6 +66,7 @@ export const QuerySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("WORKSTREAM_GET"), id: z.string() }),
   z.object({ kind: z.literal("WORKSTREAM_BY_SLUG"), slug: z.string() }),
   z.object({ kind: z.literal("WORKSTREAM_SUMMARIES") }),
+  z.object({ kind: z.literal("WORKSTREAM_REVISIONS"), id: z.string() }),
 
   z.object({
     kind: z.literal("OBSERVATION_LIST"),
@@ -94,6 +98,7 @@ export const QuerySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("PROBLEM_REVISIONS"), id }),
 
   z.object({ kind: z.literal("EVIDENCE_LIST"), problem: id.optional() }),
+  z.object({ kind: z.literal("EVIDENCE_REVISIONS"), id: z.string() }),
 
   z.object({ kind: z.literal("ATTEMPT_LIST"), problem: id.optional() }),
   z.object({
@@ -104,9 +109,11 @@ export const QuerySchema = z.discriminatedUnion("kind", [
 
   z.object({ kind: z.literal("ABANDONMENT_LIST"), workstream: z.string() }),
   z.object({ kind: z.literal("ABANDONMENT_SHOW"), id: z.string() }),
+  z.object({ kind: z.literal("ABANDONMENT_REVISIONS"), id: z.string() }),
 
   z.object({ kind: z.literal("OUTCOME_LIST") }),
   z.object({ kind: z.literal("OUTCOME_SHOW"), id: z.string() }),
+  z.object({ kind: z.literal("OUTCOME_REVISIONS"), id: z.string() }),
 
   z.object({
     kind: z.literal("SEARCH"),
@@ -196,15 +203,20 @@ export type RevisionMarker = { count: number; lastRevisedAt: number } | null;
  *
  * `changed` is parsed here rather than handed over as the JSON string it is
  * stored as, so the storage shape — the decision most likely to change — stops
- * at this layer.
+ * at this layer. A previous value may be `null`: an Evidence note, an Outcome's
+ * learnings and a Workstream's description are all nullable, and "it used to
+ * say nothing" is a value the history keeps rather than an absence it drops.
  */
 export type RevisionEntry = {
   id: string;
-  changed: Record<string, string>;
+  changed: Record<string, string | null>;
   reason: string | null;
   revisedById: string;
   revisedAt: number;
 };
+
+/** An Evidence row as its listing answers with it: the note, plus whether it was corrected. */
+export type EvidenceWithRevision = typeof evidence.$inferSelect & { revision: RevisionMarker };
 
 export type OutcomeWithFollowUps =
   | (typeof outcomes.$inferSelect & { followUpProblemIds: number[] })
@@ -342,6 +354,36 @@ async function revisionMarkerFor(
   return { count: Number(row.count), lastRevisedAt: Number(row.last) };
 }
 
+/**
+ * The same marker for a whole listing, in one statement rather than one per row.
+ *
+ * `EVIDENCE_LIST` is the only read that shows an Evidence row, so the marker has
+ * to ride the listing; paying a round trip per row for it would be the shape
+ * ADR-0017 rejected in the other direction.
+ */
+async function revisionMarkersFor(
+  db: CruxDb,
+  entity: string,
+  entityIds: (string | number)[],
+): Promise<Map<string, RevisionMarker>> {
+  const byId = new Map<string, RevisionMarker>();
+  if (entityIds.length === 0) return byId;
+  const rows = await db
+    .select({
+      entityId: revisions.entityId,
+      count: sql<number>`count(*)`,
+      last: sql<number>`max(${revisions.revisedAt})`,
+    })
+    .from(revisions)
+    .where(and(eq(revisions.entity, entity), inArray(revisions.entityId, entityIds.map(String))))
+    .groupBy(revisions.entityId);
+  for (const r of rows) {
+    if (!r.count) continue;
+    byId.set(r.entityId, { count: Number(r.count), lastRevisedAt: Number(r.last) });
+  }
+  return byId;
+}
+
 /** The `###` of a `REV-###`, for ordering two revisions filed in the same millisecond. */
 const revisionSeq = (id: string): number => Number(id.replace(/^REV-/, "")) || 0;
 
@@ -367,7 +409,7 @@ async function revisionsFor(
     .sort((a, b) => b.revisedAt - a.revisedAt || revisionSeq(b.id) - revisionSeq(a.id))
     .map((r) => ({
       id: r.id,
-      changed: JSON.parse(r.changed) as Record<string, string>,
+      changed: JSON.parse(r.changed) as Record<string, string | null>,
       reason: r.reason,
       revisedById: r.revisedById,
       revisedAt: r.revisedAt,
@@ -632,7 +674,12 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       if (rows.length === 0 || !scope.has(rows[0]!.id)) {
         throw new NotFoundError(`workstream not found: ${q.id}`, { id: q.id });
       }
-      return rows[0]!;
+      return { ...rows[0]!, revision: await revisionMarkerFor(db, "workstream", rows[0]!.id) };
+    }
+
+    case "WORKSTREAM_REVISIONS": {
+      const ws = await requireWorkstreamInScope(db, q.id, scope);
+      return (await revisionsFor(db, "workstream", ws.id)) satisfies RevisionEntry[];
     }
 
     case "WORKSTREAM_GET": {
@@ -845,15 +892,32 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
     }
 
     case "EVIDENCE_LIST": {
-      if (q.problem !== undefined) {
-        const p = await requireProblemInScope(db, q.problem, scope);
-        return db.select().from(evidence).where(eq(evidence.problemId, p.id));
-      }
-      // No Problem named: every Evidence row whose Problem is inside the scope.
-      return db
-        .select()
-        .from(evidence)
-        .where(inArray(evidence.problemId, problemsInScope(db, scope)));
+      const rows =
+        q.problem !== undefined
+          ? await db
+              .select()
+              .from(evidence)
+              .where(eq(evidence.problemId, (await requireProblemInScope(db, q.problem, scope)).id))
+          : // No Problem named: every Evidence row whose Problem is inside the scope.
+            await db
+              .select()
+              .from(evidence)
+              .where(inArray(evidence.problemId, problemsInScope(db, scope)));
+      // The listing is where an Evidence row is looked at, so the marker rides
+      // it — one statement for the whole page (ADR-0017).
+      const markers = await revisionMarkersFor(
+        db,
+        "evidence",
+        rows.map((r) => r.id),
+      );
+      return rows.map(
+        (r) => ({ ...r, revision: markers.get(r.id) ?? null }) satisfies EvidenceWithRevision,
+      );
+    }
+
+    case "EVIDENCE_REVISIONS": {
+      const row = await requireEvidenceInScope(db, q.id, scope);
+      return (await revisionsFor(db, "evidence", row.id)) satisfies RevisionEntry[];
     }
 
     case "ATTEMPT_LIST": {
@@ -929,7 +993,12 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
         .limit(1);
       if (rows.length === 0)
         throw new NotFoundError(`abandonment not found: ${q.id}`, { id: q.id });
-      return rows[0]!;
+      return { ...rows[0]!, revision: await revisionMarkerFor(db, "abandonment", q.id) };
+    }
+
+    case "ABANDONMENT_REVISIONS": {
+      const row = await requireAbandonmentInScope(db, q.id, scope);
+      return (await revisionsFor(db, "abandonment", row.id)) satisfies RevisionEntry[];
     }
 
     case "OUTCOME_LIST":
@@ -945,11 +1014,24 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
         .where(and(eq(outcomes.id, q.id), inArray(outcomes.problemId, problemsInScope(db, scope))))
         .limit(1);
       if (rows.length === 0) throw new NotFoundError(`outcome not found: ${q.id}`, { id: q.id });
-      const followUps = await db
-        .select({ problemId: outcomeFollowUpProblems.problemId })
-        .from(outcomeFollowUpProblems)
-        .where(eq(outcomeFollowUpProblems.outcomeId, q.id));
-      return { ...rows[0]!, followUpProblemIds: followUps.map((f) => f.problemId) };
+      // One wave: the follow-ups and the marker both need only the id.
+      const [followUps, revision] = await Promise.all([
+        db
+          .select({ problemId: outcomeFollowUpProblems.problemId })
+          .from(outcomeFollowUpProblems)
+          .where(eq(outcomeFollowUpProblems.outcomeId, q.id)),
+        revisionMarkerFor(db, "outcome", q.id),
+      ]);
+      return {
+        ...rows[0]!,
+        followUpProblemIds: followUps.map((f) => f.problemId),
+        revision,
+      };
+    }
+
+    case "OUTCOME_REVISIONS": {
+      const row = await requireOutcomeInScope(db, q.id, scope);
+      return (await revisionsFor(db, "outcome", row.id)) satisfies RevisionEntry[];
     }
 
     case "SEARCH":
