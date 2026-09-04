@@ -91,40 +91,23 @@ looked at it. Show the diff, and say which Observations it came from.
 
 ## Finding the session, and reading it
 
-**Do not pick a transcript by modification time.** Several sessions share this repo's
-directory and therefore share its name prefix — five `crux-*` sessions were live the day
-this was written — so newest-first is a coin flip that happens to land.
-
-`~/.claude/sessions/*.json` is one file per live session, and the ones started under an
-agent profile carry an `agent` key alongside `cwd`, `name`, `status` and `sessionId`.
-That resolves a profile to its transcript in one hop:
+Load the **`agent-sessions`** skill. It resolves an agent profile to the session running
+it and the transcript on disk, and reads that transcript:
 
 ```sh
-python3 - <<'PY'
-import json, glob, os
-CWD = os.path.realpath(os.getcwd())
-slug = CWD.replace('/', '-')
-for f in glob.glob(os.path.expanduser('~/.claude/sessions/*.json')):
-    try: d = json.load(open(f))
-    except Exception: continue
-    if not d.get('agent') or os.path.realpath(d.get('cwd', '')) != CWD: continue
-    print(d['agent'], d['name'], d['status'],
-          os.path.expanduser(f'~/.claude/projects/{slug}/{d["sessionId"]}.jsonl'))
-PY
+bun run .claude/skills/agent-sessions/sessions.ts --agent crux-product
+bun run .claude/skills/agent-sessions/sessions.ts --read crux-product --tail 30
 ```
 
-The transcript is JSONL, one object per line, oldest first, with the text in
-`message.content` blocks.
+**Never pick a transcript by modification time.** Sessions are named after their
+directory, so every agent working this repo answers to the same prefix — five `crux-*`
+sessions were live the day this was written. Newest-first is a coin flip that happens to
+land, and the skill exists because that is not good enough.
 
-`ListAgents` also enumerates live sessions and `SendMessage` talks to one, but the
-listing carries only a name, a kind, a state and an age. It does not report which agent
-profile a session is running and does not hand you a transcript, so it cannot tell two
-sessions in the same directory apart. The registry is what answers; the listing is a
-cross-check, and the two disagree about `status` often enough not to trust either alone.
-
-Tailing a file is plumbing rather than design, and it has a hard limit worth holding on
-to: it tells you what was said, never what was meant. When intent is ambiguous, watch
-what the session does next instead of guessing.
+Reading a transcript is not reading a mind. It tells you what was said, never what was
+meant, and a session's summary of its own work is a claim rather than a result. When
+intent is ambiguous, watch what the session does next instead of inferring. When it
+reports an outcome, go and check the artifact.
 
 **Watch at stops, not at messages.** A turn ends with
 `{"type":"system","subtype":"turn_duration"}`, written last; block until that count
