@@ -1071,6 +1071,68 @@ describe("Attempts on the Problem page", () => {
 });
 
 /**
+ * A corrected row says so, and says nothing else (ADR-0017).
+ *
+ * Keeping previous values is only worth the table if some surface admits the
+ * row changed; the browser is that surface. It is a marker and not a diff —
+ * what changed, and the optional reason it changed, stay in the `revisions`
+ * read — and a row nobody has corrected renders nothing at all, since an empty
+ * state would be noise on almost every page in the corpus.
+ */
+describe("the revision marker", () => {
+  test("a revised Problem says so, and counts the corrections", async () => {
+    const { cookie } = await inviteAndJoin("rev-prb@example.com", "Rev Problem");
+    const problemId = await seedWorkedProblem();
+
+    const unrevised = await (
+      await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })
+    ).text();
+    expect(unrevised).not.toContain("revised");
+
+    await dispatchAs(corpusOwner, {
+      kind: "REVISE_PROBLEM",
+      payload: { id: problemId, title: "Context evaporates between sessions, measurably" },
+    });
+    const once = await (await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })).text();
+    expect(once).toContain("revised once");
+
+    await dispatchAs(corpusOwner, {
+      kind: "REVISE_PROBLEM",
+      payload: { id: problemId, description: "Twenty-five minutes, twice this week." },
+    });
+    const twice = await (
+      await get(`/w/crux/problems/${problemId}`, { headers: { cookie } })
+    ).text();
+    expect(twice).toContain("revised 2 times");
+    // The marker, and nothing more: the page shows the description the row now
+    // holds, and nowhere shows the one it used to — no reason, no diff, no
+    // history list.
+    expect(twice).toContain("Twenty-five minutes, twice this week.");
+    expect(twice).not.toContain("Each new conversation restarts cold");
+  });
+
+  test("a revised Observation says so on its own page", async () => {
+    const { cookie } = await inviteAndJoin("rev-obs@example.com", "Rev Observation");
+    await seedWorkedProblem();
+    const observationId = (await db.select().from(observations))[0]!.id;
+
+    const unrevised = await (
+      await get(`/w/crux/observations/${observationId}`, { headers: { cookie } })
+    ).text();
+    expect(unrevised).not.toContain("revised");
+
+    await dispatchAs(corpusOwner, {
+      kind: "REVISE_OBSERVATION",
+      payload: { id: observationId, content: "Spent 25 minutes re-explaining Tuesday's decision." },
+    });
+    const revised = await (
+      await get(`/w/crux/observations/${observationId}`, { headers: { cookie } })
+    ).text();
+    expect(revised).toContain("revised once");
+  });
+});
+
+/**
  * The public homepage. It is the only page addressed to somebody with no
  * session, so what matters is that `/` stops redirecting for a stranger while
  * still meaning "your Workstreams" for a Member — one address, two answers.

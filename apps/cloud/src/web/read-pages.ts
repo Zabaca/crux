@@ -22,6 +22,7 @@ import type {
   ObservationSummary,
   ProblemDetail,
   ReadContext,
+  RevisionMarker,
   WorkstreamRow,
   WorkstreamSummary,
 } from "@crux/core/reads";
@@ -64,6 +65,31 @@ const trackerLink = (ref: string, label: string): Html =>
   /^https?:\/\//i.test(ref)
     ? html`<a href="${ref}" rel="noreferrer noopener">${label}</a>`
     : html`${label}`;
+
+/**
+ * That this row was corrected, and how many times (ADR-0017).
+ *
+ * The marker and nothing else: what changed, and the reason it changed, stay in
+ * the `revisions` table and the `revisions` read. A diff view is a design
+ * surface nobody has asked for, and the reason is optional besides, so most
+ * revisions would render as an empty box. A row nobody has ever revised renders
+ * nothing at all — an empty state here would be noise on every page in the
+ * corpus, since almost no row is ever revised.
+ */
+const revisionNote = (revision: RevisionMarker): Html =>
+  revision
+    ? html`<span class="mono" style="color:var(--faint);font-size:12px"
+        >revised ${revision.count === 1 ? "once" : `${revision.count} times`}</span
+      >`
+    : html``;
+
+/**
+ * The same marker on a line of its own, for a page with no header row to sit
+ * in. One decision about whether the row was revised, made here, so the page
+ * that renders it never has to ask a second time.
+ */
+const revisionLine = (revision: RevisionMarker): Html =>
+  revision ? html`<div style="margin:10px 0 0">${revisionNote(revision)}</div>` : html``;
 
 const crumb = (parts: Array<{ href?: string; label: string }>): Html =>
   html`<div class="crumb">
@@ -138,7 +164,7 @@ export async function problemPage(
     <div style="display:flex;align-items:center;gap:10px;margin:10px 0 0">
       ${badge(stageOf(problem.status))}<span class="mono" style="color:var(--faint);font-size:12px"
         >PRB-${problem.id}</span
-      >
+      >${revisionNote(detail.revision)}
     </div>
     <h1>${problem.title}</h1>
 
@@ -397,7 +423,7 @@ export async function observationPage(
   if (!detail || detail.observation.workstreamId !== ws.id) {
     throw new PageNotFound(`no Observation ${id} in ${slug}`);
   }
-  const { observation, evidenceLinks } = detail;
+  const { observation, evidenceLinks, revision } = detail;
   const tags: string[] = observation.tags ? (JSON.parse(observation.tags) as string[]) : [];
 
   const body = html`
@@ -407,6 +433,7 @@ export async function observationPage(
       { label: "Observations" },
       { label: observation.id },
     ])}
+    ${revisionLine(revision)}
     <h1 style="font-size:19px;line-height:1.5;max-width:760px">${observation.content}</h1>
 
     <div class="split" style="margin-top:16px">

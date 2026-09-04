@@ -66,7 +66,9 @@ A row that turns out to be wrong is corrected rather than left standing:
 
 ```sh
 crux problem revise <id> --title "..." --description "..." --reason "..."
-crux problem revisions <id>
+crux observation revise <id> --content "..." --reason "..."
+crux attempt revise <id> --ref "..." --label "..." --note "..." --reason "..."
+crux problem revisions <id>          # and `observation revisions`, `attempt revisions`
 ```
 
 Every prose-bearing row works the same way, through the same pair of verbs:
@@ -89,13 +91,30 @@ write, and `--reason` is optional — the model demands one at terminal doors an
 leaves it optional at reversible ones, and a revision is reversible because you
 can revise again. The row itself stays the single source of current truth; what
 it used to say goes to a `revisions` table that no ordinary read touches.
-`crux problem show` carries a marker — that the row was revised, and how many
-times — resolved inside the wave that read already issues, and the history is
-the second read above; so do `crux workstream show`, `crux outcome show`,
-`crux abandonment show`, and every row `crux evidence list` answers with ([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)).
+Every read that shows a revisable row carries a marker — that the row was
+revised, and how many times — resolved inside the wave that read already issues,
+and the history is the second read above: `crux problem show`,
+`crux observation show`, `crux workstream show`, `crux outcome show`,
+`crux abandonment show`, and every row `crux attempt list` and
+`crux evidence list` answer with
+([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)). The Problem page and the
+Observation page in the browser carry the same marker, on the same terms: it
+joins the wave those pages already issue, a row nobody has corrected shows
+nothing at all, and there is no diff viewer — what changed, and the optional
+reason it changed, are the `revisions` read and stay there.
 Correcting a row is not the same claim as archiving one: revision says *what I
 wrote was wrong*, archiving says *what I wrote was right and has stopped being
 live*.
+
+An Observation is editable despite the model calling it a raw signal, because
+the freeze was always a proxy for durability — an edit with no record is
+indistinguishable from a fabrication — and the history now supplies that
+directly. An archived Observation is still revisable: it stays reachable by id
+and under any Problem's Evidence, so a falsehood in it still informs a live
+conclusion. Nothing under `revise` touches an Attempt's `status`: getting a
+`ref` wrong used to cost a terminal transition, since the only repair was to
+close it `dropped` and refile, which left a dropped Attempt representing no
+abandoned work. A closing note may only be corrected on an Attempt that has one.
 
 Before a Problem gets synthesized, the one that already exists has to be findable:
 

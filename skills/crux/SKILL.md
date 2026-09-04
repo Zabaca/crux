@@ -97,6 +97,8 @@ crux observation list -w crux
 crux observation list -w crux --unlinked        # the review queue
 crux observation list -w crux --show-archived   # archived rows too
 crux observation show OBS-17
+crux observation revise OBS-17 --content "..." --reason "..."
+crux observation revisions OBS-17               # what it used to say
 crux observation archive OBS-17 --rationale "..."
 ```
 
@@ -117,6 +119,14 @@ user is thinking out loud and nothing is settled; it is a to-do or reminder (Cru
 not a task tracker); or you are tempted to file something the user did not say. Cheap
 intake is a feature, but so is judgment — a blurry thought filed early is drag on every
 later reload.
+
+**Revise when the row is wrong**, not when the world moved. An Observation is a raw
+signal, and it is editable anyway because the freeze was a proxy for durability that
+the kept history now supplies directly (ADR-0017): correct a sentence that was false
+when you wrote it, and leave one that was true on the day and has since been fixed —
+that is what archiving says. Correct rather than archive-and-refile, which orphans any
+Evidence already pointing at the row. An archived Observation is still revisable.
+`observation show` carries a marker; the history is the second read.
 
 **Archive** is terminal, takes no `-w` (the id names the row), and is for misfiles,
 duplicates, and evaporated relevance. Archived rows drop out of default queues but
@@ -257,6 +267,8 @@ build.**
 crux attempt add --problem 42 --ref ENG-412 --label "Batch the writes"
 crux attempt list 42
 crux attempt close ATT-001 --status shipped --note "why it ended that way"
+crux attempt revise ATT-001 --ref ENG-413 --reason "the first ref resolved to nothing"
+crux attempt revisions ATT-001
 crux attempt drift -w crux
 ```
 
@@ -275,6 +287,11 @@ nothing is happening. Filing late destroys the one thing the entity produces.
   anything reached production.
 - **A shipped Attempt does not complete the Problem.** Something shipping is a fact
   about the world; the Problem being gone is a judgment somebody makes.
+- **A wrong `ref` is corrected, never dropped-and-refiled.** `attempt revise` fixes the
+  `ref`, the `--label` or the closing note (`--note`, only on an Attempt that has one)
+  and never touches `status` — a correction is not a transition. Closing an Attempt
+  `dropped` to fix a pointer puts a row representing no abandoned work into the
+  graveyard reserved for judgments about why an approach ended.
 
 ## Outcome — completing the Problem
 

@@ -214,9 +214,39 @@ export const RenameWorkstreamAction = z.object({
     description: z.string().optional(),
   }),
 });
-export const RenameObservationAction = z.object({
-  kind: z.literal("RENAME_OBSERVATION"),
-  payload: z.object({ id: z.string(), content: z.string() }),
+/**
+ * Correcting an Observation (ADR-0017). This replaces `RENAME_OBSERVATION`,
+ * which overwrote `content` with no history and no reason and was reachable
+ * from no surface at all — the exact shape being replaced, so it is deleted
+ * rather than exposed.
+ */
+export const ReviseObservationAction = z.object({
+  kind: z.literal("REVISE_OBSERVATION"),
+  payload: z
+    .object({
+      id: z.string(),
+      content: z.string(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+});
+/**
+ * Correcting an Attempt (ADR-0017). `status` is absent by decision: a
+ * correction is not a transition, and closing is the only thing that may move
+ * one. Every field is optional and the transition judges the "names nothing"
+ * and "changes nothing" cases.
+ */
+export const ReviseAttemptAction = z.object({
+  kind: z.literal("REVISE_ATTEMPT"),
+  payload: z
+    .object({
+      id: z.string(),
+      ref: z.string().optional(),
+      label: z.string().optional(),
+      closingNote: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .strict(),
 });
 
 export const MutationActionSchema = z.discriminatedUnion("kind", [
@@ -237,7 +267,8 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddEvidenceAction,
   AddWorkstreamAction,
   RenameWorkstreamAction,
-  RenameObservationAction,
+  ReviseObservationAction,
+  ReviseAttemptAction,
 ]);
 
 export type MutationAction = z.infer<typeof MutationActionSchema>;
@@ -278,7 +309,8 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ADD_EVIDENCE",
   "ADD_WORKSTREAM",
   "RENAME_WORKSTREAM",
-  "RENAME_OBSERVATION",
+  "REVISE_OBSERVATION",
+  "REVISE_ATTEMPT",
 ];
 
 export function isViewAction(action: Action): action is ViewAction {
@@ -303,6 +335,8 @@ export type ReviseEvidencePayload = z.infer<typeof ReviseEvidenceAction>["payloa
 export type ReviseOutcomePayload = z.infer<typeof ReviseOutcomeAction>["payload"];
 export type ReviseAbandonmentPayload = z.infer<typeof ReviseAbandonmentAction>["payload"];
 export type ReviseWorkstreamPayload = z.infer<typeof ReviseWorkstreamAction>["payload"];
+export type ReviseObservationPayload = z.infer<typeof ReviseObservationAction>["payload"];
+export type ReviseAttemptPayload = z.infer<typeof ReviseAttemptAction>["payload"];
 export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];
 export type AddWorkstreamPayload = z.infer<typeof AddWorkstreamAction>["payload"];
 export type RenameWorkstreamPayload = z.infer<typeof RenameWorkstreamAction>["payload"];

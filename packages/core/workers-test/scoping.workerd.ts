@@ -142,6 +142,7 @@ const PROBES: Record<QueryKind, Probe> = {
   OBSERVATION_LIST: (a) => ({ kind: "OBSERVATION_LIST", workstream: a.slug }),
   OBSERVATION_SHOW: (a) => ({ kind: "OBSERVATION_SHOW", id: a.observationId }),
   OBSERVATION_DETAIL: (a) => ({ kind: "OBSERVATION_DETAIL", id: a.observationId }),
+  OBSERVATION_REVISIONS: (a) => ({ kind: "OBSERVATION_REVISIONS", id: a.observationId }),
   OBSERVATION_UNLINKED: (a) => ({ kind: "OBSERVATION_UNLINKED", workstreamId: a.workstreamId }),
   OBSERVATION_SUMMARIES: (a) => ({ kind: "OBSERVATION_SUMMARIES", workstreamId: a.workstreamId }),
 
@@ -156,6 +157,7 @@ const PROBES: Record<QueryKind, Probe> = {
   EVIDENCE_LIST: () => ({ kind: "EVIDENCE_LIST" }),
   EVIDENCE_REVISIONS: (a) => ({ kind: "EVIDENCE_REVISIONS", id: a.evidenceId }),
   ATTEMPT_LIST: () => ({ kind: "ATTEMPT_LIST" }),
+  ATTEMPT_REVISIONS: (a) => ({ kind: "ATTEMPT_REVISIONS", id: a.attemptId }),
 
   ABANDONMENT_LIST: (a) => ({ kind: "ABANDONMENT_LIST", workstream: a.slug }),
   ABANDONMENT_SHOW: (a) => ({ kind: "ABANDONMENT_SHOW", id: a.abandonmentId }),

@@ -311,6 +311,33 @@ describe("reads", () => {
     }
   });
 
+  test("observation and attempt histories are their own reads", async () => {
+    const history = [
+      {
+        id: "REV-004",
+        changed: { content: "the digest takes 4 seconds" },
+        reason: null,
+        revisedById: "USR-test",
+        revisedAt: 1_700_000_000_000,
+      },
+    ];
+    const calls = stubServer({ "POST /v1/query": { result: history } });
+
+    const obs = await capture(() =>
+      runCmd(observationCommand as AnyCmd, "revisions", { id: "OBS-001", json: true }),
+    );
+    expect(calls.map((c) => c.body).at(-1)).toEqual({
+      kind: "OBSERVATION_REVISIONS",
+      id: "OBS-001",
+    });
+    expect(obs).toEqual(history);
+
+    await capture(() =>
+      runCmd(attemptCommand as AnyCmd, "revisions", { id: "ATT-001", json: true }),
+    );
+    expect(calls.map((c) => c.body).at(-1)).toEqual({ kind: "ATTEMPT_REVISIONS", id: "ATT-001" });
+  });
+
   test("--show-archived carries the opt-in on the plain listing and on search", async () => {
     const calls = stubServer({ "POST /v1/query": { result: [] } });
 
@@ -526,6 +553,79 @@ describe("writes", () => {
       await capture(() => runCmd(cmd, "revise", args));
       expect(calls.at(-1)!.body).toEqual(expected);
     }
+  });
+
+  test("observation revise sends the correction, and the reason only when given", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": {
+        revision: 1,
+        result: { ok: true, id: "OBS-001", revisionId: "REV-001", changedFields: ["content"] },
+      },
+    });
+
+    await capture(() =>
+      runCmd(observationCommand as AnyCmd, "revise", {
+        id: "OBS-001",
+        content: "the digest takes 12 seconds",
+        json: true,
+      }),
+    );
+
+    // No `reason` key at all: the payload is `.strict()`, and a key sent as
+    // undefined would be a reason the caller never gave.
+    expect(calls.at(-1)!.body).toEqual({
+      kind: "REVISE_OBSERVATION",
+      payload: { id: "OBS-001", content: "the digest takes 12 seconds" },
+    });
+  });
+
+  test("attempt revise sends only the fields it was given, and never a status", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": {
+        revision: 1,
+        result: { ok: true, id: "ATT-001", revisionId: "REV-002", changedFields: ["ref"] },
+      },
+    });
+
+    await capture(() =>
+      runCmd(attemptCommand as AnyCmd, "revise", {
+        id: "ATT-001",
+        ref: "https://tracker.example/RIGHT-1",
+        reason: "the first ref resolved to nothing",
+        json: true,
+      }),
+    );
+
+    expect(calls.at(-1)!.body).toEqual({
+      kind: "REVISE_ATTEMPT",
+      payload: {
+        id: "ATT-001",
+        ref: "https://tracker.example/RIGHT-1",
+        reason: "the first ref resolved to nothing",
+      },
+    });
+  });
+
+  test("attempt revise sends the closing note under the name the action uses", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": {
+        revision: 1,
+        result: { ok: true, id: "ATT-001", revisionId: "REV-003", changedFields: ["closingNote"] },
+      },
+    });
+
+    await capture(() =>
+      runCmd(attemptCommand as AnyCmd, "revise", {
+        id: "ATT-001",
+        note: "landed in v3.1, behind a flag",
+        json: true,
+      }),
+    );
+
+    expect(calls.at(-1)!.body).toEqual({
+      kind: "REVISE_ATTEMPT",
+      payload: { id: "ATT-001", closingNote: "landed in v3.1, behind a flag" },
+    });
   });
 
   test("problem complete names the Problem it closes, and splits its follow-ups", async () => {

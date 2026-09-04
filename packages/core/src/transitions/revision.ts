@@ -9,8 +9,8 @@
  *
  * `entity` and the stringified `entityId` are what make one table serve every
  * kind of row. The *callers* stay typed: `reviseProblem` names the two fields a
- * Problem has, so a `content` can never be handed to one, and `reviseWorkstream`
- * cannot reach a slug at all.
+ * Problem has, so a `content` can never be handed to one, `reviseAttempt` cannot
+ * reach a `status`, and `reviseWorkstream` cannot reach a slug at all.
  */
 import { eq } from "drizzle-orm";
 
@@ -19,16 +19,25 @@ import type { BatchItem } from "drizzle-orm/batch";
 import { runBatch, type CruxDb } from "../db/client.js";
 import {
   abandonments,
+  attempts,
   evidence,
+  observations,
   outcomes,
   problems,
   revisions,
   workstreams,
 } from "../db/schema.js";
-import { NotFoundError, ValidationError } from "./errors.js";
+import { InvariantError, NotFoundError, ValidationError } from "./errors.js";
 
 /** Which kind of row a revision corrects. Storage is polymorphic; the API is not. */
-export type RevisableEntity = "problem" | "evidence" | "outcome" | "abandonment" | "workstream";
+export type RevisableEntity =
+  | "problem"
+  | "observation"
+  | "attempt"
+  | "evidence"
+  | "outcome"
+  | "abandonment"
+  | "workstream";
 
 export type RevisionResult = {
   /** The revision row that recorded the previous values. */
@@ -112,7 +121,7 @@ async function applyRevision(args: {
   if (changedFields.length === 0) {
     throw new ValidationError(`revision leaves ${entity} ${entityId} unchanged`, {
       id: entityId,
-      fields: Object.keys(updates).filter((f) => updates[f] !== undefined),
+      fields: namedFields(updates),
     });
   }
 
@@ -134,6 +143,10 @@ async function applyRevision(args: {
   return { revisionId, changedFields };
 }
 
+/** The fields the caller actually named, for a refusal that says what it saw. */
+const namedFields = (updates: Record<string, string | undefined>): string[] =>
+  Object.keys(updates).filter((f) => updates[f] !== undefined);
+
 /**
  * A revision that names no field is a refusal, not an empty write.
  *
@@ -145,7 +158,7 @@ function requireSomeField(
   entityId: string | number,
   updates: Record<string, string | undefined>,
 ): void {
-  if (Object.values(updates).every((v) => v === undefined)) {
+  if (namedFields(updates).length === 0) {
     throw new ValidationError(
       `a revision must name at least one of ${Object.keys(updates).join(", ")}`,
       { id: entityId },
@@ -191,6 +204,141 @@ export async function reviseProblem(
       if (changed.includes("title")) set.title = updates.title;
       if (changed.includes("description")) set.description = updates.description;
       return db.update(problems).set(set).where(eq(problems.id, problemId));
+    },
+  });
+}
+
+export type ObservationRevision = {
+  content: string;
+};
+
+/**
+ * Correct what an Observation says.
+ *
+ * The entity model called an Observation immutable, and that freeze was always
+ * a proxy for durability: an edit with no record is indistinguishable from a
+ * fabrication. The history provides durability directly, so the proxy is
+ * retired (ADR-0017).
+ *
+ * An **archived** Observation is still revisable. The two claims are
+ * orthogonal: archiving says the row stopped being live, revision says it was
+ * wrong, and a retired row that misstates what was seen is exactly the one
+ * worth correcting — it is still reachable by id and under any Problem's
+ * Evidence, so a falsehood in it still informs a live conclusion.
+ */
+export async function reviseObservation(
+  observationId: string,
+  updates: ObservationRevision,
+  reason: string | undefined,
+  userId: string,
+  db: CruxDb,
+): Promise<RevisionResult> {
+  if (updates.content.trim() === "") {
+    // An Observation blanked to whitespace is the raw signal destroyed, which
+    // is the one thing lifting the freeze may not be allowed to do (ADR-0017).
+    throw new InvariantError(`an Observation cannot be corrected to nothing`, { observationId });
+  }
+
+  const row = (
+    await db.select().from(observations).where(eq(observations.id, observationId)).limit(1)
+  )[0];
+  if (!row) throw new NotFoundError(`Observation not found: ${observationId}`, { observationId });
+
+  return applyRevision({
+    db,
+    entity: "observation",
+    entityId: observationId,
+    current: { content: row.content },
+    updates: { content: updates.content },
+    reason,
+    userId,
+    updateRow: (changed, now) => {
+      const set: Partial<typeof observations.$inferInsert> = { updatedAt: now };
+      if (changed.includes("content")) set.content = updates.content;
+      return db.update(observations).set(set).where(eq(observations.id, observationId));
+    },
+  });
+}
+
+export type AttemptRevision = {
+  ref?: string;
+  label?: string;
+  closingNote?: string;
+};
+
+/**
+ * Correct an Attempt's pointer, its label, or the note that closed it.
+ *
+ * Nothing here touches `status`. Getting a `ref` wrong used to cost a terminal
+ * transition — the only repair was to close the Attempt `dropped` and refile,
+ * which left a dropped Attempt representing no abandoned work — and a
+ * correction is not a transition (ADR-0012, ADR-0017).
+ *
+ * A closing note may only be corrected on an Attempt that has one. On an open
+ * Attempt there is nothing to correct, and writing one would be closing it
+ * through a door that records no judgment.
+ */
+export async function reviseAttempt(
+  attemptId: string,
+  updates: AttemptRevision,
+  reason: string | undefined,
+  userId: string,
+  db: CruxDb,
+): Promise<RevisionResult> {
+  requireSomeField(attemptId, {
+    ref: updates.ref,
+    label: updates.label,
+    closingNote: updates.closingNote,
+  });
+
+  // Trimmed and refused empty, the way `createAttempt` does: an Attempt with
+  // no destination or no name is a row that answers nothing, and a correction
+  // is not a way around the invariant that filing one enforces.
+  for (const [field, value] of Object.entries(updates)) {
+    if (value !== undefined && value.trim() === "") {
+      // `InvariantError`, the code `createAttempt` raises for the same rule:
+      // one invariant that answers with two codes is two rules to a caller
+      // parsing them.
+      throw new InvariantError(`Attempt ${field} cannot be corrected to nothing`, {
+        attemptId,
+        field,
+      });
+    }
+  }
+  const trimmed: AttemptRevision = {
+    ...(updates.ref !== undefined ? { ref: updates.ref.trim() } : {}),
+    ...(updates.label !== undefined ? { label: updates.label.trim() } : {}),
+    ...(updates.closingNote !== undefined ? { closingNote: updates.closingNote.trim() } : {}),
+  };
+
+  const row = (await db.select().from(attempts).where(eq(attempts.id, attemptId)).limit(1))[0];
+  if (!row) throw new NotFoundError(`Attempt not found: ${attemptId}`, { attemptId });
+
+  if (trimmed.closingNote !== undefined && row.closingNote === null) {
+    throw new ValidationError(
+      `Attempt ${attemptId} is ${row.status} and has no closing note to correct`,
+      { attemptId, status: row.status },
+    );
+  }
+
+  return applyRevision({
+    db,
+    entity: "attempt",
+    entityId: attemptId,
+    current: { ref: row.ref, label: row.label, closingNote: row.closingNote },
+    updates: {
+      ref: trimmed.ref,
+      label: trimmed.label,
+      closingNote: trimmed.closingNote,
+    },
+    reason,
+    userId,
+    updateRow: (changed, now) => {
+      const set: Partial<typeof attempts.$inferInsert> = { updatedAt: now };
+      if (changed.includes("ref")) set.ref = trimmed.ref;
+      if (changed.includes("label")) set.label = trimmed.label;
+      if (changed.includes("closingNote")) set.closingNote = trimmed.closingNote;
+      return db.update(attempts).set(set).where(eq(attempts.id, attemptId));
     },
   });
 }

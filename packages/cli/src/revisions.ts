@@ -21,11 +21,11 @@ export function emitRevised(result: unknown, id: string): void {
 }
 
 /**
- * A row's history as one line per correction.
+ * A row's history, one line per correction, newest first (ADR-0017).
  *
- * The *values* a revision replaced are in the JSON; the human line names the
- * fields, when, and why — enough to decide which entry to look at, which is all
- * a history read is for.
+ * The line names *which* fields changed and not what they said, because a
+ * previous description is a paragraph: the `--json` shape carries the values,
+ * and the terminal carries the index into them.
  */
 export function formatRevisions(rows: RevisionEntry[]): string {
   return (

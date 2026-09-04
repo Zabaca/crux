@@ -1,6 +1,11 @@
 import { defineCommand } from "citty";
 import { emit, setJsonMode } from "../output.js";
-import type { AddObservationPayload, ArchiveObservationPayload } from "@crux/core/actions";
+import type {
+  AddObservationPayload,
+  ArchiveObservationPayload,
+  ReviseObservationPayload,
+} from "@crux/core/actions";
+import { emitRevised, revisionsCommand } from "../revisions.js";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
 
@@ -110,6 +115,37 @@ const showCmd = defineCommand({
   },
 });
 
+/**
+ * Correcting what an Observation says (ADR-0017). The freeze the entity model
+ * described was a proxy for durability; the history provides that directly, so
+ * the row may be fixed and what it used to say is kept.
+ */
+const reviseCmd = defineCommand({
+  meta: { name: "revise", description: "Correct what an observation says." },
+  args: {
+    id: { type: "positional", required: true },
+    content: { type: "string", required: true, description: "what it should say instead" },
+    reason: { type: "string", description: "why the correction was made (optional)" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const payload: ReviseObservationPayload = {
+      id: args.id,
+      content: args.content,
+      ...(args.reason !== undefined ? { reason: args.reason } : {}),
+    };
+    const { result } = await api().dispatch({ kind: "REVISE_OBSERVATION", payload });
+    emitRevised(result, args.id);
+  },
+});
+
+const revisionsCmd = revisionsCommand({
+  kind: "OBSERVATION_REVISIONS",
+  noun: "an observation",
+  idHint: "OBS-###",
+});
+
 const archiveCmd = defineCommand({
   meta: {
     name: "archive",
@@ -133,5 +169,12 @@ const archiveCmd = defineCommand({
 
 export const observationCommand = defineCommand({
   meta: { name: "observation", description: "Observations." },
-  subCommands: { add: addCmd, list: listCmd, show: showCmd, archive: archiveCmd },
+  subCommands: {
+    add: addCmd,
+    list: listCmd,
+    show: showCmd,
+    revise: reviseCmd,
+    revisions: revisionsCmd,
+    archive: archiveCmd,
+  },
 });
