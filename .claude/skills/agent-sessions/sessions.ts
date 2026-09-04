@@ -41,18 +41,26 @@ type Registry = {
 
 type Session = Registry & { transcript: string | null };
 
-/** Args: `--all`, `--agent X`, `--read X`, `--tail N`. */
+/** Args: `--all`, `--agent X`, `--read X`, `--tail N`, `--follow X`, `--interval S`. */
 function parseArgs(argv: string[]) {
-  const out: { all: boolean; agent?: string; read?: string; tail: number } = {
-    all: false,
-    tail: 30,
-  };
+  const out: {
+    all: boolean;
+    agent?: string;
+    read?: string;
+    follow?: string;
+    fromStart: boolean;
+    tail: number;
+    interval: number;
+  } = { all: false, fromStart: false, tail: 30, interval: 5 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === "--all") out.all = true;
+    else if (a === "--from-start") out.fromStart = true;
     else if (a === "--agent") out.agent = argv[++i];
     else if (a === "--read") out.read = argv[++i];
+    else if (a === "--follow") out.follow = argv[++i];
     else if (a === "--tail") out.tail = Number(argv[++i]) || 30;
+    else if (a === "--interval") out.interval = Number(argv[++i]) || 5;
   }
   return out;
 }
@@ -147,6 +155,95 @@ function readTurns(path: string, tail: number) {
   return turns.slice(-tail);
 }
 
+/** One text block, in the shape both `--read` and `--follow` answer with. */
+function textBlocks(d: {
+  type?: string;
+  timestamp?: string;
+  message?: { content?: unknown };
+}): { role: string; ts: string | null; text: string }[] {
+  const content = d.message?.content;
+  if (!Array.isArray(content)) return [];
+  const out: { role: string; ts: string | null; text: string }[] = [];
+  for (const b of content) {
+    const blk = b as { type?: string; text?: string };
+    if (blk?.type === "text" && typeof blk.text === "string" && blk.text.trim()) {
+      out.push({ role: d.type ?? "?", ts: d.timestamp ?? null, text: blk.text.trim() });
+    }
+  }
+  return out;
+}
+
+/**
+ * Emit one record per completed turn, forever.
+ *
+ * The boundary is the session's own stop marker — a `system` line with subtype
+ * `turn_duration`, written last — not a line count. Polling for growth fires
+ * mid-turn, and most of what looks wrong mid-turn is corrected inside the same
+ * turn by the session itself, so an observer woken on every message is reviewing
+ * a draft. A stop is also where the session hands something to its human, which
+ * is when reading it is worth most.
+ *
+ * Starts at the current end of the file, so this follows what happens next.
+ * `--from-start` replays every completed turn first, which is what an observer
+ * joining a session already in progress wants. Only lines past the last poll are
+ * parsed either way, so a long transcript costs its growth rather than its size.
+ */
+async function follow(session: Session, intervalMs: number, fromStart: boolean): Promise<never> {
+  const path = session.transcript as string;
+  let processed = 0;
+  if (!fromStart) {
+    try {
+      processed = readFileSync(path, "utf8").split("\n").filter(Boolean).length;
+    } catch {
+      /* not on disk yet — start from the top once it appears */
+    }
+  }
+  let pending: { role: string; ts: string | null; text: string }[] = [];
+
+  for (;;) {
+    let lines: string[] = [];
+    try {
+      lines = readFileSync(path, "utf8").split("\n").filter(Boolean);
+    } catch {
+      /* transient — try again next tick */
+    }
+    for (const line of lines.slice(processed)) {
+      let d: {
+        type?: string;
+        subtype?: string;
+        timestamp?: string;
+        durationMs?: number;
+        messageCount?: number;
+        message?: { content?: unknown };
+      };
+      try {
+        d = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (d.type === "system" && d.subtype === "turn_duration") {
+        process.stdout.write(
+          `${JSON.stringify({
+            session: session.name,
+            agent: session.agent,
+            stop: {
+              ts: d.timestamp ?? null,
+              durationMs: d.durationMs ?? null,
+              messageCount: d.messageCount ?? null,
+            },
+            turns: pending,
+          })}\n`,
+        );
+        pending = [];
+        continue;
+      }
+      pending.push(...textBlocks(d));
+    }
+    processed = Math.max(processed, lines.length);
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
 const args = parseArgs(process.argv.slice(2));
 const here = process.cwd();
 let sessions = readRegistry();
@@ -154,11 +251,10 @@ let sessions = readRegistry();
 if (!args.all) sessions = sessions.filter((s) => s.cwd === here);
 if (args.agent) sessions = sessions.filter((s) => s.agent === args.agent);
 
-if (args.read) {
-  const key = args.read;
-  const match =
-    sessions.find((s) => s.name === key || s.sessionId === key || s.agent === key) ??
-    readRegistry().find((s) => s.name === key || s.sessionId === key || s.agent === key);
+/** A `name`, an `agent` or a `sessionId`, resolved or refused. */
+function resolve(key: string): Session {
+  const hit = (s: Session) => s.name === key || s.sessionId === key || s.agent === key;
+  const match = sessions.find(hit) ?? readRegistry().find(hit);
   if (!match) {
     console.log(JSON.stringify({ error: "no session matched", query: key }, null, 2));
     process.exit(1);
@@ -167,8 +263,19 @@ if (args.read) {
     console.log(JSON.stringify({ error: "no transcript on disk", session: match }, null, 2));
     process.exit(1);
   }
+  return match;
+}
+
+if (args.follow) {
+  await follow(resolve(args.follow), args.interval * 1000, args.fromStart);
+} else if (args.read) {
+  const match = resolve(args.read);
   console.log(
-    JSON.stringify({ session: match, turns: readTurns(match.transcript, args.tail) }, null, 2),
+    JSON.stringify(
+      { session: match, turns: readTurns(match.transcript as string, args.tail) },
+      null,
+      2,
+    ),
   );
 } else {
   console.log(

@@ -13,6 +13,7 @@ bun run .claude/skills/agent-sessions/sessions.ts                        # profi
 bun run .claude/skills/agent-sessions/sessions.ts --agent crux-product   # one profile
 bun run .claude/skills/agent-sessions/sessions.ts --all                  # every directory
 bun run .claude/skills/agent-sessions/sessions.ts --read crux-85 --tail 20
+bun run .claude/skills/agent-sessions/sessions.ts --follow crux-observer   # watch, at stops
 ```
 
 **Only sessions running an agent profile are listed.** Plain sessions are the majority —
@@ -31,6 +32,29 @@ what separate a live row from a stale one when `status` lies, which it does.
 `--read` takes a `name`, an `agent` or a `sessionId` and returns `{session, turns[]}` with
 `{role, ts, text}` per turn, oldest last. It exits 1 when nothing matches or the
 transcript is missing.
+
+## Watching: `--follow`
+
+Takes the same key and blocks, writing **one JSON object per completed turn** — JSONL, so
+it streams:
+
+```json
+{"session":"crux-85","agent":"crux-product",
+ "stop":{"ts":"…","durationMs":59990,"messageCount":18},
+ "turns":[{"role":"assistant","ts":"…","text":"…"}]}
+```
+
+**The boundary is the session's own stop marker**, a `system` line with subtype
+`turn_duration` written last — not a line count and not file growth. Polling for growth
+wakes you mid-turn, and most of what looks wrong mid-turn is corrected inside that same
+turn by the session itself, so an observer woken on every message is reviewing a draft. A
+stop is also the moment the session hands something to its human, which is when reading it
+is worth most.
+
+It starts at the current end of the file, so it follows what happens next. `--from-start`
+replays every completed turn first — what an observer joining a session already in
+progress wants. `--interval <seconds>` sets the poll, default 5. Only lines past the last
+poll are parsed, so a long transcript costs its growth rather than its size.
 
 ## Why not ListAgents
 
