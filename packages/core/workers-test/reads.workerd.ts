@@ -164,6 +164,61 @@ describe("query()", () => {
     ]);
   });
 
+  test("with a defer, the recorded write is handed over rather than waited for", async () => {
+    const { problemId } = await seed();
+    const store = new MemoryViewStore();
+    const deferred: Array<Promise<unknown>> = [];
+    // A store that does not answer until it is released — standing in for the
+    // Durable Object hop, which is the ~205ms the caller used to pay for after
+    // the answer already existed. An in-memory store settles in a microtask and
+    // so cannot tell "handed over" from "waited for".
+    let release = (): void => {};
+    const slow = {
+      read: async () => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return store.read();
+      },
+      write: (blob: Record<string, unknown>) => store.write(blob),
+    };
+
+    await query(
+      { kind: "PROBLEM_SHOW", id: problemId },
+      { db, principal, viewStore: slow, defer: (work) => deferred.push(work) },
+    );
+
+    // The read has answered while the store is still mid-hop.
+    expect(deferred).toHaveLength(1);
+    expect(await store.read()).toEqual({});
+
+    release();
+    await deferred[0]!;
+    const blob = (await store.read()) as { recentQueries: Array<{ kind: string; slug: string }> };
+    expect(blob.recentQueries.map((q) => [q.kind, q.slug])).toEqual([
+      ["PROBLEM_SHOW", String(problemId)],
+    ]);
+  });
+
+  test("a deferred write that fails neither rejects nor fails the read", async () => {
+    const { problemId } = await seed();
+    const broken = {
+      read: () => Promise.reject(new Error("the object is unreachable")),
+      write: () => Promise.reject(new Error("the object is unreachable")),
+    };
+    const deferred: Array<Promise<unknown>> = [];
+
+    const result = await query(
+      { kind: "PROBLEM_SHOW", id: problemId },
+      { db, principal, viewStore: broken, defer: (work) => deferred.push(work) },
+    );
+
+    expect((result as { id: number }).id).toBe(problemId);
+    // Handing a rejecting promise to `waitUntil` is an unhandled rejection in
+    // the Worker, so the best-effort guarantee has to survive the deferral.
+    await expect(deferred[0]!).resolves.toBeUndefined();
+  });
+
   test("OBSERVATION_SUMMARIES derives the three states an Observation can be in", async () => {
     await seed(); // OBS-1 is Evidence for the seeded Problem.
     await db.insert(observations).values([

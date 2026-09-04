@@ -446,6 +446,20 @@ export type ReadContext = {
  * before, so the error envelope and the CLI's exit code are unchanged. A row
  * outside the scope is reported as missing rather than as forbidden.
  */
+/**
+ * Somewhere to put work the answer does not depend on — the `recentQueries`
+ * write, which is two sequential hops to a Durable Object the caller was paying
+ * for after the result already existed.
+ *
+ * It is a callback rather than an import because core must not name a runtime
+ * (ADR-0003): the Worker passes `ctx.waitUntil`, and a caller with no execution
+ * context passes nothing and keeps the awaited behaviour, which is what keeps
+ * the suites deterministic — you can assert that a `defer` was called, and you
+ * cannot assert that `waitUntil` was. The work handed over never rejects, so it
+ * is safe for `waitUntil`.
+ */
+export type Defer = (work: Promise<unknown>) => void;
+
 export async function query(
   rawQuery: unknown,
   options: {
@@ -458,6 +472,8 @@ export async function query(
      * two. Omitting it resolves the scope here — never runs unscoped — and a
      * scope belonging to somebody else is ignored rather than trusted. */
     scope?: Scope;
+    /** Hand off work the answer does not depend on — see `Defer`. */
+    defer?: Defer;
   },
 ): Promise<unknown> {
   const q = QuerySchema.parse(rawQuery);
@@ -467,11 +483,17 @@ export async function query(
 
   const record = RECORDED[q.kind];
   if (record && options.viewStore) {
-    await recordRecentQuery(
+    // Started here either way — `defer` changes who waits for it, not when it
+    // begins. It stays a read-modify-write over the whole blob, so two recorded
+    // reads in flight at once can still lose an entry; that was true awaited
+    // and it is bookkeeping, not corpus.
+    const written = recordRecentQuery(
       options.viewStore,
       record.kind,
       (record.slug as (x: unknown) => string)(q),
     );
+    if (options.defer) options.defer(written);
+    else await written;
   }
   return result;
 }
