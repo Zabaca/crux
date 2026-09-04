@@ -149,6 +149,7 @@ const PROBES: Record<QueryKind, Probe> = {
   PROBLEM_GET: (a) => ({ kind: "PROBLEM_GET", id: a.problemId }),
   PROBLEM_SUMMARIES: (a) => ({ kind: "PROBLEM_SUMMARIES", workstreamId: a.workstreamId }),
   PROBLEM_DETAIL: (a) => ({ kind: "PROBLEM_DETAIL", id: a.problemId }),
+  PROBLEM_REVISIONS: (a) => ({ kind: "PROBLEM_REVISIONS", id: a.problemId }),
   PROBLEM_DRIFT: (a) => ({ kind: "PROBLEM_DRIFT", workstream: a.slug }),
 
   EVIDENCE_LIST: () => ({ kind: "EVIDENCE_LIST" }),

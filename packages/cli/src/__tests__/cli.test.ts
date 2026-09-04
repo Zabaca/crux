@@ -258,6 +258,26 @@ describe("reads", () => {
     });
   });
 
+  test("problem revisions asks for the history and prints what it gets", async () => {
+    const history = [
+      {
+        id: "REV-002",
+        changed: { title: "reads are slow" },
+        reason: "the Evidence demoted the cause",
+        revisedById: "USR-test",
+        revisedAt: 1_700_000_000_000,
+      },
+    ];
+    const calls = stubServer({ "POST /v1/query": { result: history } });
+
+    const out = await capture(() =>
+      runCmd(problemCommand as AnyCmd, "revisions", { id: "7", json: true }),
+    );
+
+    expect(calls.map((c) => c.body).at(-1)).toEqual({ kind: "PROBLEM_REVISIONS", id: "7" });
+    expect(out).toEqual(history);
+  });
+
   test("problem show emits the digest the server sent, untouched", async () => {
     const shown = {
       id: 7,
@@ -379,6 +399,31 @@ describe("writes", () => {
     expect(calls.at(-1)!.body).toMatchObject({
       kind: "ADD_OBSERVATION",
       payload: { workstream: "WS-smoke", content: "Something observed", tags: ["alpha", "beta"] },
+    });
+  });
+
+  test("problem revise sends only the fields it was given", async () => {
+    const calls = stubServer({
+      "POST /v1/dispatch": {
+        revision: 1,
+        result: { ok: true, id: 7, revisionId: "REV-001", changed: ["title"] },
+      },
+    });
+
+    await capture(() =>
+      runCmd(problemCommand as AnyCmd, "revise", {
+        id: "7",
+        title: "a truer title",
+        reason: "the Evidence demoted the cause",
+        json: true,
+      }),
+    );
+
+    // No `description` key at all: the payload is `.strict()`, and a key sent
+    // as undefined would be a field the caller never asked to change.
+    expect(calls.at(-1)!.body).toEqual({
+      kind: "REVISE_PROBLEM",
+      payload: { id: "7", title: "a truer title", reason: "the Evidence demoted the cause" },
     });
   });
 

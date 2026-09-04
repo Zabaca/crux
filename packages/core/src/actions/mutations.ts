@@ -30,6 +30,7 @@ import {
   recordOutcome,
   archiveObservation,
   renameWorkstream,
+  reviseProblem,
   CruxError,
   ReferentialError,
   type RoadmapStage,
@@ -254,6 +255,21 @@ export async function runMutation(
         db,
       );
       return { result: { ok: true, id, status: "done" }, workstreamId: prob.workstreamId };
+    }
+    case "REVISE_PROBLEM": {
+      const p = action.payload;
+      const prob = await requireProblemInScope(db, p.id, scope);
+      const { revisionId, changed } = await reviseProblem(
+        prob.id,
+        { title: p.title, description: p.description },
+        p.reason,
+        user.id,
+        db,
+      );
+      return {
+        result: { ok: true, id: prob.id, revisionId, changed },
+        workstreamId: prob.workstreamId,
+      };
     }
     case "ADD_OBSERVATION": {
       const p = action.payload;

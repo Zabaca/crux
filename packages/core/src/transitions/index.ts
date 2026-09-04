@@ -4,3 +4,4 @@ export * from "./attempt.js";
 export * from "./outcome.js";
 export * from "./observation.js";
 export * from "./rename.js";
+export * from "./revision.js";

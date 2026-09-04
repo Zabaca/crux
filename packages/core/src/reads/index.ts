@@ -33,6 +33,7 @@ import {
   outcomes,
   outcomeFollowUpProblems,
   problems,
+  revisions,
   workstreams,
 } from "../db/schema.js";
 import { NotFoundError, ValidationError } from "../transitions/errors.js";
@@ -82,6 +83,7 @@ export const QuerySchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("PROBLEM_GET"), id }),
   z.object({ kind: z.literal("PROBLEM_SUMMARIES"), workstreamId: z.string() }),
   z.object({ kind: z.literal("PROBLEM_DETAIL"), id }),
+  z.object({ kind: z.literal("PROBLEM_REVISIONS"), id }),
 
   z.object({ kind: z.literal("EVIDENCE_LIST"), problem: id.optional() }),
 
@@ -167,6 +169,32 @@ export type ProblemDetail = {
   evidence: EvidenceWithObservation[];
   abandonment: AbandonmentRow | null;
   outcome: OutcomeWithFollowUps;
+};
+
+/**
+ * That a row was corrected, and how many times (ADR-0017).
+ *
+ * A marker and nothing else: the history itself is a second read, because
+ * inlining it would repeat the mistake that killed the old digest command —
+ * a hot read grown fat with data almost no caller wants. Null on a row nobody
+ * has ever revised, which is not an error.
+ */
+export type RevisionMarker = { count: number; lastRevisedAt: number } | null;
+
+/**
+ * One entry of a row's history: the fields that changed, holding the values
+ * they used to have.
+ *
+ * `changed` is parsed here rather than handed over as the JSON string it is
+ * stored as, so the storage shape — the decision most likely to change — stops
+ * at this layer.
+ */
+export type RevisionEntry = {
+  id: string;
+  changed: Record<string, string>;
+  reason: string | null;
+  revisedById: string;
+  revisedAt: number;
 };
 
 export type OutcomeWithFollowUps =
@@ -266,6 +294,45 @@ async function attemptTallies(
     if (a.status === "open") open.set(a.problemId, (open.get(a.problemId) ?? 0) + 1);
   }
   return { total, open };
+}
+
+/**
+ * How many times a row has been revised, and when it last was — one statement,
+ * so it can join the wave a read already issues rather than costing a hop after
+ * it (ADR-0017).
+ */
+async function revisionMarkerFor(
+  db: CruxDb,
+  entity: string,
+  entityId: string | number,
+): Promise<RevisionMarker> {
+  const rows = await db
+    .select({ count: sql<number>`count(*)`, last: sql<number>`max(${revisions.revisedAt})` })
+    .from(revisions)
+    .where(and(eq(revisions.entity, entity), eq(revisions.entityId, String(entityId))));
+  const row = rows[0];
+  if (!row || !row.count) return null;
+  return { count: Number(row.count), lastRevisedAt: Number(row.last) };
+}
+
+/** A row's history, newest first. */
+async function revisionsFor(
+  db: CruxDb,
+  entity: string,
+  entityId: string | number,
+): Promise<RevisionEntry[]> {
+  const rows = await db
+    .select()
+    .from(revisions)
+    .where(and(eq(revisions.entity, entity), eq(revisions.entityId, String(entityId))))
+    .orderBy(desc(revisions.revisedAt), desc(revisions.id));
+  return rows.map((r) => ({
+    id: r.id,
+    changed: JSON.parse(r.changed) as Record<string, string>,
+    reason: r.reason,
+    revisedById: r.revisedById,
+    revisedAt: r.revisedAt,
+  }));
 }
 
 /** The Problem's Outcome, with its follow-up Problems inlined — null until it is done. */
@@ -645,11 +712,22 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
 
     case "PROBLEM_SHOW": {
       const p = await requireProblemInScope(db, q.id, scope);
-      return {
-        ...p,
-        attempts: await attemptsFor(db, p.id),
-        outcome: await outcomeFor(db, p.id),
-      };
+      // One wave, not three: all three need the Problem's id and nothing else,
+      // and the revision marker joins it rather than costing a round trip after
+      // it (ADR-0017). `read-round-trips.workerd.ts` is what holds this.
+      const [attemptRows, outcome, revision] = await Promise.all([
+        attemptsFor(db, p.id),
+        outcomeFor(db, p.id),
+        revisionMarkerFor(db, "problem", p.id),
+      ]);
+      return { ...p, attempts: attemptRows, outcome, revision };
+    }
+
+    case "PROBLEM_REVISIONS": {
+      // The scope check is the whole of the authorization: history about a
+      // Problem this Principal cannot see is a Problem that does not exist.
+      const p = await requireProblemInScope(db, q.id, scope);
+      return (await revisionsFor(db, "problem", p.id)) satisfies RevisionEntry[];
     }
 
     case "PROBLEM_SUMMARIES": {

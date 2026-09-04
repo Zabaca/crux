@@ -44,6 +44,7 @@ const VIEW_ALLOWED: Record<string, AllowedActions> = {
       "ADD_ATTEMPT",
       "CLOSE_ATTEMPT",
       "ADD_EVIDENCE",
+      "REVISE_PROBLEM",
       "COMPLETE_PROBLEM",
       "SCHEDULE_PROBLEM",
       "UNSCHEDULE_PROBLEM",

@@ -3,6 +3,7 @@ import {
   text,
   integer,
   uniqueIndex,
+  index,
   primaryKey,
   type AnySQLiteColumn,
 } from "drizzle-orm/sqlite-core";
@@ -246,4 +247,44 @@ export const outcomeFollowUpProblems = sqliteTable(
       .references(() => problems.id),
   },
   (t) => ({ pk: primaryKey({ columns: [t.outcomeId, t.problemId] }) }),
+);
+
+/**
+ * What a row used to say (ADR-0017).
+ *
+ * One table for every entity: a revision row is the same shape whichever kind
+ * of row it corrects, so the polymorphism lives here, in storage, and never in
+ * the action schema — where the fields genuinely differ and a `fields` bag
+ * would accept `content` on a Problem.
+ *
+ * `entityId` is deliberately not a foreign key. Problems key on integers and
+ * Observations on text, and one column cannot reference both; the id is
+ * stringified on the way in.
+ *
+ * `changed` is a JSON object of the fields the revision touched, holding their
+ * *previous* values. The live row stays the single source of current truth, so
+ * nothing reconstructs state from this — it is a side record that no normal
+ * read touches.
+ */
+export const revisions = sqliteTable(
+  "revisions",
+  {
+    id: text("id").primaryKey(), // REV-###
+    /** 'problem' | 'observation' | … — which table `entityId` names. */
+    entity: text("entity").notNull(),
+    entityId: text("entity_id").notNull(),
+    /** JSON object: the changed fields, holding the values they used to have. */
+    changed: text("changed").notNull(),
+    /** Why, when the reviser said. Optional: a revision is reversible (ADR-0017). */
+    reason: text("reason"),
+    revisedById: text("revised_by_id")
+      .notNull()
+      .references(() => users.id),
+    revisedAt: integer("revised_at")
+      .notNull()
+      .default(sql`(unixepoch() * 1000)`),
+  },
+  (t) => ({
+    entityIdx: index("revisions_entity").on(t.entity, t.entityId),
+  }),
 );
