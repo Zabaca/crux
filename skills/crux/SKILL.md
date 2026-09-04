@@ -95,6 +95,7 @@ crux observation add -w crux --content "..." \
   --tag "perf,d1"
 crux observation list -w crux
 crux observation list -w crux --unlinked        # the review queue
+crux observation list -w crux --show-archived   # archived rows too
 crux observation show OBS-17
 crux observation archive OBS-17 --rationale "..."
 ```
@@ -121,6 +122,14 @@ later reload.
 duplicates, and evaporated relevance. Archived rows drop out of default queues but
 stay visible under any Problem's Evidence with the rationale inlined.
 
+Concretely: `crux observation list`, `crux observation list --unlinked` and
+`crux search` all leave archived rows out, and `--show-archived` on any of them
+puts them back with the rationale attached. `crux observation show OBS-17` still
+answers — naming a row is asking for that row — and so does every Evidence link
+under a Problem. So a search before filing does **not** see archived
+Observations: that is deliberate, and re-filing something that was archived is
+cheaper than quoting a retired row as though it were live.
+
 ## Problem
 
 A synthesized "there is a thing worth solving." Titles are a noun phrase naming the
@@ -135,7 +144,8 @@ crux search "<a few distinctive words>"
 Never file a Problem without searching. A near-twin splits one thing's Evidence across
 two rows and neither reads as load-bearing afterwards. Search covers Problem titles and
 descriptions and Observation content, across **every** Workstream by default
-(`-w <slug>` narrows, `--limit` caps at 20 of each kind). Matching is case-insensitive
+(`-w <slug>` narrows, `--limit` caps at 20 of each kind, `--show-archived` includes
+archived Observations, which are otherwise left out). Matching is case-insensitive
 substring and not word-aware, so search a distinctive stem (`auth`, `onboard`) rather
 than a sentence, and try two or three wordings before concluding nothing exists.
 

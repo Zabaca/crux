@@ -1,9 +1,15 @@
 import { env, reset } from "cloudflare:test";
 import { beforeEach, describe, expect, test } from "vitest";
+import { inArray } from "drizzle-orm";
 
 import { createD1Db, type CruxDb } from "../src/db/client.js";
 import { applyD1Schema } from "../src/db/d1/index.js";
-import { query } from "../src/reads/index.js";
+import {
+  query,
+  type ObservationDetail,
+  type ProblemDetail,
+  type SearchResults,
+} from "../src/reads/index.js";
 import { MemoryViewStore } from "../src/view-state/store.js";
 import {
   attempts,
@@ -234,8 +240,10 @@ describe("query()", () => {
       },
     ]);
 
+    // The intake page is the one caller that asks for archived rows, because
+    // its Archived group is one of the three states this test names.
     const rows = (await query(
-      { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t" },
+      { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t", showArchived: true },
       { db, principal },
     )) as Array<{ id: string; problemCount: number; archive: unknown }>;
     const byId = new Map(rows.map((r) => [r.id, r]));
@@ -276,5 +284,122 @@ describe("query()", () => {
     const store = new MemoryViewStore();
     await query({ kind: "WORKSTREAM_LIST" }, { db, principal, viewStore: store });
     expect(await store.read()).toEqual({});
+  });
+});
+
+// An archive is the recorded judgment that a row has stopped being live
+// (ADR-0017). The write side stored it; until now only the unlinked queue read
+// it, so every other listing handed a retired row back as though it were still
+// current — which is how one silently informed a live conclusion. What follows
+// is the line: listings and search drop archived rows, naming one still returns
+// it, and an Evidence link still carries it.
+describe("archiving is honoured on read", () => {
+  /** OBS-1 is Evidence for the seeded Problem; both Observations are archived. */
+  async function seedArchived(): Promise<{ problemId: number }> {
+    const seeded = await seed();
+    await db.insert(observations).values({
+      id: "OBS-2",
+      workstreamId: "WS-t",
+      reporterId: "USR-t",
+      content: "an unlinked note that lost its context",
+    });
+    await db
+      .update(observations)
+      .set({ archivedAt: 1700, archivedById: "USR-t", archiveRationale: "the product changed" })
+      .where(inArray(observations.id, ["OBS-1", "OBS-2"]));
+    return seeded;
+  }
+
+  test("OBSERVATION_LIST leaves archived rows out, and hands them back when asked", async () => {
+    await seedArchived();
+    const listed = (await query(
+      { kind: "OBSERVATION_LIST", workstream: "t" },
+      { db, principal },
+    )) as Array<{ id: string }>;
+    expect(listed).toEqual([]);
+
+    const shown = (await query(
+      { kind: "OBSERVATION_LIST", workstream: "t", showArchived: true },
+      { db, principal },
+    )) as Array<{ id: string; archive: { rationale: string | null } | null }>;
+    expect(shown.map((o) => o.id).sort()).toEqual(["OBS-1", "OBS-2"]);
+    // Shown only because somebody asked, so the reason it was retired comes with it.
+    expect(shown[0]!.archive).toMatchObject({
+      rationale: "the product changed",
+      archivedById: "USR-t",
+      archivedAt: 1700,
+    });
+  });
+
+  test("OBSERVATION_SUMMARIES leaves archived rows out, and hands them back when asked", async () => {
+    await seedArchived();
+    const summarised = (await query(
+      { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t" },
+      { db, principal },
+    )) as Array<{ id: string }>;
+    expect(summarised).toEqual([]);
+
+    const shown = (await query(
+      { kind: "OBSERVATION_SUMMARIES", workstreamId: "WS-t", showArchived: true },
+      { db, principal },
+    )) as Array<{ id: string; problemCount: number }>;
+    expect(shown.map((o) => o.id).sort()).toEqual(["OBS-1", "OBS-2"]);
+    expect(shown.find((o) => o.id === "OBS-1")!.problemCount).toBe(1);
+  });
+
+  test("SEARCH does not match an archived Observation unless asked", async () => {
+    await seedArchived();
+    const found = (await query(
+      { kind: "SEARCH", q: "overnight" },
+      { db, principal },
+    )) as SearchResults;
+    expect(found.observations).toEqual([]);
+    // Nothing here narrows Problems — only the Observation half is archived.
+    expect(found.problems).toHaveLength(0);
+
+    const shown = (await query(
+      { kind: "SEARCH", q: "overnight", showArchived: true },
+      { db, principal },
+    )) as SearchResults;
+    expect(shown.observations.map((o) => o.id)).toEqual(["OBS-1"]);
+    expect(shown.observations[0]!.archive).toMatchObject({ rationale: "the product changed" });
+  });
+
+  test("naming an archived Observation still returns it", async () => {
+    await seedArchived();
+    const shown = (await query({ kind: "OBSERVATION_SHOW", id: "OBS-1" }, { db, principal })) as {
+      id: string;
+      archivedAt: number | null;
+    };
+    expect(shown.id).toBe("OBS-1");
+    expect(shown.archivedAt).toBe(1700);
+
+    const detail = (await query(
+      { kind: "OBSERVATION_DETAIL", id: "OBS-1" },
+      { db, principal },
+    )) as ObservationDetail;
+    expect(detail.observation.archive).toMatchObject({ rationale: "the product changed" });
+    expect(detail.evidenceLinks).toHaveLength(1);
+  });
+
+  test("an archived Observation stays under the Evidence of the Problem it supports", async () => {
+    const { problemId } = await seedArchived();
+    // Hiding it here would gut the Problem's argument rather than protect it:
+    // the Evidence link is a deliberate assertion that this row supports it.
+    const detail = (await query(
+      { kind: "PROBLEM_DETAIL", id: problemId },
+      { db, principal },
+    )) as ProblemDetail;
+    expect(detail.evidence).toHaveLength(1);
+    expect(detail.evidence[0]!.observation).toMatchObject({
+      id: "OBS-1",
+      archive: { rationale: "the product changed" },
+    });
+
+    const links = (await query(
+      { kind: "EVIDENCE_LIST", problem: problemId },
+      { db, principal },
+    )) as Array<{ observationId: string }>;
+    expect(links.map((e) => e.observationId)).toEqual(["OBS-1"]);
   });
 });

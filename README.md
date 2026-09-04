@@ -88,9 +88,9 @@ crux search "<a few distinctive words>"
 ```
 
 That searches Problem titles and descriptions and Observation content, every
-Workstream by default (`--workstream <slug>` narrows it), and answers with the
-matching rows plus the slug of the Workstream each belongs to — enough to judge
-whether it is the same thing. Duplication is handled by finding, not by merging:
+Workstream by default (`--workstream <slug>` narrows it, `--show-archived`
+widens it), and answers with the matching rows plus the slug of the Workstream
+each belongs to — enough to judge whether it is the same thing. Duplication is handled by finding, not by merging:
 Observations are deliberately cheap and duplication among them is by design,
 while a near-twin Problem splits one thing's Evidence across two rows. The skill
 requires the search and prefers attaching Evidence to the Problem it finds.
@@ -98,6 +98,19 @@ Matching is a case-insensitive substring rather than FTS5 — that choice was
 settled by probing D1 inside workerd, where FTS5 works but tokenizes
 (`MATCH 'auth'` misses "reauthentication") and refuses raw user text as a query;
 the read's shape does not encode it, so it can be swapped at a larger corpus.
+
+An **archived** Observation is out of that search, and out of
+`crux observation list` and the board, unless `--show-archived` asks for it.
+Archiving is the recorded judgment that a row has stopped being live
+([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)), and a listing that hands
+one back as though it still were is how a retired row silently informs a live
+conclusion. What is *not* filtered is naming a row — `crux observation show
+OBS-17` still answers — or reaching one through Evidence: that link is a
+deliberate assertion that this Observation supports this Problem, so hiding it
+would gut the Problem's argument rather than protect it. The cost, taken
+knowingly, is a weaker duplicate hunt: a retired row no longer surfaces to the
+search run before filing, and re-filing a cheap Observation is the better of the
+two failures.
 
 ## Install (Claude Code plugin)
 

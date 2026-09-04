@@ -4,7 +4,11 @@ import type { AddObservationPayload, ArchiveObservationPayload } from "@crux/cor
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
 
-type ObservationRow = { id: string; content: string };
+type ObservationRow = {
+  id: string;
+  content: string;
+  archive?: { rationale: string | null } | null;
+};
 
 function asTags(v: unknown): string[] {
   if (Array.isArray(v)) return v as string[];
@@ -56,7 +60,10 @@ const listCmd = defineCommand({
     },
     "show-archived": {
       type: "boolean",
-      description: "With --unlinked, include archived Observations.",
+      description:
+        "Include archived Observations. Without it — the default — a row that " +
+        "has been archived is left out of the listing entirely; it stays " +
+        "reachable by id and under any Problem's Evidence.",
     },
     json: { type: "boolean" },
   },
@@ -70,9 +77,24 @@ const listCmd = defineCommand({
             workstreamId: wsVal,
             showArchived: Boolean(args["show-archived"]),
           }
-        : { kind: "OBSERVATION_LIST", workstream: wsVal },
+        : {
+            kind: "OBSERVATION_LIST",
+            workstream: wsVal,
+            showArchived: Boolean(args["show-archived"]),
+          },
     );
-    emit(rows, rows.map((r) => `${r.id}\t${r.content.slice(0, 60)}`).join("\n") || "(none)");
+    emit(
+      rows,
+      rows
+        .map(
+          (r) =>
+            `${r.id}\t${r.content.slice(0, 60)}` +
+            // Only ever present when the reader asked for archived rows, and
+            // the rationale is the reason they asked.
+            (r.archive ? `\t[archived — ${r.archive.rationale ?? "no rationale recorded"}]` : ""),
+        )
+        .join("\n") || "(none)",
+    );
   },
 });
 

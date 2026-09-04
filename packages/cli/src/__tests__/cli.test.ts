@@ -177,6 +177,7 @@ describe("reads", () => {
       q: "auth",
       workstream: undefined,
       limit: undefined,
+      showArchived: false,
     });
     expect(out).toEqual(results);
   });
@@ -195,7 +196,13 @@ describe("reads", () => {
       }),
     );
 
-    expect(calls[0]!.body).toEqual({ kind: "SEARCH", q: "auth", workstream: "crux", limit: 5 });
+    expect(calls[0]!.body).toEqual({
+      kind: "SEARCH",
+      q: "auth",
+      workstream: "crux",
+      limit: 5,
+      showArchived: false,
+    });
   });
 
   test("a non-numeric --limit is refused as VALIDATION_ERROR, before a request goes out", async () => {
@@ -241,6 +248,7 @@ describe("reads", () => {
     expect(calls.map((c) => c.body).at(-1)).toEqual({
       kind: "OBSERVATION_LIST",
       workstream: "WS-smoke",
+      showArchived: false,
     });
 
     await capture(() =>
@@ -276,6 +284,34 @@ describe("reads", () => {
 
     expect(calls.map((c) => c.body).at(-1)).toEqual({ kind: "PROBLEM_REVISIONS", id: "7" });
     expect(out).toEqual(history);
+  });
+
+  test("--show-archived carries the opt-in on the plain listing and on search", async () => {
+    const calls = stubServer({ "POST /v1/query": { result: [] } });
+
+    await capture(() =>
+      runCmd(observationCommand as AnyCmd, "list", {
+        workstream: "WS-smoke",
+        "show-archived": true,
+        json: true,
+      }),
+    );
+    expect(calls.map((c) => c.body).at(-1)).toEqual({
+      kind: "OBSERVATION_LIST",
+      workstream: "WS-smoke",
+      showArchived: true,
+    });
+
+    const searchCalls = stubServer({
+      "POST /v1/query": { result: { query: "a", problems: [], observations: [] } },
+    });
+    await capture(() =>
+      runCmd(searchCommand as AnyCmd, "run", { query: "a", "show-archived": true, json: true }),
+    );
+    expect(searchCalls.map((c) => c.body).at(-1)).toMatchObject({
+      kind: "SEARCH",
+      showArchived: true,
+    });
   });
 
   test("problem show emits the digest the server sent, untouched", async () => {
