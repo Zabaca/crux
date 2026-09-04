@@ -9,17 +9,28 @@ Resolves an **agent profile** to the **session** running it and the **transcript
 disk. One command, no guessing.
 
 ```sh
-bun run .claude/skills/agent-sessions/sessions.ts                        # sessions in this cwd
+bun run .claude/skills/agent-sessions/sessions.ts                        # profiles in this cwd
 bun run .claude/skills/agent-sessions/sessions.ts --agent crux-product   # one profile
-bun run .claude/skills/agent-sessions/sessions.ts --all                  # every live session
+bun run .claude/skills/agent-sessions/sessions.ts --all                  # every directory
 bun run .claude/skills/agent-sessions/sessions.ts --read crux-85 --tail 20
 ```
 
-Stdout is JSON. Listing gives `{cwd, count, sessions[]}`, each session carrying `agent`,
-`name`, `status`, `kind`, `cwd`, `sessionId`, `startedAt`, `updatedAt` and `transcript`
-(an absolute path, or `null` when none is on disk). `--read` takes a `name`, an `agent`
-or a `sessionId` and returns `{session, turns[]}` with `{role, ts, text}` per turn,
-oldest last. It exits 1 when nothing matches or the transcript is missing.
+**Only sessions running an agent profile are listed.** Plain sessions are the majority —
+7 shared this repo's directory against 3 with a profile on the day this was written — and
+none of them is what the question means. There is no flag to include them.
+
+Stdout is JSON: `{cwd, count, sessions[]}`. Each session is **the whole registry record**
+plus `transcript` (an absolute path, or `null` when none is on disk) — `agent`, `name`,
+`status`, `kind`, `cwd`, `sessionId`, `startedAt`, `updatedAt`, and alongside them `pid`,
+`version`, `procStart`, `entrypoint`, `bridgeSessionId` and `messagingSocketPath`.
+
+Those last ones are reach, not noise. **`messagingSocketPath`** (`/tmp/cc-socks/<pid>.sock`)
+is how a session is talked to rather than only read; `pid`, `procStart` and `version` are
+what separate a live row from a stale one when `status` lies, which it does.
+
+`--read` takes a `name`, an `agent` or a `sessionId` and returns `{session, turns[]}` with
+`{role, ts, text}` per turn, oldest last. It exits 1 when nothing matches or the
+transcript is missing.
 
 ## Why not ListAgents
 

@@ -1,13 +1,17 @@
 #!/usr/bin/env bun
 /**
- * Which Claude Code sessions are live, which agent profile each is running, and
- * where its transcript is.
+ * Which agent profiles are running right now, and where each one's transcript is.
+ *
+ * Only sessions started under an agent profile are listed. Plain sessions are
+ * the majority — 7 of them shared this repo's directory on the day this was
+ * written against 3 with a profile — and none of them is what somebody asking
+ * this question means.
  *
  * `ListAgents` names live sessions but reports neither the agent profile nor a
- * transcript path, so it cannot tell two sessions in one directory apart — five
- * `crux-*` sessions were open the day this was written, all named after the same
- * directory. The registry under `~/.claude/sessions/` carries `agent` beside
- * `cwd` and `sessionId`, which resolves a profile to its transcript in one hop.
+ * transcript path, so it cannot tell two sessions in one directory apart: they
+ * are named after that directory, so every agent working one repo shares a
+ * prefix. The registry under `~/.claude/sessions/` carries `agent` beside `cwd`
+ * and `sessionId`, which resolves a profile to its transcript in one hop.
  *
  * The transcript path is derived (project dir = cwd with `/` → `-`) and then
  * *checked*, with a scan of `~/.claude/projects/` as the fallback: the slug rule
@@ -91,7 +95,12 @@ function readRegistry(): Session[] {
     } catch {
       continue;
     }
-    if (!d.sessionId) continue;
+    // Only sessions started under an agent profile — but the whole registry
+    // record for each. The narrowing is the filter, not the fields: what looks
+    // like noise is the reach. `messagingSocketPath` is how you talk to a
+    // session rather than only read it, and `pid`, `version` and `procStart`
+    // are what tell a stale row from a live one.
+    if (!d.sessionId || !d.agent) continue;
     out.push({ ...d, transcript: findTranscript(d.sessionId, d.cwd) });
   }
   return out.sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
