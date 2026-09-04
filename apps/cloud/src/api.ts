@@ -14,7 +14,7 @@ import { claimLinkEmail } from "@crux/core/auth/email";
 import { observationCapFrom, type Capacity } from "@crux/core/auth/capacity";
 import { dispatch, ActionNotAllowedError, getAllowedActions } from "@crux/core/actions";
 import { loadViewMetaFromBlob, loadStateFromBlob, formatStateValue } from "@crux/core/view-state";
-import { query } from "@crux/core/reads";
+import { query, type Defer } from "@crux/core/reads";
 import { CruxError } from "@crux/core/transitions";
 import { ZodError } from "zod";
 import { DurableObjectViewStore } from "./view-state-do.js";
@@ -184,7 +184,13 @@ function viewStoreFor(env: Env, scope: Scope): DurableObjectViewStore {
 export async function handleApi(
   request: Request,
   env: Env,
-  deps: { db?: CruxDb } = {},
+  deps: {
+    db?: CruxDb;
+    /** The request's `ctx.waitUntil`, when there is one. Handed to `query()`, so
+     * a recorded read's bookkeeping happens after the response instead of in
+     * front of it. Absent, every read keeps waiting for it. */
+    defer?: Defer;
+  } = {},
 ): Promise<Response | null> {
   const url = new URL(request.url);
   const { pathname } = url;
@@ -289,6 +295,7 @@ export async function handleApi(
         principal: { id: authed.userId },
         scope: authed.scope,
         viewStore: viewStoreFor(env, authed.scope),
+        defer: deps.defer,
       });
       return json({ result });
     } catch (err) {

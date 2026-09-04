@@ -148,6 +148,17 @@ entry points are in core — `query()` beside `dispatch()` — so an invariant a
 `--json` shape each exist in exactly one place, which is the only arrangement
 that survives two people writing at once.
 
+A read that is *recorded* — `PROBLEM_SHOW` is the only one — also appends to a
+`recentQueries` list in that object, which is two sequential hops the answer
+does not depend on and was measured at about 205ms in front of every such read.
+It now happens behind the response: `query()` takes an optional `defer`
+callback, and the Worker entry passes `ctx.waitUntil`. The callback is what
+keeps `cloudflare:workers` out of core (ADR-0003) — a caller with no execution
+context passes nothing and keeps the awaited behaviour, which is what makes the
+deferral assertable in a test at all. The write stays best-effort in both
+shapes: the promise handed over never rejects, so a Durable Object that cannot
+be reached still cannot fail a read.
+
 What the CLI still owns is argument parsing, the request it sends, and the
 terminal: the server's `{error:{code,message,details}}` envelope is rebuilt into
 the same error objects as before, so codes and exit codes are unchanged.

@@ -156,7 +156,10 @@ export default {
     const icon = favicon(pathname);
     if (icon) return icon;
 
-    const api = await handleApi(request, env);
+    // `ctx.waitUntil` is what lets a read hand its bookkeeping off rather than
+    // wait for it: the runtime keeps the isolate alive for the work after the
+    // response has gone. Core never names it — it takes the callback.
+    const api = await handleApi(request, env, { defer: (work) => ctx.waitUntil(work) });
     if (api) return api;
 
     if (astroOwns(pathname, request.method)) {

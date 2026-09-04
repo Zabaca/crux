@@ -32,6 +32,29 @@ const dispatch = (action: unknown) =>
   call("/v1/dispatch", { method: "POST", body: JSON.stringify(action) });
 const query = (q: unknown) => call("/v1/query", { method: "POST", body: JSON.stringify(q) });
 
+/** The view-state blob as the ViewStateDO actually holds it, read straight off
+ * the object rather than through `/v1/view`, which projects it. Keyed the way
+ * `stubFor` keys it: on the root Principal, which for this unlinked token is
+ * the token's own user. */
+async function viewBlob(): Promise<Record<string, unknown>> {
+  const stub = env.VIEW_STATE.get(env.VIEW_STATE.idFromName("USR-james"));
+  return (await (await stub.fetch("https://view-state/read")).json()) as Record<string, unknown>;
+}
+
+/** Wait for the `recentQueries` write a recorded read hands to `ctx.waitUntil`.
+ * The response no longer waits for it, so a test that reads the blob straight
+ * afterwards is racing the deferral rather than observing it. */
+async function waitForRecentQueries(): Promise<Array<{ kind: string; slug?: string }>> {
+  for (let attempt = 0; attempt < 200; attempt++) {
+    const recorded = (await viewBlob()).recentQueries as
+      | Array<{ kind: string; slug?: string }>
+      | undefined;
+    if (recorded && recorded.length > 0) return recorded;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  throw new Error("the deferred recentQueries write never landed");
+}
+
 beforeEach(async () => {
   await reset();
   db = createD1Db(env.DB);
@@ -481,8 +504,10 @@ describe("view routes", () => {
       payload: { workstream: "WS-crux", title: "P", description: "d" },
     });
     // The recorded read — this is what writes recentQueries over a blob that
-    // has no XState fields yet.
+    // has no XState fields yet. That write is deferred past the response now,
+    // so wait for it: without this the blob under test might not exist yet.
     expect((await query({ kind: "PROBLEM_SHOW", id: 1 })).status).toBe(200);
+    await waitForRecentQueries();
 
     const res = await call("/v1/view");
     expect(res.status).toBe(200);
@@ -494,6 +519,25 @@ describe("view routes", () => {
     expect(view.stateLabel).toBe("viewing.workstream_list");
     expect(view.value).toEqual({ viewing: "workstream_list" });
     expect(view.context).toEqual({ workstreamId: null, problemId: null });
+  });
+
+  // The read hands the recentQueries write to `ctx.waitUntil` rather than
+  // waiting on two Durable Object hops the answer does not depend on. What this
+  // pins is the half that can be pinned over HTTP: the entry still lands, after
+  // the response. That it is not *waited* for is asserted in core, against a
+  // store that does not answer until the test releases it — a deployed request
+  // cannot tell the two apart without racing itself.
+  test("a recorded read defers its recentQueries write past the response", async () => {
+    await dispatch({
+      kind: "ADD_PROBLEM",
+      payload: { workstream: "WS-crux", title: "P", description: "d" },
+    });
+
+    expect((await query({ kind: "PROBLEM_SHOW", id: 1 })).status).toBe(200);
+
+    expect((await waitForRecentQueries()).map((q) => [q.kind, q.slug])).toEqual([
+      ["PROBLEM_SHOW", "1"],
+    ]);
   });
 
   test("view state is per user — another token sees its own", async () => {
