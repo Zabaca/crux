@@ -185,6 +185,8 @@ export type ProblemDetail = {
   evidence: EvidenceWithObservation[];
   abandonment: AbandonmentRow | null;
   outcome: OutcomeWithFollowUps;
+  /** That the Problem was corrected, and how many times — null if never. */
+  revision: RevisionMarker;
 };
 
 /**
@@ -220,6 +222,8 @@ export type OutcomeWithFollowUps =
 export type ObservationDetail = {
   observation: ObservationWithArchive;
   evidenceLinks: Array<typeof evidence.$inferSelect & { problem: ProblemRow }>;
+  /** That the Observation was corrected, and how many times — null if never. */
+  revision: RevisionMarker;
 };
 
 /**
@@ -754,7 +758,14 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
     }
 
     case "OBSERVATION_DETAIL": {
-      const rows = await db.select().from(observations).where(eq(observations.id, q.id)).limit(1);
+      // The marker rides the statement that fetches the row, exactly as it does
+      // in `OBSERVATION_SHOW`: the page that renders it must not pay a hop for
+      // it (ADR-0017). It touches no tenant-bearing column, so issuing it
+      // before the scope check below tells a stranger nothing.
+      const [rows, revision] = await Promise.all([
+        db.select().from(observations).where(eq(observations.id, q.id)).limit(1),
+        revisionMarkerFor(db, "observation", q.id),
+      ]);
       const obs = rows[0];
       if (!obs || !scope.has(obs.workstreamId)) return null;
       const evRows = await db
@@ -777,6 +788,7 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       return {
         observation: { ...obs, archive: toArchive(obs) },
         evidenceLinks,
+        revision,
       } satisfies ObservationDetail;
     }
 
@@ -889,16 +901,20 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
       if (!p) return null;
       // Everything below needs only `problemId`, which the scope check above
       // already established. Awaiting them one at a time — which is what
-      // building the object literal in order did — spent four sequential round
-      // trips on four independent reads. Two of them still contain a necessary
+      // building the object literal in order did — spent five sequential round
+      // trips on five independent reads. Two of them still contain a necessary
       // second hop of their own (the Observations behind the Evidence, the
       // follow-up Problems an Outcome names), so the floor here is the depth of
-      // the deepest one, not the sum of all four.
-      const [attemptRows, evidenceRows, abandonRows, outcome] = await Promise.all([
+      // the deepest one, not the sum of all five.
+      const [attemptRows, evidenceRows, abandonRows, outcome, revision] = await Promise.all([
         attemptsFor(db, problemId),
         evidenceWithObservations(db, problemId, true),
         db.select().from(abandonments).where(eq(abandonments.problemId, problemId)).limit(1),
         outcomeFor(db, problemId),
+        // Five rather than four, and still one wave: the marker the page shows
+        // is a fifth independent question, not a hop after the other four
+        // (ADR-0017).
+        revisionMarkerFor(db, "problem", problemId),
       ]);
       return {
         problem: p,
@@ -906,6 +922,7 @@ async function run(q: QueryRequest, db: CruxDb, scope: Scope): Promise<unknown> 
         evidence: evidenceRows,
         abandonment: abandonRows[0] ?? null,
         outcome,
+        revision,
       } satisfies ProblemDetail;
     }
 
