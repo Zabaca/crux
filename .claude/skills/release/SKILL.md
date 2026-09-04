@@ -116,29 +116,31 @@ Once approved:
 
 2. Insert the entry into `CHANGELOG.md` directly under the preamble, above the
    previous release. Date it today.
-3. Commit both, and nothing else — **on a branch, not on `main`**:
+3. Commit both, and nothing else, **straight to `main`**:
 
 ```bash
-git switch -c release/v<X.Y.Z>
 git add apps/cloud/package.json CHANGELOG.md
 git commit -m "chore(release): crux v<X.Y.Z>"
-git push -u origin release/v<X.Y.Z>
-gh pr create --title "chore(release): crux v<X.Y.Z>" --body "<the changelog entry>"
+git push origin main
 ```
 
-**The release commit goes through a pull request like every other change.**
-`main` takes changes only that way — the [`main` ruleset](../../../docs/runbooks/protect-main.md)
-has no bypass actors, admins included — and a release is not the place to earn
-an exception. It also means the exact commit that ships was verified by CI on
-`main`, which is what Step 2 re-checks.
+**This is the one change that does not go through a pull request.** The
+[`main` ruleset](../../../docs/runbooks/protect-main.md) grants the repository
+admin role a bypass for exactly this: the release commit is two mechanical files
+carrying no reviewable decision — a version string a tool wrote, and prose you
+already approved a moment ago in Step 1. Routing it through a pull request
+bought a second `Verify` on content `main.yml` was about to check again anyway,
+and paid a merge, a branch delete and a switch for it.
 
-Wait for `Verify` to pass, merge it, and come back to `main`:
+**What that does not skip is CI.** Step 2 waits for `main.yml` to go green on
+this exact commit before anything is built or deployed. The deploy is gated on
+the same check as before; what is gone is the duplicate ahead of it.
 
-```bash
-gh pr checks --watch
-gh pr merge --squash --delete-branch
-git switch main && git pull origin main
-```
+If the push is rejected, do not reach for `--force` and do not switch to a
+branch to get around it. Either the bypass is not in place — check with
+`gh api repos/Zabaca/crux/rules/branch/main` — or somebody pushed while you were
+drafting, in which case pull, confirm the bump and entry are still right on top
+of what landed, and push again.
 
 **Do not tag yet.** The tag is Step 4, after production has been asked what it
 is running.
@@ -150,7 +152,7 @@ is running.
 All of it, **before** anything is deployed. A non-zero exit is a stop: report
 which command failed with its output, and **do not deploy**.
 
-First, confirm CI has judged the release commit itself — the merge in Step 1
+First, confirm CI has judged the release commit itself — the push in Step 1
 started a fresh `main.yml` run:
 
 ```bash
@@ -262,9 +264,9 @@ git tag -a "crux-v<X.Y.Z>" -m "crux v<X.Y.Z>"
 git push origin "crux-v<X.Y.Z>"
 ```
 
-**A tag, and nothing else.** The commit is already on `origin` — it went through
-a pull request in Step 1 — so this pushes no branch and needs no exception to
-the `main` ruleset. **A deploy that fails verification leaves no tag on
+**A tag, and nothing else.** The commit is already on `origin` from Step 1, so
+this pushes no branch — and the ruleset targets branches, not tags, so the tag
+needs no bypass of its own. **A deploy that fails verification leaves no tag on
 `origin`**, which is what makes every tag a release that reached production and
 was checked there.
 
@@ -286,7 +288,7 @@ Report, in a few lines:
 - anything in the gate that was slow, flaky, or worth a ticket — the workerd
   timeout especially, since "flaky" and "broken" look identical in one run.
 
-The pull request from Step 1 is already merged and its branch deleted; nothing
-further is open. If `main` has moved since Step 3, say so — production is
-serving the tagged commit, not the tip, and that gap is the thing the next
-release closes.
+Nothing is left open — the release commit went straight to `main` in Step 1 and
+the tag followed in Step 4. If `main` has moved since Step 3, say so:
+production is serving the tagged commit, not the tip, and that gap is the thing
+the next release closes.

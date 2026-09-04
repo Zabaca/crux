@@ -214,14 +214,16 @@ therefore a release that reached production and was checked there — which is a
 stronger claim than any exit code can make, because the deploy failure this
 repository has actually met exits 0.
 
-**A pull request is verified before it can merge.**
+**A pull request is verified before it can merge, and `main` enforces it.**
 [`pull-request.yml`](.github/workflows/pull-request.yml) runs `bun run verify` —
-lint, typecheck, `docs:check`, the suite — on every PR against `main`. Once the
-[`main` ruleset](docs/runbooks/protect-main.md) is applied, `main` refuses a
-merge whose `Verify` has not passed; until it is, the check is visible but
-advisory — applying it needs repository admin, which the CI token deliberately
-does not hold. Verifying only on the merge made the merge itself the first
+lint, typecheck, `docs:check`, the suite — on every PR against `main`, and the
+[`main` ruleset](docs/runbooks/protect-main.md) refuses a merge whose `Verify`
+has not passed. Verifying only on the merge made the merge itself the first
 verification, which is how `main` ended up ahead of production once already.
+The ruleset carries one `bypass_actor` — the repository admin role — for the one
+commit that does not go through a pull request: `/release`'s version bump and
+changelog entry, which skips the review and not the CI
+([ADR-0015](docs/adr/0015-a-release-is-a-command-not-a-merge.md)).
 
 **`main.yml` verifies the merge result**, and that is all it does.
 [It](.github/workflows/main.yml) runs the same `bun run verify` on every push to

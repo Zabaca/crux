@@ -30,17 +30,28 @@ pinned to `integration_id` 15368 — GitHub Actions — so a green `Verify` has 
 come from the workflow, not from a commit status anyone with write access could
 post under the same name.
 
-There are no `bypass_actors`, on purpose: admins are not exempt, so `main` takes
-changes only through a pull request. Nothing needs a direct push, releases
-included — [`/release`](../../.claude/skills/release/SKILL.md) opens a pull
-request for its version bump and changelog entry like any other change, and then
-pushes a **tag**, which this ruleset does not target
-([ADR-0015](../adr/0015-a-release-is-a-command-not-a-merge.md)). `zbc apply
-production` reads the trunk and does not write it, and
-[rebuilding the database](rebuild-production-database.md) runs from an
-operator's machine. Add a bypass actor only with a reason worth writing down;
-"the release needs it" is not one, and a tag ruleset added later would be the
-thing that breaks releases.
+There is exactly one `bypass_actor`: the **repository admin role**, `always`.
+It exists for one caller and one commit — [`/release`](../../.claude/skills/release/SKILL.md)
+pushes its version bump and changelog entry straight to `main`
+([ADR-0015](../adr/0015-a-release-is-a-command-not-a-merge.md)). That commit is
+two mechanical files carrying no reviewable decision: a version string a tool
+wrote, and prose a human approved at the keyboard a moment earlier. Sending it
+through a pull request bought a second `Verify` on content `main.yml` was about
+to check again anyway. **The bypass skips the pull request, not CI** — the
+release refuses to deploy until `main.yml` is green on that exact commit, so
+nothing reaches production unverified.
+
+The exemption is deliberately the *role*, not a person or an app: the release is
+cut from an operator's machine by whoever holds admin, and CI holds no
+credential that could use it. Everything else still arrives through a pull
+request, admins included in spirit — the bypass is a door for one commit shape,
+not a habit. Widen it only with a reason worth writing down here.
+
+Two things it does not cover. `zbc apply production` reads the trunk and does
+not write it, and [rebuilding the database](rebuild-production-database.md) runs
+from an operator's machine — neither touches `main`. And the release's **tag**
+needs no bypass at all, because this ruleset targets branches; a tag ruleset
+added later would be the thing that breaks releases.
 
 To change it later, edit the file and `PUT` it back at
 `repos/Zabaca/crux/rulesets/<id>`.
@@ -50,12 +61,19 @@ To change it later, edit the file and `PUT` it back at
 ```sh
 gh api repos/Zabaca/crux/rulesets --jq '.[] | {id, name, enforcement}'
 gh api repos/Zabaca/crux/rules/branch/main --jq '[.[].type]'
+gh api repos/Zabaca/crux/rulesets/<id> --jq '.bypass_actors'
 ```
 
 The second command asks the question that actually matters — *what rules apply
 to `main` right now* — and should list `pull_request` and
 `required_status_checks`. A merge attempted against a red or absent `Verify`
 then refuses in the UI and through `gh pr merge`.
+
+The third is the half a release depends on, and it is worth reading rather than
+assuming: it must show `RepositoryRole` with `bypass_mode: always`. An empty
+list means `/release`'s Step 1 push will be rejected. Note that `rules/branch`
+resolves rules *for the caller* — an admin may see a shorter list precisely
+because the bypass is working, so check both.
 
 ## The one thing to watch
 
