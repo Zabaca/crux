@@ -784,7 +784,9 @@ describe("Attempts", () => {
       result: Array<Record<string, unknown>>;
     };
     // The full column set, written out by hand from ADR-0012 rather than read
-    // back off the row: problem, ref, label, status, closing note, authorship.
+    // back off the row: problem, ref, label, status, closing note, authorship —
+    // plus the revision marker the listing resolves, which is the whole of what
+    // `attempt list` says about a correction (ADR-0017).
     expect(Object.keys(listed.result[0]!).sort()).toEqual([
       "closingNote",
       "createdAt",
@@ -793,6 +795,7 @@ describe("Attempts", () => {
       "label",
       "problemId",
       "ref",
+      "revision",
       "status",
       "updatedAt",
     ]);

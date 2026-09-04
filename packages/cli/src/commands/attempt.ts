@@ -1,7 +1,13 @@
 import { defineCommand } from "citty";
 import { OkWithIdOutput, OkWithStatusOutput } from "../validation/index.js";
 import { emit, setJsonMode } from "../output.js";
-import type { AddAttemptPayload, CloseAttemptPayload } from "@crux/core/actions";
+import type {
+  AddAttemptPayload,
+  CloseAttemptPayload,
+  ReviseAttemptPayload,
+} from "@crux/core/actions";
+import type { RevisionEntry } from "@crux/core/reads";
+import { formatRevisions } from "../revisions.js";
 import { api } from "../api-client.js";
 import { requireProblem, requireWorkstream, workstreamArg } from "../require-args.js";
 
@@ -11,6 +17,7 @@ type AttemptRow = {
   label: string;
   ref: string;
   closingNote: string | null;
+  revision: { count: number; lastRevisedAt: number } | null;
 };
 
 type DriftingProblemRow = {
@@ -58,7 +65,15 @@ const listCmd = defineCommand({
     });
     emit(
       rows,
-      rows.map((r) => `${r.id}\t${r.status}\t${r.label}\t${r.ref}`).join("\n") || "(none)",
+      rows
+        .map(
+          (r) =>
+            `${r.id}\t${r.status}\t${r.label}\t${r.ref}` +
+            // A marker and nothing else: what the row used to say is
+            // `attempt revisions <id>` (ADR-0017).
+            (r.revision ? `\t[revised ×${r.revision.count}]` : ""),
+        )
+        .join("\n") || "(none)",
     );
   },
 });
@@ -86,6 +101,46 @@ const closeCmd = defineCommand({
     } as CloseAttemptPayload;
     const { result } = await api().dispatch({ kind: "CLOSE_ATTEMPT", payload });
     emit(result, OkWithStatusOutput, `closed ${args.id} → ${args.status}`);
+  },
+});
+
+/**
+ * Correcting an Attempt (ADR-0017). Only the flags given are sent, and none of
+ * them is `status`: getting a `ref` wrong used to cost a terminal transition —
+ * close it `dropped` and refile — and a correction is not a transition.
+ */
+const reviseCmd = defineCommand({
+  meta: { name: "revise", description: "Correct an Attempt's ref, label, or closing note." },
+  args: {
+    id: { type: "positional", required: true },
+    ref: { type: "string", description: "where the work actually lives" },
+    label: { type: "string", description: "a short label" },
+    note: { type: "string", description: "the closing note — only on an Attempt that has one" },
+    reason: { type: "string", description: "why the correction was made (optional)" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const payload: ReviseAttemptPayload = {
+      id: args.id,
+      ...(args.ref !== undefined ? { ref: args.ref } : {}),
+      ...(args.label !== undefined ? { label: args.label } : {}),
+      ...(args.note !== undefined ? { closingNote: args.note } : {}),
+      ...(args.reason !== undefined ? { reason: args.reason } : {}),
+    };
+    const { result } = await api().dispatch({ kind: "REVISE_ATTEMPT", payload });
+    const { changedFields } = result as { changedFields: string[] };
+    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
+  },
+});
+
+const revisionsCmd = defineCommand({
+  meta: { name: "revisions", description: "What an Attempt used to say." },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const rows = await api().query<RevisionEntry[]>({ kind: "ATTEMPT_REVISIONS", id: args.id });
+    emit(rows, formatRevisions(rows));
   },
 });
 
@@ -131,6 +186,8 @@ export const attemptCommand = defineCommand({
     add: addCmd,
     list: listCmd,
     close: closeCmd,
+    revise: reviseCmd,
+    revisions: revisionsCmd,
     drift: driftCmd,
   },
 });
