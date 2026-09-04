@@ -109,17 +109,18 @@ meant, and a session's summary of its own work is a claim rather than a result. 
 intent is ambiguous, watch what the session does next instead of inferring. When it
 reports an outcome, go and check the artifact.
 
-**Watch at stops, not at messages.** A turn ends with
-`{"type":"system","subtype":"turn_duration"}`, written last; block until that count
-rises, then read only the lines the turn added. Reviewing message by message floods you
-and buys nothing — most of what looks wrong mid-turn is corrected inside the same turn
-by the session itself, so judging earlier is judging a draft. A stop is also where the
-session hands something to its human, which is the moment your read is worth most.
+**Watch at stops, not at messages** — `--follow` is built on that and does it for you:
 
-Nothing in the JSONL names which agent a session is running: there is no `agentType`
-field, and the first line is a `mode` or `last-prompt` record. Order the project's
-transcripts by mtime and read the first assistant message to identify one, and ask for
-the id rather than inferring it when two are live.
+```sh
+bun run .claude/skills/agent-sessions/sessions.ts --follow crux-product
+```
+
+It blocks and emits one record per *completed* turn, keyed on the session's own stop
+marker. Reviewing message by message floods you and buys nothing: most of what looks
+wrong mid-turn is corrected inside that same turn by the session itself, so judging
+earlier is judging a draft. A stop is also where the session hands something to its
+human, which is the moment your read is worth most. Add `--from-start` when you join a
+session already in progress.
 
 ## Scope
 
