@@ -100,6 +100,24 @@ export const CompleteProblemAction = z.object({
     followUpProblemIds: z.array(z.union([z.string(), z.number()])).optional(),
   }),
 });
+/**
+ * Correcting a Problem (ADR-0017). `.strict()` for the same reason
+ * `ADD_ATTEMPT` is: a stripped-away `content` would let a caller believe an
+ * Observation's field had been written onto a Problem. Both fields are
+ * optional and naming neither is refused by the transition, which is where the
+ * "changes nothing" case is judged too.
+ */
+export const ReviseProblemAction = z.object({
+  kind: z.literal("REVISE_PROBLEM"),
+  payload: z
+    .object({
+      id: z.union([z.string(), z.number()]),
+      title: z.string().optional(),
+      description: z.string().optional(),
+      reason: z.string().optional(),
+    })
+    .strict(),
+});
 export const AddObservationAction = z.object({
   kind: z.literal("ADD_OBSERVATION"),
   payload: z.object({
@@ -148,6 +166,7 @@ export const MutationActionSchema = z.discriminatedUnion("kind", [
   AddAttemptAction,
   CloseAttemptAction,
   CompleteProblemAction,
+  ReviseProblemAction,
   AddObservationAction,
   ArchiveObservationAction,
   AddEvidenceAction,
@@ -184,6 +203,7 @@ export const MUTATION_ACTION_KINDS: MutationActionKind[] = [
   "ADD_ATTEMPT",
   "CLOSE_ATTEMPT",
   "COMPLETE_PROBLEM",
+  "REVISE_PROBLEM",
   "ADD_OBSERVATION",
   "ARCHIVE_OBSERVATION",
   "ADD_EVIDENCE",
@@ -209,6 +229,7 @@ export type AbandonProblemPayload = z.infer<typeof AbandonProblemAction>["payloa
 export type AddAttemptPayload = z.infer<typeof AddAttemptAction>["payload"];
 export type CloseAttemptPayload = z.infer<typeof CloseAttemptAction>["payload"];
 export type CompleteProblemPayload = z.infer<typeof CompleteProblemAction>["payload"];
+export type ReviseProblemPayload = z.infer<typeof ReviseProblemAction>["payload"];
 export type AddEvidencePayload = z.infer<typeof AddEvidenceAction>["payload"];
 export type AddWorkstreamPayload = z.infer<typeof AddWorkstreamAction>["payload"];
 export type RenameWorkstreamPayload = z.infer<typeof RenameWorkstreamAction>["payload"];

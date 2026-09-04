@@ -206,6 +206,21 @@ export const D1_SCHEMA_STATEMENTS: readonly string[] = [
   )`,
   `CREATE UNIQUE INDEX IF NOT EXISTS outcomes_problem_id_unique ON outcomes (problem_id)`,
 
+  // What a row used to say (ADR-0017). One table for every entity, so the
+  // polymorphism lives here rather than in the action schema. `entity_id` is
+  // deliberately not a foreign key: Problems key on integers and Observations
+  // on text, and one column cannot reference both.
+  `CREATE TABLE IF NOT EXISTS revisions (
+    id text PRIMARY KEY NOT NULL,
+    entity text NOT NULL,
+    entity_id text NOT NULL,
+    changed text NOT NULL,
+    reason text,
+    revised_by_id text NOT NULL REFERENCES users(id),
+    revised_at integer DEFAULT (unixepoch() * 1000) NOT NULL
+  )`,
+  `CREATE INDEX IF NOT EXISTS revisions_entity ON revisions (entity, entity_id)`,
+
   `CREATE TABLE IF NOT EXISTS outcome_follow_up_problems (
     outcome_id text NOT NULL REFERENCES outcomes(id),
     problem_id integer NOT NULL REFERENCES problems(id),

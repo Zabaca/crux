@@ -62,6 +62,25 @@ more expensive than re-deriving it.
 
 For cross-project audit, `crux` queries across all workstreams in the same shape — the answer to "where do my active engagements actually stand?" is one command, not a doc hunt. "All workstreams" means all of _yours_: every read is scoped to the Principal that made the request, and one Principal's corpus is invisible to another's ([ADR-0013](docs/adr/0013-anonymous-first-adoption.md)).
 
+A Problem that turns out to be wrong is corrected rather than left standing:
+
+```sh
+crux problem revise <id> --title "..." --description "..." --reason "..."
+crux problem revisions <id>
+```
+
+Only the fields named change, naming none is a refusal rather than an empty
+write, and `--reason` is optional — the model demands one at terminal doors and
+leaves it optional at reversible ones, and a revision is reversible because you
+can revise again. The row itself stays the single source of current truth; what
+it used to say goes to a `revisions` table that no ordinary read touches.
+`crux problem show` carries a marker — that the row was revised, and how many
+times — resolved inside the wave that read already issues, and the history is
+the second read above ([ADR-0017](docs/adr/0017-a-row-may-be-corrected.md)).
+Correcting a row is not the same claim as archiving one: revision says *what I
+wrote was wrong*, archiving says *what I wrote was right and has stopped being
+live*.
+
 Before a Problem gets synthesized, the one that already exists has to be findable:
 
 ```sh

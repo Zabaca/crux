@@ -161,9 +161,19 @@ crux problem show 42
 
 `--status` is one of `now`, `next`, `later`, `unscheduled`, `done`, `abandoned`.
 
-**A Problem cannot be edited after filing.** Write the description to survive
-revision: state what is observed and name what is still undecided, rather than baking
-in a conclusion the Evidence may overturn.
+**A Problem can be corrected, and the corpus keeps what it used to say** (ADR-0017).
+Only the fields you pass change; `--reason` is optional and worth giving.
+
+```sh
+crux problem revise 42 --title "..." --reason "the Evidence demoted the cause"
+crux problem revisions 42                 # what it used to say, newest first
+```
+
+Revise when the row is **wrong** — the Evidence overturned the claim it makes. That is
+not the same as the world having moved on, which is what archiving says. Still write
+the description to survive revision: state what is observed and name what is still
+undecided, rather than baking in a conclusion the Evidence may overturn. `problem show`
+carries a marker when a Problem has been revised; the history itself is the second read.
 
 ### Scheduling
 

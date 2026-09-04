@@ -8,6 +8,9 @@
  * does, and on D1 that is four sequential round trips for four reads that never
  * needed ordering.
  *
+ * `PROBLEM_SHOW` is held to the same rule, which is what the revision marker
+ * had to be built into rather than added after (ADR-0017).
+ *
  * The count and the concurrency are both taken at the D1 binding: a later edit
  * that turns the `Promise.all` back into sequential `await`s issues exactly the
  * same statements, so the number of them proves nothing on its own. What
@@ -25,6 +28,7 @@ import {
   observations,
   outcomes,
   problems,
+  revisions,
   users,
   workstreams,
 } from "../src/db/schema.js";
@@ -168,6 +172,35 @@ describe("PROBLEM_DETAIL", () => {
     expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(4);
     // Five: the Problem, then the four. Neither second hop happens — there are
     // no Observations to fetch and no Outcome to fetch follow-ups for.
+    expect(counted.statements).toHaveLength(5);
+  });
+});
+
+describe("PROBLEM_SHOW", () => {
+  test("the revision marker joins the wave rather than costing a hop after it", async () => {
+    const id = await seedProblem();
+    await db.insert(revisions).values({
+      id: "REV-001",
+      entity: "problem",
+      entityId: String(id),
+      changed: JSON.stringify({ title: "slow reads" }),
+      revisedById: OWNER,
+      revisedAt: Date.now(),
+    });
+
+    const counted = countingD1(env.DB);
+    const shown = (await query(
+      { kind: "PROBLEM_SHOW", id },
+      { db: counted.db, principal: { id: OWNER }, scope },
+    )) as { revision: { count: number } | null };
+
+    // The marker is answered, and answered alongside the other two rather than
+    // after them: history is a side record, and a `show` pays one statement for
+    // knowing it exists (ADR-0017).
+    expect(shown.revision).toEqual({ count: 1, lastRevisedAt: expect.any(Number) });
+    expect(counted.peakConcurrency()).toBeGreaterThanOrEqual(3);
+    // Five, three deep: the scope check, then the Attempts, the Outcome and
+    // the marker together, then the follow-up Problems the Outcome names.
     expect(counted.statements).toHaveLength(5);
   });
 });

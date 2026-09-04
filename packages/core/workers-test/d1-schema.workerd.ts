@@ -27,6 +27,9 @@ const EXPECTED_TABLES = [
   // Not an entity: the pending half of claiming, which is what makes proving an
   // address before writing its edge possible at all (ADR-0013).
   "claims",
+  // Not an entity either: what a row used to say, one table for every kind of
+  // row (ADR-0017).
+  "revisions",
 ] as const;
 
 beforeEach(async () => {

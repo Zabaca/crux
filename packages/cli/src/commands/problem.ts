@@ -7,7 +7,9 @@ import type {
   UnscheduleProblemPayload,
   AbandonProblemPayload,
   CompleteProblemPayload,
+  ReviseProblemPayload,
 } from "@crux/core/actions";
+import type { RevisionEntry } from "@crux/core/reads";
 import { api } from "../api-client.js";
 import { requireWorkstream, workstreamArg } from "../require-args.js";
 
@@ -65,6 +67,52 @@ const showCmd = defineCommand({
   async run({ args }) {
     if (args.json) setJsonMode(true);
     emit(await api().query({ kind: "PROBLEM_SHOW", id: args.id }), ProblemShowOutput);
+  },
+});
+
+/**
+ * Correcting a Problem (ADR-0017). Only the flags given are sent, so a `revise`
+ * that names a title leaves the description exactly as it was; naming neither
+ * is refused by the deployment rather than guessed at here.
+ */
+const reviseCmd = defineCommand({
+  meta: { name: "revise", description: "Correct a problem's title, description, or both." },
+  args: {
+    id: { type: "positional", required: true },
+    title: { type: "string" },
+    description: { type: "string" },
+    reason: { type: "string", description: "why the correction was made (optional)" },
+    json: { type: "boolean" },
+  },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const payload: ReviseProblemPayload = {
+      id: args.id,
+      ...(args.title !== undefined ? { title: args.title } : {}),
+      ...(args.description !== undefined ? { description: args.description } : {}),
+      ...(args.reason !== undefined ? { reason: args.reason } : {}),
+    };
+    const { result } = await api().dispatch({ kind: "REVISE_PROBLEM", payload });
+    const { changedFields } = result as { changedFields: string[] };
+    emit(result, `revised ${args.id} — ${changedFields.join(", ")}`);
+  },
+});
+
+const revisionsCmd = defineCommand({
+  meta: { name: "revisions", description: "What a problem used to say." },
+  args: { id: { type: "positional", required: true }, json: { type: "boolean" } },
+  async run({ args }) {
+    if (args.json) setJsonMode(true);
+    const rows = await api().query<RevisionEntry[]>({ kind: "PROBLEM_REVISIONS", id: args.id });
+    emit(
+      rows,
+      rows
+        .map(
+          (r) =>
+            `${r.id}\t${new Date(r.revisedAt).toISOString()}\t${Object.keys(r.changed).join(", ")}${r.reason ? `\t${r.reason}` : ""}`,
+        )
+        .join("\n") || "(none)",
+    );
   },
 });
 
@@ -152,6 +200,8 @@ export const problemCommand = defineCommand({
     add: addCmd,
     list: listCmd,
     show: showCmd,
+    revise: reviseCmd,
+    revisions: revisionsCmd,
     schedule: scheduleCmd,
     unschedule: unscheduleCmd,
     complete: completeCmd,
