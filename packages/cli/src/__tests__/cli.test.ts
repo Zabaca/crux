@@ -722,6 +722,33 @@ describe("server rejections reach the terminal unchanged", () => {
     expect(EXIT_CODES[err.code]).toBe(27);
   });
 
+  test("an UNKNOWN_KIND rejection keeps the server's message and gets its own exit code", async () => {
+    const message =
+      'this deployment does not recognise the kind "PROBLEM_LIST". That usually means the client is ahead of the deployment, so re-running with different arguments will not help.';
+    stubServer({
+      "POST /v1/query": envelope(501, "UNKNOWN_KIND", message, {
+        kind: "PROBLEM_LIST",
+        version: "0.4.0",
+      }),
+    });
+
+    const err = (await runCmd(problemCommand as AnyCmd, "list", {
+      workstream: "crux",
+      json: true,
+    }).catch((e) => e)) as CruxError;
+
+    expect(err).toBeInstanceOf(CruxError);
+    expect(err.code).toBe("UNKNOWN_KIND");
+    // Verbatim: the prose is where the deployment says re-checking flags cannot
+    // help, and the CLI has nothing to add to it.
+    expect(err.message).toBe(message);
+    expect(err.details).toEqual({ kind: "PROBLEM_LIST", version: "0.4.0" });
+    // 29, not 24: "this deployment is older than my binary" has to be tellable
+    // from "you called it wrong" without reading prose (ADR-0018).
+    expect(EXIT_CODES[err.code]).toBe(29);
+    expect(EXIT_CODES[err.code]).not.toBe(EXIT_CODES.VALIDATION_ERROR);
+  });
+
   test("an ACTION_NOT_ALLOWED rejection is rebuilt with its allowed lists", async () => {
     stubServer({
       "POST /v1/dispatch": envelope(409, "ACTION_NOT_ALLOWED", "not allowed", {

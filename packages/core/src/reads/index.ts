@@ -37,6 +37,7 @@ import {
   workstreams,
 } from "../db/schema.js";
 import { NotFoundError, ValidationError } from "../transitions/errors.js";
+import { assertKnownKind, kindsOf } from "../kinds.js";
 import {
   findProblemInScope,
   findWorkstreamBySlugInScope,
@@ -126,6 +127,10 @@ export const QuerySchema = z.discriminatedUnion("kind", [
     showArchived: z.boolean().optional(),
   }),
 ]);
+
+/** Every read this deployment serves. One it does not is a skew, not a bad
+ * argument (ADR-0018). */
+const QUERY_KINDS = kindsOf(QuerySchema);
 
 export type QueryRequest = z.infer<typeof QuerySchema>;
 export type QueryKind = QueryRequest["kind"];
@@ -662,6 +667,7 @@ export async function query(
     defer?: Defer;
   },
 ): Promise<unknown> {
+  assertKnownKind(rawQuery, QUERY_KINDS);
   const q = QuerySchema.parse(rawQuery);
   const { db } = options;
 
