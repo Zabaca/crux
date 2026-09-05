@@ -13,11 +13,13 @@ import { outcomeCommand } from "./commands/outcome.js";
 import { initCommand } from "./commands/init.js";
 import { claimCommand } from "./commands/claim.js";
 import { viewCommand } from "./commands/view.js";
+import { resolveCliVersion } from "./version.js";
+import { emit } from "./output.js";
 
 const main = defineCommand({
   meta: {
     name: "crux",
-    version: "0.0.0",
+    version: resolveCliVersion(),
     description: "Discovery residue CLI — capture observations, shape problems, track attempts.",
   },
   subCommands: {
@@ -36,8 +38,30 @@ const main = defineCommand({
   },
 });
 
+/**
+ * `--version` is only the flag when nothing has been asked for yet: before the
+ * first non-flag argument, and so before any subcommand. `crux problem revise
+ * X --version` is a bad argument to `revise` and must reach `revise` to be told
+ * so, rather than being answered here.
+ */
+function wantsVersion(rawArgs: string[]): boolean {
+  for (const arg of rawArgs) {
+    if (arg === "--version") return true;
+    if (!arg.startsWith("-")) return false;
+  }
+  return false;
+}
+
 async function bootstrap() {
   const rawArgs = process.argv.slice(2);
+  // Local only — no config, no token, no network (ADR-0018). The shape is a
+  // strict subset of what `crux version` answers, so the difference reads as
+  // "the flag skipped the network" rather than as two answers.
+  if (wantsVersion(rawArgs)) {
+    const client = resolveCliVersion();
+    emit({ client }, client);
+    return;
+  }
   if (rawArgs.length === 0 || rawArgs.includes("--help") || rawArgs.includes("-h")) {
     let cmd: {
       meta?: unknown;

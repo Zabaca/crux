@@ -9,13 +9,14 @@
  * a real D1 — `packages/core/workers-test/reads.workerd.ts`.
  */
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 
 import { createApiClient, setApiClient, ApiError } from "../api-client.js";
 import { setCaptureWriter, setJsonMode } from "../output.js";
 import { EXIT_CODES } from "../errors.js";
+import { resolveCliVersion } from "../version.js";
 import { CruxError } from "@crux/core/transitions";
 import { ActionNotAllowedError } from "@crux/core/actions";
 
@@ -1134,5 +1135,97 @@ describe("claim", () => {
     expect(err).toBeInstanceOf(ApiError);
     expect(err.code).toBe("EMAIL_NOT_CONFIGURED");
     expect(EXIT_CODES[err.code]).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Version
+// ---------------------------------------------------------------------------
+
+describe("version", () => {
+  const cliEntry = join(import.meta.dir, "..", "index.ts");
+  const repoRoot = join(import.meta.dir, "..", "..", "..", "..");
+  const releaseVersion = (
+    JSON.parse(readFileSync(join(repoRoot, "apps", "cloud", "package.json"), "utf8")) as {
+      version: string;
+    }
+  ).version;
+
+  /** Run the CLI as a process, so the exit code and stdout are the real ones. */
+  async function runCli(
+    args: string[],
+    env: Record<string, string | undefined>,
+  ): Promise<{ code: number; stdout: string }> {
+    const merged: Record<string, string> = {};
+    for (const [k, v] of Object.entries({ ...process.env, ...env })) {
+      if (v !== undefined) merged[k] = v;
+    }
+    const proc = Bun.spawn(["bun", cliEntry, ...args], {
+      env: merged,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const stdout = await new Response(proc.stdout).text();
+    return { code: await proc.exited, stdout };
+  }
+
+  test("reads the release version, not the CLI package's own", () => {
+    // `packages/cli/package.json` has never been bumped off 0.0.0, and is the
+    // drift ADR-0018 exists to stop happening twice.
+    const cliPkg = JSON.parse(
+      readFileSync(join(repoRoot, "packages", "cli", "package.json"), "utf8"),
+    ) as { version: string };
+    expect(resolveCliVersion()).toBe(releaseVersion);
+    expect(resolveCliVersion()).not.toBe(cliPkg.version);
+  });
+
+  test("--version answers locally: no config, no token, no reachable deployment", async () => {
+    const home = mkdtempSync(join(tmpdir(), "crux-version-home-"));
+    try {
+      const { code, stdout } = await runCli(["--version"], {
+        CRUX_HOME: home,
+        // A deployment nothing can reach. Exit 0 is the assertion that the flag
+        // never went looking for one (ADR-0018).
+        CRUX_API_URL: "http://127.0.0.1:1/",
+        CRUX_API_TOKEN: undefined,
+        CRUX_PLUGIN_ROOT: undefined,
+      });
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout)).toEqual({ client: releaseVersion });
+      // Nothing was written to the empty CRUX_HOME: no Principal was minted.
+      expect(readdirSync(home)).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("an installed plugin resolves its own root's version", async () => {
+    const root = mkdtempSync(join(tmpdir(), "crux-plugin-root-"));
+    try {
+      mkdirSync(join(root, "apps", "cloud"), { recursive: true });
+      writeFileSync(
+        join(root, "apps", "cloud", "package.json"),
+        JSON.stringify({ name: "@crux/cloud", version: "9.9.9" }),
+      );
+      const { code, stdout } = await runCli(["--version"], { CRUX_PLUGIN_ROOT: root });
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout)).toEqual({ client: "9.9.9" });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("the --help banner reports the same version", async () => {
+    const { code, stdout } = await runCli(["--help"], { CRUX_PLUGIN_ROOT: undefined });
+    expect(code).toBe(0);
+    expect(stdout).toContain(`crux v${releaseVersion}`);
+  });
+
+  test("--version after a subcommand is that subcommand's bad argument", async () => {
+    // It must reach the subcommand to be refused there, rather than being
+    // answered by the flag.
+    const { code, stdout } = await runCli(["problem", "list", "--version"], {});
+    expect(code).not.toBe(0);
+    expect(stdout).not.toContain("client");
   });
 });
