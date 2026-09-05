@@ -33,13 +33,18 @@ disambiguation rules.
   verb, no labels endpoint, and `tickets update` accepts only opaque `labelIds`.
   Those skills stay unedited on purpose — they are vendored upstream and a second
   copy of this rule is the one that rots.
-- **A spec becomes a Goal plus its tickets.** Create the Goal first and always with
-  a `description` — it is the goal's plan and renders on the board — then create one
-  ticket per slice in dependency order, passing `"dependsOn":[…]` so each lands
-  blocked by its prerequisites, and read `dependsOnResults` on each create rather
-  than assuming the edge landed. `fredrin goals assign <goal> <ticket…>` is what
-  files them under the goal; without it they are not in it. The authoritative
-  version of this, including ship-together, is `.fredrin/FREDRIN.md`.
+- **A spec becomes a Goal plus its tickets, and the Goal's `description` is the
+  spec.** Create the Goal first and never name-only: the description is its plan, it
+  renders on the board, and it is where the shape of the work lives — what is being
+  built, why the tickets are cut where they are, and what is deliberately out of
+  scope. Do not also write a spec document; the argument behind the work belongs in
+  an ADR, the shape of it in the Goal, and the slices in the tickets, each in one
+  place. Then create one ticket per slice in dependency order, passing
+  `"dependsOn":[…]` so each lands blocked by its prerequisites, and read
+  `dependsOnResults` on each create rather than assuming the edge landed.
+  `fredrin goals assign <goal> <ticket…>` is what files them under the goal; without
+  it they are not in it. The authoritative version of this, including ship-together,
+  is `.fredrin/FREDRIN.md`.
 
 ## Workflow notes for skills
 
