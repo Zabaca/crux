@@ -348,6 +348,21 @@ an actor:** a human owns Principals, and every attribution resolves to one. Keep
 "Claude noticed this" versus "the user said this" distinction in the content or tags,
 never in the identity.
 
+## When something behaves oddly, say which pair you were running
+
+A `crux` command is an HTTP call, so a session is a client *and* a deployment, and the
+two are updated independently — the client on the user's plugin-update schedule, the
+deployment when somebody releases. When a read comes back surprising or a page looks
+wrong, the pair is the first thing an Observation about it needs:
+
+```sh
+${CLAUDE_PLUGIN_ROOT}/bin/crux version
+```
+
+It reports `client`, `deployment` and the `url` it asked. Put those in the Observation's
+content. It never fails: an unreachable deployment, or one too old to report a version,
+is `deployment: null` at exit 0, and nothing is minted to ask.
+
 ## When a write refuses with `CAPACITY_EXCEEDED` (exit 27)
 
 The Principal has spent its free allowance of Observations. **Writes pause; every read

@@ -76,8 +76,19 @@ export const DEFAULT_API_URL = "https://crux.zabaca.com";
 /** The HTTP call the client makes. Injected in tests; `fetch` in production. */
 export type Transport = (url: string, init: RequestInit) => Promise<Response>;
 
+/** How long `health()` waits before calling the deployment unreachable. */
+const HEALTH_TIMEOUT_MS = 5_000;
+
 /** What `POST /v1/dispatch` answers — core's `DispatchResult`, over the wire. */
 export type DispatchResponse = { revision: number; viewState?: unknown; result?: unknown };
+
+/**
+ * What `GET /health` answers. Every field is optional because the deployment on
+ * the other end may predate the field: one that has never been bumped off the
+ * pre-release layout reports no `version` at all, and that is an answer worth
+ * carrying rather than a malformed response.
+ */
+export type HealthReport = { status?: string; db?: string; version?: string };
 
 export interface CruxApiClient {
   /** The configured deployment's base URL. */
@@ -86,6 +97,8 @@ export interface CruxApiClient {
   dispatch(action: Record<string, unknown>): Promise<DispatchResponse>;
   get<T = unknown>(path: string): Promise<T>;
   post<T = unknown>(path: string, body?: unknown): Promise<T>;
+  /** `GET /health`, or `null` if the deployment could not answer one. */
+  health(): Promise<HealthReport | null>;
 }
 
 export function createApiClient(options: {
@@ -155,6 +168,30 @@ export function createApiClient(options: {
     },
     get<T>(path: string): Promise<T> {
       return call<T>(path, { method: "GET" });
+    },
+    async health(): Promise<HealthReport | null> {
+      try {
+        const res = await transport(`${base}/health`, {
+          method: "GET",
+          // A deployment that accepts the connection and then says nothing must
+          // not hang the caller: the only reason to ask /health is that
+          // something is already odd, and a diagnostic that never returns is
+          // the worst possible answer to that.
+          signal: AbortSignal.timeout(HEALTH_TIMEOUT_MS),
+        });
+        const body: unknown = JSON.parse(await res.text());
+        // Deliberately not gated on `res.ok`: a degraded deployment answers 503
+        // *carrying* its version (ADR-0015), and which build is failing is
+        // exactly what the asker wanted to know.
+        return typeof body === "object" && body !== null && !Array.isArray(body)
+          ? (body as HealthReport)
+          : null;
+      } catch {
+        // Unreachable, timed out, or answering something that is not JSON. All
+        // three mean the same thing to the caller — the deployment did not say
+        // — and none of them is a reason to fail a question about versions.
+        return null;
+      }
     },
     post<T>(path: string, body?: unknown): Promise<T> {
       return call<T>(path, {
