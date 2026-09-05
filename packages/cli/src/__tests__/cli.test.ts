@@ -1155,7 +1155,7 @@ describe("version", () => {
   async function runCli(
     args: string[],
     env: Record<string, string | undefined>,
-  ): Promise<{ code: number; stdout: string }> {
+  ): Promise<{ code: number; stdout: string; stderr: string }> {
     const merged: Record<string, string> = {};
     for (const [k, v] of Object.entries({ ...process.env, ...env })) {
       if (v !== undefined) merged[k] = v;
@@ -1165,8 +1165,11 @@ describe("version", () => {
       stdout: "pipe",
       stderr: "pipe",
     });
-    const stdout = await new Response(proc.stdout).text();
-    return { code: await proc.exited, stdout };
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    return { code: await proc.exited, stdout, stderr };
   }
 
   test("reads the release version, not the CLI package's own", () => {
@@ -1221,11 +1224,27 @@ describe("version", () => {
     expect(stdout).toContain(`crux v${releaseVersion}`);
   });
 
-  test("--version after a subcommand is that subcommand's bad argument", async () => {
-    // It must reach the subcommand to be refused there, rather than being
-    // answered by the flag.
-    const { code, stdout } = await runCli(["problem", "list", "--version"], {});
-    expect(code).not.toBe(0);
-    expect(stdout).not.toContain("client");
+  test("--version after a subcommand is not the flag", async () => {
+    // It must reach the subcommand — which refuses it for the missing `-w`,
+    // locally and without a deployment — rather than being answered here.
+    const home = mkdtempSync(join(tmpdir(), "crux-version-sub-"));
+    try {
+      const { code, stdout, stderr } = await runCli(["problem", "list", "--version"], {
+        CRUX_HOME: home,
+        CRUX_API_URL: "http://127.0.0.1:1/",
+        CRUX_API_TOKEN: undefined,
+      });
+      expect(code).toBe(EXIT_CODES.VALIDATION_ERROR!);
+      expect(stdout).not.toContain("client");
+      expect(JSON.parse(stderr).error.code).toBe("VALIDATION_ERROR");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("--help asked for first still prints the banner", async () => {
+    const { code, stdout } = await runCli(["--help", "--version"], {});
+    expect(code).toBe(0);
+    expect(stdout).toContain(`crux v${releaseVersion}`);
   });
 });

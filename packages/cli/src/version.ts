@@ -17,9 +17,9 @@ const RELEASE_MANIFEST = join("apps", "cloud", "package.json");
  * Reported when no candidate root holds a readable manifest — a layout nothing
  * in this repository produces. It is deliberately not a version number: a
  * hardcoded fallback that looks like one is how a client starts lying about
- * what it is.
+ * what it is. Callers say so on stderr rather than passing it off as an answer.
  */
-const UNRESOLVED = "unknown";
+export const UNRESOLVED_VERSION = "unknown";
 
 /**
  * Where the release manifest might be, in order:
@@ -38,20 +38,12 @@ function candidateRoots(): string[] {
   return roots;
 }
 
-let cached: string | undefined;
-
 /**
  * The version this client is, resolved locally and never over the network: a
  * version flag that fails when the deployment is unreachable fails exactly when
  * somebody most needs to know what they are running (ADR-0018).
  */
 export function resolveCliVersion(): string {
-  if (cached !== undefined) return cached;
-  cached = readVersion();
-  return cached;
-}
-
-function readVersion(): string {
   for (const root of candidateRoots()) {
     try {
       const raw = readFileSync(join(root, RELEASE_MANIFEST), "utf8");
@@ -61,10 +53,5 @@ function readVersion(): string {
       // Not this root — try the next one.
     }
   }
-  return UNRESOLVED;
-}
-
-/** Test seam: forget the memoised answer so a different root can be resolved. */
-export function resetCliVersionCache(): void {
-  cached = undefined;
+  return UNRESOLVED_VERSION;
 }
