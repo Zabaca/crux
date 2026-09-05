@@ -32,6 +32,16 @@ Canonical vocabulary for this repo. Terms land here when they get resolved in a 
 - **Rename** — changing what a row is *called* rather than what it said: a Workstream's slug, which every `-w`, every URL and every stored reference points at (ADR-0016). A separate verb from revision on purpose, so re-addressing a corpus is never mistaken for fixing a sentence.
 - **Archiving** — retiring a row that was accurate and has stopped being live, with a rationale. The world moved; the record did not become wrong. Not a correction, and never a deletion.
 
+## Client and deployment
+
+- **Skew** — the client and the deployment running different releases. Expected
+  rather than exceptional: a merge deploys nothing (ADR-0015), the plugin puts a
+  client on its user's own update schedule, and neither half is pinned to the
+  other. Only one direction can fail — an unrecognised `kind` always means the
+  *client is ahead*, since an older client simply never asks for what it does not
+  know about. That refusal is `UNKNOWN_KIND` and is deliberately not a validation
+  error ([ADR-0018](docs/adr/0018-a-skew-is-a-refusal-not-a-bad-argument.md)).
+
 ## Doc conventions
 
 - **Graduate (a doc section)** — move a section out of the shared README into its own file behind a short pointer, triggered by the section's *size*, never by which audience it serves (ADR-0001).
