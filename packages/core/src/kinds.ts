@@ -11,12 +11,35 @@ import { UnknownKindError } from "./transitions/errors.js";
 
 /** A discriminated-union variant, seen only as the literal `kind` it declares. */
 type KindVariant = { shape: { kind: { value: string } } };
+/** A union of those, or of unions of those — `ActionSchema` is the second shape. */
+type KindUnion = { options: readonly (KindVariant | KindUnion)[] };
 
-/** Every `kind` the given unions declare, collected once at module load. */
-export function kindsOf(
-  ...unions: Array<{ options: readonly KindVariant[] }>
-): ReadonlySet<string> {
-  return new Set(unions.flatMap((u) => u.options.map((o) => o.shape.kind.value)));
+/**
+ * Every `kind` the given union declares, collected once at module load.
+ *
+ * Nested unions are walked rather than enumerated by the caller, so the set is
+ * whatever the schema actually serves: a third union added to `ActionSchema`
+ * joins it without an edit here, instead of being silently refused as unknown.
+ *
+ * It reaches into zod's own structure, so it throws rather than returning a
+ * short set if that structure ever moves: an empty or partial set would refuse
+ * *every* request as an unknown kind, which is a worse failure than not booting.
+ */
+export function kindsOf(union: KindUnion): ReadonlySet<string> {
+  const kinds = new Set<string>();
+  const walk = (node: KindVariant | KindUnion): void => {
+    if ("options" in node) {
+      for (const option of node.options) walk(option);
+      return;
+    }
+    const kind: unknown = node.shape?.kind?.value;
+    if (typeof kind !== "string") {
+      throw new TypeError("kindsOf: a union variant declares no literal `kind`");
+    }
+    kinds.add(kind);
+  };
+  walk(union);
+  return kinds;
 }
 
 /**

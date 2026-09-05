@@ -68,11 +68,11 @@ export class CapacityExceededError extends CruxError {
  * must not name a runtime or read the Worker's package (ADR-0003).
  */
 export class UnknownKindError extends CruxError {
-  constructor(kind: string, details: Record<string, unknown> = {}) {
+  constructor(kind: string) {
     super(
       "UNKNOWN_KIND",
       `this deployment does not recognise the kind "${kind}". That usually means the client is ahead of the deployment, so re-running with different arguments will not help.`,
-      { kind, ...details },
+      { kind },
     );
   }
 }

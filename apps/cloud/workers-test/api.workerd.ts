@@ -171,6 +171,17 @@ describe("POST /v1/query — reads", () => {
     expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 
+  // So is a request with no kind to be unknown about. A body this shape is
+  // malformed rather than skewed, and telling its sender their deployment is
+  // old would send them somewhere there is nothing to find.
+  test("a request with an absent or non-string kind is a validation error", async () => {
+    for (const body of [{}, { kind: 7 }, { workstream: "crux" }]) {
+      const res = await query(body);
+      expect(res.status).toBe(400);
+      expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+    }
+  });
+
   test("a filtered PROBLEM_LIST answers with only that stage's Problems", async () => {
     await dispatch({
       kind: "ADD_PROBLEM",
