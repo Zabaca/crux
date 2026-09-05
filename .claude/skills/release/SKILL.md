@@ -133,9 +133,11 @@ Once approved:
    `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, printing
    the old and new value for each. It decides nothing: the number is already
    chosen, and this only carries it. It is idempotent, so re-running `/release`
-   after a failed gate is safe. If it **refuses**, a manifest has grown a second
-   `version` field; move that one by hand and say in the script which is the
-   plugin's, rather than leaving the manifests behind.
+   after a failed gate is safe. A **refusal** here means a manifest is not the
+   shape the sync knows — no crux entry in `plugins`, invalid JSON, or a
+   `version` field it cannot pick out — and it names which. Repair the manifest
+   and run the sync again; do not hand-edit the version past it, because Step 2
+   checks the three files agree and will stop the release anyway.
 
 3. Insert the entry into `CHANGELOG.md` directly under the preamble, above the
    previous release. Date it today.
@@ -152,9 +154,10 @@ git push origin main
 [`main` ruleset](../../../docs/runbooks/protect-main.md) grants the repository
 admin role a bypass for exactly this: the release commit is four mechanical files
 carrying no reviewable decision — a version string a tool wrote, two copies of it
-a script wrote, and prose you already approved a moment ago in Step 1. Routing it through a pull request
-bought a second `Verify` on content `main.yml` was about to check again anyway,
-and paid a merge, a branch delete and a switch for it.
+a script wrote, and prose you already approved a moment ago in Step 1. Routing
+it through a pull request bought a second `Verify` on content `main.yml` was
+about to check again anyway, and paid a merge, a branch delete and a switch for
+it.
 
 **What that does not skip is CI.** Step 2 waits for `main.yml` to go green on
 this exact commit before anything is built or deployed. The deploy is gated on
@@ -190,12 +193,15 @@ Then run the gate locally as well:
 
 ```bash
 bun run scripts/build-docs.ts   # the doc tree is derived, not committed (ADR-0005)
-bun run verify                  # lint, typecheck, docs:check, test
+bun run verify                  # lint, typecheck, docs:check, version:check, test
 ```
 
 `verify` is defined once in `package.json` and is the same sequence
 `pull-request.yml` and `main.yml` run, so the release gate cannot drift behind
-the merge gate. Running it locally on top of the green CI run is not redundant
+the merge gate. It includes `version:check`, which fails when
+`apps/cloud/package.json` and the two plugin manifests disagree — so a Step 1
+where the sync was skipped stops here rather than shipping a plugin nobody's
+Claude Code will update. Running it locally on top of the green CI run is not redundant
 ceremony: it is the last check on the working tree the deploy will actually be
 built from, and `zbc apply` builds from that tree, not from what CI had.
 
