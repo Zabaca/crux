@@ -64,6 +64,14 @@ Worker bundle through a JSON import, and `/health` serves it beside `status` and
 write the version is a place for it to drift, and `bun pm version` in the wrong
 directory is an easy way to create one.
 
+*Amended by [ADR-0018](0018-a-skew-is-a-refusal-not-a-bad-argument.md).* The
+release now bumps two further files — `.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json` — because Claude Code caches an installed
+plugin under its version string, so a marketplace version that never moves is a
+client that never updates. The reasoning above still holds and is why they are
+bumped *by `/release`* rather than by hand: the single source is `apps/cloud`,
+and the other two are copies the release keeps in step.
+
 **`/health` is what verifies a deploy, not wrangler's exit code.** The release
 polls it until it reports the version just committed. It has to be the
 deployment answering — an exit code describes an upload, and the failure worth
