@@ -100,6 +100,17 @@ this reason.
 awkwardness is itself the finding. Three of today's tickets came from the tool being
 annoying to use, not from reading its source.
 
+**An Attempt points at the Goal, not at its tickets.** An Attempt is a pointer to an
+*approach*, and a Fredrin Goal is what holds one — its tickets are the slices the
+approach was cut into, which is build detail Crux does not own (ADR-0012). The `ref` is
+the goal's id, since a Goal has no `CRUX-` identifier; the readable name goes in
+`--label`. One row means one closing note, which is the judgment worth keeping: five
+Attempts closed on Problem #2 in one sitting all said "Shipped in 0.4.0" and differed
+only in which slice they named. It also stops two failures — `attempt drift` reads a
+Problem as busy from one open row rather than five, and a ticket dropped as unnecessary
+no longer forces an Attempt into the graveyard reserved for approaches somebody
+abandoned.
+
 **Grill on product decisions, not technical ones.** A question earns the human's
 attention when its answer changes what somebody using the product experiences, or what
 the product commits to and cannot cheaply take back. Mechanics are yours — a status
