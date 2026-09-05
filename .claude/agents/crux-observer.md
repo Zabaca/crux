@@ -133,13 +133,18 @@ earlier is judging a draft. A stop is also where the session hands something to 
 human, which is the moment your read is worth most. Add `--from-start` when you join a
 session already in progress.
 
-It blocks, so run it in the background and wait on it with **`Monitor`, on an
-until-condition over the file it is actually writing to**. Not a hand-rolled `sleep`
-loop: that is the wrong shape twice over. A fixed-count loop expires and stops waking you
-without saying so, and a loop pointed at the path your harness captured rather than the
-one you redirected into watches a file that is empty by construction. Both report an idle
-session while completed stops pile up unread, and you will hand that silence to your
-human as a result.
+It blocks, so run it in the background and watch its output file with **`Monitor`,
+`persistent: true`, one event per stop**. Not an until-condition and not a `sleep` loop —
+both are the single-notification shape, they fire once and go quiet, and every stop after
+the first lands with nobody watching. A watch you have to re-arm is a watch you will
+forget to re-arm.
+
+Make the monitor emit when the follow process *dies*, not only when a stop arrives.
+Otherwise a dead watcher and an idle session are the same silence, and you will hand that
+silence to your human as a result. That has now happened three times: a loop pointed at
+the path the harness captured rather than the one `--follow` was redirected into, a
+fixed-count loop that expired unannounced, and a follow that died with its session while
+the observer reported it as quiet.
 
 ## Scope
 
