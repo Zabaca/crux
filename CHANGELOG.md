@@ -13,6 +13,82 @@ Every version here except `0.1.0` was cut by `/release`
 verified against `/health` before its tag was pushed. A tag on `origin` is
 therefore a release that reached production and was checked there.
 
+## 0.4.0 — 2026-09-04
+
+A row that turns out to be wrong can be corrected, and the corpus keeps what it
+used to say — while a row that has stopped being live stops answering the
+queries that hunt for duplicates.
+
+### The corpus can be corrected
+
+- **Every prose-bearing row is revisable**, through one pair of verbs:
+  `crux problem revise`, `observation revise`, `attempt revise`,
+  `evidence revise`, `outcome revise`, `abandonment revise` and
+  `workstream revise`. Only the fields you name change, naming none is a
+  refusal rather than an empty write, and `--reason` is optional — the model
+  demands one at terminal doors and leaves it optional at reversible ones.
+- **What a row used to say is kept.** `crux problem revisions <id>`, and the
+  same read on every other revisable entity, answers with the prior versions
+  newest first, plus the optional reason each was changed. The row itself stays
+  the single source of current truth; no ordinary read touches the history.
+- **Every read that shows a revisable row says it was revised**, and how many
+  times — `problem show`, `observation show`, `workstream show`, `outcome
+  show`, `abandonment show`, and every row `attempt list` and `evidence list`
+  answer with. The Problem and Observation pages in the browser carry the same
+  marker. A row nobody has corrected shows nothing at all, and there is no diff
+  viewer: what changed is the `revisions` read.
+- **An Attempt's `ref` is corrected rather than dropped and refiled.** Getting a
+  pointer wrong used to cost a terminal transition and left a `dropped` Attempt
+  representing no abandoned work. `attempt revise` never touches `status` — a
+  correction is not a transition — and a closing note may only be corrected on
+  an Attempt that has one.
+- **An Observation is editable**, despite being a raw signal, because the freeze
+  was always a proxy for durability that the kept history now supplies
+  directly. An archived Observation is still revisable: it stays reachable by id
+  and under any Problem's Evidence, so a falsehood in it still informs a live
+  conclusion.
+- **`workstream revise` refuses `--slug`.** A slug is how a Workstream is
+  addressed — by every `-w`, every URL and every reference an agent has stored —
+  not something the row said. `crux workstream rename` keeps it.
+
+### Archiving finally means something on read
+
+- **Archived Observations leave `crux observation list`, `--unlinked` and
+  `crux search`**, and `--show-archived` on any of them puts them back with the
+  rationale attached. A listing that handed one back as though it were live is
+  how a retired row silently informed a live conclusion.
+- **Naming a row still answers.** `crux observation show OBS-17` returns an
+  archived row, and so does every Evidence link under a Problem — that link is a
+  deliberate assertion that this Observation supports this Problem, so hiding it
+  would gut the Problem's argument rather than protect it.
+- The cost, taken knowingly: the duplicate hunt before filing no longer sees
+  archived rows, and re-filing a cheap Observation is the better of the two
+  failures.
+
+### Faster
+
+- **A recorded read no longer waits on its own bookkeeping.** `PROBLEM_SHOW`
+  appends to a `recentQueries` list in the view-state Durable Object — two
+  sequential hops the answer does not depend on, measured at about 205ms in
+  front of every such read. It now happens behind the response, and stays
+  best-effort: a Durable Object that cannot be reached still cannot fail a read.
+
+### Breaking
+
+- **The `crux-review` skill is gone.** The one crux skill is now organised by
+  the entity model and carries what the review skill taught, so a second skill
+  restating the same model was the copy that rots.
+- **The `RENAME_OBSERVATION` dispatch action is deleted**, replaced by
+  `REVISE_OBSERVATION`. No CLI command used it; a client calling `/v1/dispatch`
+  directly does.
+
+### Under the hood
+
+The revision history is one additive table plus a marker resolved inside the
+wave each read already issues. Three repo-local agents — a product agent, an
+observer and a release agent — and a skill that resolves an agent profile to its
+session transcript.
+
 ## 0.3.0 — 2026-09-03
 
 Pages stop being slow, one Principal can no longer learn what another has named
