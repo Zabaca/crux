@@ -243,6 +243,24 @@ true again (ADR-0013). `crux init` writes `[api] url` / `token` into
 `config.toml` after checking they work, for pointing at a deployment of your
 own; `CRUX_API_URL` and `CRUX_API_TOKEN` override the file for one invocation.
 
+Because the two halves move independently, a session is a client *and* a
+deployment, and which pair you are running is a fact worth being able to state:
+
+```sh
+crux version
+# { "client": "0.4.0", "deployment": "0.4.0", "url": "https://crux.zabaca.com" }
+```
+
+That is the line an agent puts in an Observation about odd behaviour. A version
+rides in a refusal's `details`, but most odd behaviour does not refuse — a read
+comes back surprising, a page looks wrong — and no `details` ever arrive. It
+degrades rather than fails: a deployment that cannot be reached, or one too old
+to report a version, is `deployment: null` at exit 0, and nothing is minted to
+ask, because `/health` needs no Principal. `crux --version` answers the client
+half without touching the network at all, so the difference reads as *the flag
+skipped the network* rather than as two answers that disagree
+([ADR-0018](docs/adr/0018-a-skew-is-a-refusal-not-a-bad-argument.md)).
+
 ## Develop from source
 
 For contributors working on Crux itself:

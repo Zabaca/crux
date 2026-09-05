@@ -17,6 +17,7 @@ import { createApiClient, setApiClient, ApiError } from "../api-client.js";
 import { setCaptureWriter, setJsonMode } from "../output.js";
 import { EXIT_CODES } from "../errors.js";
 import { resolveCliVersion } from "../version.js";
+import { versionCommand } from "../commands/version.js";
 import { CruxError } from "@crux/core/transitions";
 import { ActionNotAllowedError } from "@crux/core/actions";
 
@@ -1273,5 +1274,185 @@ describe("version", () => {
     const { code, stdout } = await runCli(["--help", "--version"], {});
     expect(code).toBe(0);
     expect(stdout).toContain(`crux v${releaseVersion}`);
+  });
+
+  // -------------------------------------------------------------------------
+  // `crux version` — the pair, over the network, degrading to the local half
+  // -------------------------------------------------------------------------
+
+  type VersionReport = { client: string; deployment: string | null; url: string };
+
+  /**
+   * Records every request whole — headers included, and the abort signal —
+   * which `stubServer` deliberately does not. What `crux version` must *not*
+   * send is the point of two of the tests below, and a helper that only keeps
+   * the lowercase `authorization` cannot see a header sent under another
+   * casing.
+   */
+  function recordingServer(respond: (path: string) => Response) {
+    const seen: Array<{ method: string; path: string; init: RequestInit }> = [];
+    setApiClient(
+      createApiClient({
+        baseUrl: "https://crux.test/",
+        token: "tok-1",
+        transport: (url, init) => {
+          seen.push({
+            method: (init.method ?? "GET").toUpperCase(),
+            path: new URL(url).pathname,
+            init,
+          });
+          return Promise.resolve(respond(new URL(url).pathname));
+        },
+      }),
+    );
+    return seen;
+  }
+
+  const okHealth = (version?: string) =>
+    new Response(JSON.stringify({ status: "ok", db: "ok", ...(version ? { version } : {}) }));
+
+  test("reports both halves: the client's version and the deployment's", async () => {
+    const seen = recordingServer(() => okHealth("0.9.9"));
+    const report = await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    expect(report).toEqual({
+      client: releaseVersion,
+      deployment: "0.9.9",
+      url: "https://crux.test",
+    });
+    // One GET of the liveness probe, and no `/v1` traffic at all: asking which
+    // pair you are running must not touch the corpus.
+    expect(seen.map((c) => `${c.method} ${c.path}`)).toEqual(["GET /health"]);
+    // And no credential goes with it, under any casing — `/health` is
+    // unauthenticated, and a token sent needlessly is a token that can leak.
+    const headers = Object.keys((seen[0]!.init.headers ?? {}) as Record<string, string>);
+    expect(headers.filter((h) => /^authorization$/i.test(h))).toEqual([]);
+  });
+
+  test("the health call carries an abort signal, so it cannot hang forever", async () => {
+    // A deployment that accepts the connection and then says nothing is the one
+    // failure a bare `fetch` turns into an unbounded wait, and it is exactly the
+    // state somebody runs this command in. Asserting the signal is passed is
+    // what catches a regression that drops it; waiting out the real timeout
+    // would cost the suite five seconds to learn the same thing.
+    const seen = recordingServer(() => okHealth("0.9.9"));
+    await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    const signal = seen[0]!.init.signal;
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal!.aborted).toBe(false);
+  });
+
+  test("a deployment that cannot be reached is deployment: null, not a refusal", async () => {
+    setApiClient(
+      createApiClient({
+        baseUrl: "https://crux.test/",
+        token: "tok-1",
+        transport: () => Promise.reject(new Error("ECONNREFUSED")),
+      }),
+    );
+    const report = await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    expect(report).toEqual({ client: releaseVersion, deployment: null, url: "https://crux.test" });
+  });
+
+  test("a deployment too old to report a version is deployment: null too", async () => {
+    recordingServer(() => okHealth());
+    const report = await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    expect(report.deployment).toBeNull();
+    expect(report.client).toBe(releaseVersion);
+  });
+
+  test("a degraded deployment still says which build is failing", async () => {
+    // 503 carries the version (ADR-0015), and which build is degraded is
+    // exactly what the person asking wanted to know.
+    recordingServer(
+      () =>
+        new Response(JSON.stringify({ status: "degraded", db: "error", version: "0.9.9" }), {
+          status: 503,
+        }),
+    );
+    const report = await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    expect(report.deployment).toBe("0.9.9");
+  });
+
+  test("the client half agrees with --version, which is a strict subset", async () => {
+    recordingServer(() => okHealth("0.9.9"));
+    const report = await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    const { code, stdout } = await runCli(["--version"], { CRUX_PLUGIN_ROOT: undefined });
+    expect(code).toBe(0);
+    const flag = JSON.parse(stdout) as { client: string };
+    expect(Object.keys(flag)).toEqual(["client"]);
+    expect(flag.client).toBe(report.client);
+  });
+
+  test("asking for the pair never resolves a token, so nothing is minted", async () => {
+    // Minting is what `api()` does when `config.toml` holds no token: the
+    // client is built with a *function* for a token, and the first request that
+    // needs one runs it, writing a credential to disk (ADR-0013). A version
+    // question must never reach that function — a credential created as the
+    // side effect of a diagnostic is one the user never asked for.
+    let resolved = 0;
+    setApiClient(
+      createApiClient({
+        baseUrl: "https://crux.test/",
+        token: () => {
+          resolved += 1;
+          return Promise.resolve("tok-minted");
+        },
+        transport: () =>
+          Promise.resolve(
+            new Response(JSON.stringify({ status: "ok", db: "ok", version: "0.9.9" })),
+          ),
+      }),
+    );
+    const report = await capture<VersionReport>(() => runCmd(versionCommand as AnyCmd, "run", {}));
+    expect(report.deployment).toBe("0.9.9");
+    expect(resolved).toBe(0);
+  });
+
+  test("an unreachable deployment writes nothing to an empty CRUX_HOME", async () => {
+    const home = mkdtempSync(join(tmpdir(), "crux-version-cmd-home-"));
+    try {
+      const { code, stdout } = await runCli(["version"], {
+        CRUX_HOME: home,
+        CRUX_API_URL: "http://127.0.0.1:1/",
+        CRUX_API_TOKEN: undefined,
+        CRUX_PLUGIN_ROOT: undefined,
+      });
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout)).toEqual({
+        client: releaseVersion,
+        deployment: null,
+        url: "http://127.0.0.1:1",
+      });
+      expect(readdirSync(home)).toEqual([]);
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
+  });
+
+  test("a config.toml that cannot be read still yields the client's half", async () => {
+    // The command exists for the moment something is already odd, and a
+    // half-written config is that moment. The client version needed nothing to
+    // resolve, so nothing about the deployment may take it down.
+    const home = mkdtempSync(join(tmpdir(), "crux-version-bad-config-"));
+    try {
+      writeFileSync(join(home, "config.toml"), "[api]\nurl = ");
+      const { code, stdout, stderr } = await runCli(["version"], {
+        CRUX_HOME: home,
+        CRUX_API_URL: undefined,
+        CRUX_API_TOKEN: undefined,
+        CRUX_PLUGIN_ROOT: undefined,
+      });
+      expect(code).toBe(0);
+      expect(JSON.parse(stdout)).toEqual({
+        client: releaseVersion,
+        deployment: null,
+        url: null,
+      });
+      // `null` alone cannot tell a broken config from a deployment that is
+      // merely down, so the difference is said out loud.
+      expect(stderr).toContain("cannot resolve a deployment to ask");
+    } finally {
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 });

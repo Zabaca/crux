@@ -29,6 +29,21 @@ export const OkWithStatusOutput = z.object({
   status: z.string().nullable(),
 });
 
+/**
+ * { client, deployment, url } — `crux version`.
+ *
+ * `deployment` is nullable rather than optional: a deployment that did not
+ * answer is a fact worth stating, and a key that simply vanishes reads as a
+ * client too old to report one (ADR-0018). `url` is nullable for the narrower
+ * case where the config naming a deployment could not be read at all, so there
+ * is no address to report having asked.
+ */
+export const VersionOutput = z.object({
+  client: z.string(),
+  deployment: z.string().nullable(),
+  url: z.string().nullable(),
+});
+
 // ---------------------------------------------------------------------------
 // Bespoke: problem show
 // ---------------------------------------------------------------------------

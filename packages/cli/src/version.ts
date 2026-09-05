@@ -55,3 +55,21 @@ export function resolveCliVersion(): string {
   }
   return UNRESOLVED_VERSION;
 }
+
+/**
+ * The client's version, saying so on stderr when this install cannot name one.
+ *
+ * Both doors to the version — the `--version` flag and the `version` command —
+ * go through here, so the one answer ADR-0018 asks for is one function rather
+ * than two that agree by inspection. `UNRESOLVED_VERSION` still reaches the
+ * caller: the question was answered, and exit 0 says so. But an install this
+ * broken should not read as an ordinary answer, and stderr is where the CLI
+ * already says the things a caller did not ask for.
+ */
+export function reportCliVersion(): string {
+  const version = resolveCliVersion();
+  if (version === UNRESOLVED_VERSION) {
+    process.stderr.write("crux: cannot resolve the release version from this install.\n");
+  }
+  return version;
+}
