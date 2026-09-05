@@ -23,6 +23,24 @@ Inside a ticket worktree, the per-ticket `./.fredrin/fredrin` CLI also exists
 authoritative reference for the full workflow, board columns, and
 disambiguation rules.
 
+## What the board says, and what it does not
+
+- **A ticket on the board is ready.** Landing in Backlog *is* the agent-grabbable
+  state, so there is no triage step and no `ready-for-agent` label. Skills that
+  assume a triage vocabulary — `to-spec`, `to-tickets` — say it "should have been
+  provided to you"; this file is what provides it, and the answer is that there is
+  nothing to apply. Fredrin has no label vocabulary to reach for either: no `labels`
+  verb, no labels endpoint, and `tickets update` accepts only opaque `labelIds`.
+  Those skills stay unedited on purpose — they are vendored upstream and a second
+  copy of this rule is the one that rots.
+- **A spec becomes a Goal plus its tickets.** Create the Goal first and always with
+  a `description` — it is the goal's plan and renders on the board — then create one
+  ticket per slice in dependency order, passing `"dependsOn":[…]` so each lands
+  blocked by its prerequisites, and read `dependsOnResults` on each create rather
+  than assuming the edge landed. `fredrin goals assign <goal> <ticket…>` is what
+  files them under the goal; without it they are not in it. The authoritative
+  version of this, including ship-together, is `.fredrin/FREDRIN.md`.
+
 ## Workflow notes for skills
 
 - Tickets move Backlog → Running → Review → Completed via deterministic
