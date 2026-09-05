@@ -369,3 +369,18 @@ stores only the token's hash, so losing `config.toml` strands everything filed u
 
 Do not retry, do not mint a fresh Principal to route around it, and do not silently
 drop what the user asked to file. Tell them it was not filed, and hold the content.
+
+## When a command refuses with `UNKNOWN_KIND` (exit 29)
+
+The deployment has never heard of what this client asked for: the plugin is ahead of
+the deployment it is talking to. **Re-running with different flags cannot help** — the
+arguments were never the problem, and there is nothing to fix in the call.
+
+The error's `details` carry the `kind` that was refused and the deployment's own
+`version`, so the refusal itself says what the deployment is running.
+
+Say so in the conversation, name the deployment's version, and stop reaching for that
+command. Everything the deployment does serve still works, so file what you can through the
+commands that do not refuse, and hold the rest rather than dropping it. If the user
+runs their own deployment, the fix is on their side: deploy the version their client
+is on.

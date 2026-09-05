@@ -147,8 +147,26 @@ describe("POST /v1/query — reads", () => {
     expect(await res.json()).toMatchObject({ error: { code: "NOT_FOUND" } });
   });
 
-  test("a read kind the server does not serve is a validation error", async () => {
+  // This assertion used to read "is a validation error", which is the reading
+  // ADR-0018 reverses: a client ahead of its deployment was told its arguments
+  // were wrong and sent to re-check flags that cannot help.
+  test("a read kind the server does not serve is a refusal of its own", async () => {
     const res = await query({ kind: "SELECT * FROM users" });
+    expect(res.status).toBe(501);
+    const body = (await res.json()) as {
+      error: { code: string; message: string; details: unknown };
+    };
+    expect(body.error.code).toBe("UNKNOWN_KIND");
+    // The deployment's own half of the pair, so the caller does not need a
+    // second call to learn it.
+    expect(body.error.details).toEqual({ kind: "SELECT * FROM users", version: pkg.version });
+    expect(body.error.message).toContain("client is ahead of the deployment");
+  });
+
+  // The other side of that branch: a kind the deployment *does* serve, called
+  // wrongly, is still the caller's mistake and still says so.
+  test("a served read with a bad argument is still a validation error", async () => {
+    const res = await query({ kind: "PROBLEM_LIST" });
     expect(res.status).toBe(400);
     expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
@@ -257,6 +275,22 @@ describe("POST /v1/query — SEARCH", () => {
 });
 
 describe("POST /v1/dispatch — writes", () => {
+  // Identical to the read endpoint's refusal, deliberately: a caller that had
+  // to branch on which endpoint it used would learn nothing (ADR-0018).
+  test("an action kind the server does not serve refuses as UNKNOWN_KIND", async () => {
+    const res = await dispatch({ kind: "DELETE_EVERYTHING", payload: { id: "1" } });
+    expect(res.status).toBe(501);
+    const body = (await res.json()) as { error: { code: string; details: unknown } };
+    expect(body.error.code).toBe("UNKNOWN_KIND");
+    expect(body.error.details).toEqual({ kind: "DELETE_EVERYTHING", version: pkg.version });
+  });
+
+  test("a served action with a bad payload is still a validation error", async () => {
+    const res = await dispatch({ kind: "ADD_PROBLEM", payload: { workstream: "WS-crux" } });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toMatchObject({ error: { code: "VALIDATION_ERROR" } });
+  });
+
   test("a view action advances view-state and bumps the revision in the DO", async () => {
     const res = await dispatch({ kind: "SELECT_WORKSTREAM", payload: { id: "WS-crux" } });
     expect(res.status).toBe(200);

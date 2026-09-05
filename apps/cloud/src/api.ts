@@ -18,6 +18,10 @@ import { query, type Defer } from "@crux/core/reads";
 import { CruxError } from "@crux/core/transitions";
 import { ZodError } from "zod";
 import { DurableObjectViewStore } from "./view-state-do.js";
+// The deployed version, the same one `/health` reports (ADR-0015). It rides in
+// an UNKNOWN_KIND refusal so a client that is ahead learns the other half of
+// the pair without a second call (ADR-0018).
+import pkg from "../package.json" with { type: "json" };
 import { emailSenderFor, viewerFor, workspaceName } from "./web/session.js";
 
 export interface Env {
@@ -71,6 +75,9 @@ const STATUS_BY_CODE: Record<string, number> = {
   CAPACITY_EXCEEDED: 429,
   INVARIANT_VIOLATION: 422,
   REFERENTIAL_MISMATCH: 422,
+  // The deployment does not implement this kind — which is what 501 means, and
+  // it is true whether the client is ahead or hand-rolled with a typo.
+  UNKNOWN_KIND: 501,
   // The deployment cannot send the mail claiming depends on, or could not. One
   // is an operator's missing binding, the other is Resend having a bad day;
   // neither is the caller's request being wrong.
@@ -104,7 +111,11 @@ function toErrorResponse(err: unknown): Response {
     return errorBody("VALIDATION_ERROR", message, { issues: err.issues });
   }
   if (err instanceof CruxError) {
-    return errorBody(err.code, err.message, err.details);
+    // The version is the deployment's to add: core does not read this package
+    // and must not (ADR-0003).
+    const details =
+      err.code === "UNKNOWN_KIND" ? { ...err.details, version: pkg.version } : err.details;
+    return errorBody(err.code, err.message, details);
   }
   const message = err instanceof Error ? err.message : String(err);
   return errorBody("UNKNOWN", message);

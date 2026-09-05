@@ -12,7 +12,14 @@
  *  5. Bump revision, write sidecar fields into view-state.json.
  *  6. Return { revision, viewState?, result? }.
  */
-import { ActionSchema, isViewAction, type Action } from "./schemas.js";
+import {
+  ActionSchema,
+  MutationActionSchema,
+  ViewActionSchema,
+  isViewAction,
+  type Action,
+} from "./schemas.js";
+import { assertKnownKind, kindsOf } from "../kinds.js";
 import type { CruxDb } from "../db/client.js";
 import { isActionAllowed, getAllowedActions } from "./allowed.js";
 import {
@@ -26,6 +33,10 @@ import type { ViewEvent } from "../view-state/machine.js";
 import { runMutation, type Actor } from "./mutations.js";
 import { scopeFor, type Scope } from "../auth/principals.js";
 import { assertWriteCapacity, type Capacity } from "../auth/capacity.js";
+
+/** Every action this deployment serves. `ActionSchema` is a union of the two
+ * unions, so both halves are collected (ADR-0018). */
+const ACTION_KINDS = kindsOf(ViewActionSchema, MutationActionSchema);
 
 /** Error thrown when an action is not allowed in the current view state. */
 export class ActionNotAllowedError extends Error {
@@ -84,7 +95,10 @@ export async function dispatch(
     enforceAllow?: boolean;
   },
 ): Promise<DispatchResult> {
-  // Parse + validate action shape
+  // Parse + validate action shape. An unrecognised kind refuses first, and with
+  // its own code: it is the deployment being behind the client, not the caller
+  // getting an argument wrong (ADR-0018).
+  assertKnownKind(rawAction, ACTION_KINDS);
   const action = ActionSchema.parse(rawAction) as Action;
 
   const store = options.viewStore;
