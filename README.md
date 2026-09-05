@@ -465,6 +465,19 @@ naming the broken links and orphans.
   [require the pull-request check on `main`](docs/runbooks/protect-main.md).
 - Procedures — [`/release`](.claude/skills/release/SKILL.md), the only path to
   production.
+- Agents — [`crux-observer`](.claude/agents/crux-observer.md) watches a session
+  doing real work with Crux and files what that session *proved about the
+  product* into `WS-crux` as Observations, re-deriving each claim against the
+  artifact rather than accepting the session's report. It is the half of
+  dogfooding a working session cannot do for itself: the agent that walks into a
+  wall is the one least able to stop and write it down, and a finding left in a
+  conversation dies with it. It does not do the work and does not fix what it
+  finds. It also holds [`crux-product`](.claude/agents/crux-product.md)'s
+  operating rules — that file no longer edits itself, so what an agent learns
+  about *how to work on Crux* goes to the corpus, and the observer proposes the
+  diff back from what accumulates there. A human still applies it.
+  [`crux-release`](.claude/agents/crux-release.md) runs the procedure above and
+  holds the judgment the sequence cannot.
 
 ## Principles
 
