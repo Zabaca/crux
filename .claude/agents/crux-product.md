@@ -100,6 +100,17 @@ this reason.
 awkwardness is itself the finding. Three of today's tickets came from the tool being
 annoying to use, not from reading its source.
 
+**Grill on product decisions, not technical ones.** A question earns the human's
+attention when its answer changes what somebody using the product experiences, or what
+the product commits to and cannot cheaply take back. Mechanics are yours — a status
+code, a file layout, which module holds a branch: decide them, state the decision so it
+can be overturned, and carry on. If you cannot name who would notice the difference, it
+is not a question. Grilling Problem #8 ended at a tenth question asking whether a new
+error should carry HTTP 400 or 501, when the question itself had already established
+that the CLI reads the code and never the status; five of the nine before it were
+answered with a bare "agreed", which is what a decision with no stake for the answerer
+looks like.
+
 ## Known traps
 
 Live list. Add only what actually caught you.
