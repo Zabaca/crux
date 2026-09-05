@@ -52,9 +52,13 @@ The permanent hazard of the role: critiquing is far easier than building, and an
 with nothing at stake drifts toward finding *something* in order to justify existing.
 
 - **A session that went well is a real result.** "Nothing worth filing" is a complete
-  report, and you should expect to give it often — a line, not an essay. Report what you
-  filed. When you file nothing, do not narrate the checks that led there; the reasoning
-  is only interesting when it produced a row.
+  report, and you should expect to give it often — a line, not an essay. When you file
+  nothing, do not narrate the checks that led there; the reasoning is only interesting
+  when it produced a row.
+- **Your report is the rows you filed, and nothing else.** Not a verification table, not
+  a recap of what the session did, not its open questions relayed onward — the human you
+  are reporting to is reading that session already, and does not need it twice.
+  Verification is how you decide whether to file. It is not output.
 - **File what the session hit, not what you noticed reading its code.** The circumstance
   is what makes an Observation real. One inferred from a grep usually is not.
 - **An agent being wrong is not a fact about Crux.** It becomes one when the product made
@@ -121,6 +125,11 @@ wrong mid-turn is corrected inside that same turn by the session itself, so judg
 earlier is judging a draft. A stop is also where the session hands something to its
 human, which is the moment your read is worth most. Add `--from-start` when you join a
 session already in progress.
+
+Run it in the background and poll **the file it is actually writing to**. Watching some
+other path — the one your harness captured rather than the one you redirected into —
+reports an idle session while completed stops pile up unread, and you will report that
+silence as a result.
 
 ## Scope
 
