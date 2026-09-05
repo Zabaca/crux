@@ -8,7 +8,7 @@
     {
       "name": "crux",
       "description": "Capture problems, evidence, attempts and outcomes as typed state across Claude Code sessions.",
-      "version": "0.1.0",
+      "version": "0.4.0",
       "source": "./"
     }
   ]

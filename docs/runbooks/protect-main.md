@@ -34,8 +34,9 @@ There is exactly one `bypass_actor`: the **repository admin role**, `always`.
 It exists for one caller and one commit — [`/release`](../../.claude/skills/release/SKILL.md)
 pushes its version bump and changelog entry straight to `main`
 ([ADR-0015](../adr/0015-a-release-is-a-command-not-a-merge.md)). That commit is
-two mechanical files carrying no reviewable decision: a version string a tool
-wrote, and prose a human approved at the keyboard a moment earlier. Sending it
+four mechanical files carrying no reviewable decision: a version string a tool
+wrote, the two plugin manifests a script copied it into, and prose a human
+approved at the keyboard a moment earlier. Sending it
 through a pull request bought a second `Verify` on content `main.yml` was about
 to check again anyway. **The bypass skips the pull request, not CI** — the
 release refuses to deploy until `main.yml` is green on that exact commit, so

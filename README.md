@@ -294,17 +294,24 @@ holds a deploy credential or may ever be given one
 ([ADR-0015](docs/adr/0015-a-release-is-a-command-not-a-merge.md)). The release
 bumps the version, drafts a [`CHANGELOG.md`](CHANGELOG.md) entry for approval,
 runs the gate, deploys, asks `/health` what is now serving traffic, and tags
-only once that answers with the version it just built. A tag on `origin` is
+only once that answers with the version it just built. The bump moves three
+files: the deployment package and, copied from it by `bun run version:sync`,
+both [plugin manifests](.claude-plugin/) — Claude Code caches an installed
+plugin under its marketplace version string and will not move off one that never
+changes ([ADR-0018](docs/adr/0018-a-skew-is-a-refusal-not-a-bad-argument.md)).
+`bun run verify` fails when the three disagree, so a skipped copy stops a pull
+request rather than reaching an installed client. A tag on `origin` is
 therefore a release that reached production and was checked there — which is a
 stronger claim than any exit code can make, because the deploy failure this
 repository has actually met exits 0.
 
 **A pull request is verified before it can merge, and `main` enforces it.**
 [`pull-request.yml`](.github/workflows/pull-request.yml) runs `bun run verify` —
-lint, typecheck, `docs:check`, the suite — on every PR against `main`, and the
-[`main` ruleset](docs/runbooks/protect-main.md) refuses a merge whose `Verify`
-has not passed. Verifying only on the merge made the merge itself the first
-verification, which is how `main` ended up ahead of production once already.
+lint, typecheck, `docs:check`, `version:check`, the suite — on every PR against
+`main`, and the [`main` ruleset](docs/runbooks/protect-main.md) refuses a merge
+whose `Verify` has not passed. Verifying only on the merge made the merge itself
+the first verification, which is how `main` ended up ahead of production once
+already.
 The ruleset carries one `bypass_actor` — the repository admin role — for the one
 commit that does not go through a pull request: `/release`'s version bump and
 changelog entry, which skips the review and not the CI
@@ -324,7 +331,7 @@ release gate cannot drift apart. All of it works from an operator's machine:
 
 ```sh
 bun run scripts/build-docs.ts   # derive the doc tree first on a fresh checkout
-bun run verify                  # lint, typecheck, docs:check, test
+bun run verify                  # lint, typecheck, docs:check, version:check, test
 bun run deploy                  # bunx @zabaca/zbc apply production — /release runs this
 ```
 
@@ -437,7 +444,9 @@ succeeded and the deploy did not.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, the HTTP client every command goes through, the Zod schemas its JSON output and its typed arguments are checked against, and the `config.toml` loader.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding, the production database rebuild
-  (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, and the favicon
+  (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, the
+  plugin-manifest version sync `/release` runs (`bun run version:sync`, and
+  `version:check` inside `verify`), and the favicon
   renderer (`bun run favicon`, after editing the mark in
   [`brand.ts`](apps/cloud/src/web/brand.ts) — it needs `rsvg-convert` and
   `magick`, which is why it is not part of `bun run build`).

@@ -1,6 +1,6 @@
 ---
 name: release
-description: Cut a crux release — the ONLY path to production. Checks preconditions, bumps the version in apps/cloud/package.json, drafts a user-facing CHANGELOG entry for approval, runs `bun run verify`, deploys with `zbc apply production`, verifies the live version on `/health`, and only then tags and pushes. Use when asked to "release", "cut a release", "ship crux", "deploy to production", "publish a version", or "/release". Refuses rather than improvises when a precondition is not met.
+description: Cut a crux release — the ONLY path to production. Checks preconditions, bumps the version in apps/cloud/package.json and the two plugin manifests, drafts a user-facing CHANGELOG entry for approval, runs `bun run verify`, deploys with `zbc apply production`, verifies the live version on `/health`, and only then tags and pushes. Use when asked to "release", "cut a release", "ship crux", "deploy to production", "publish a version", or "/release". Refuses rather than improvises when a precondition is not met.
 disable-model-invocation: true
 ---
 
@@ -64,12 +64,21 @@ Its entry covers only what has landed since the seed was written.
 
 ## Step 1 — decide the version, and draft the entry
 
-`apps/cloud/package.json` is the **only** place in this repository the release
-version is written, because it is the only package that becomes the deployment
-(ADR-0015). Every other `package.json` here is private, npm never sees it, and
-what it says is not a claim about anything — `packages/core` and `packages/cli`
-read `0.0.0`, `packages/infra` reads `0.0.1`. **Do not
-"fix" those to match a release**, and do not read one as the version.
+`apps/cloud/package.json` is the **source** of the release version, because it
+is the only package that becomes the deployment (ADR-0015). Every other
+`package.json` here is private, npm never sees it, and what it says is not a
+claim about anything — `packages/core` and `packages/cli` read `0.0.0`,
+`packages/infra` reads `0.0.1`. **Do not "fix" those to match a release**, and
+do not read one as the version.
+
+Two files do carry a copy: `.claude-plugin/plugin.json` and
+`.claude-plugin/marketplace.json`. Claude Code caches an installed plugin under
+its marketplace `version` string and will not move off it while that string
+holds, so a manifest left behind is an installed client that never updates while
+production moves under it every release
+([ADR-0018](../../../docs/adr/0018-a-skew-is-a-refusal-not-a-bad-argument.md)).
+The numbered steps below copy the number into both with one command — **do not
+edit them by hand**, and do not treat either as somewhere a version is decided.
 
 The shape is `MAJOR.MINOR.PATCH`, at `0.x` today:
 
@@ -114,23 +123,41 @@ Once approved:
    confirmed the deploy. If the flag is unavailable, edit the `version` field by
    hand — do not let it create the tag.
 
-2. Insert the entry into `CHANGELOG.md` directly under the preamble, above the
+2. Copy that number into the two plugin manifests:
+
+   ```bash
+   bun run version:sync
+   ```
+
+   It reads `apps/cloud/package.json` and rewrites the `version` field in
+   `.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, printing
+   the old and new value for each. It decides nothing: the number is already
+   chosen, and this only carries it. It is idempotent, so re-running `/release`
+   after a failed gate is safe. A **refusal** here means a manifest is not the
+   shape the sync knows — no crux entry in `plugins`, invalid JSON, or a
+   `version` field it cannot pick out — and it names which. Repair the manifest
+   and run the sync again; do not hand-edit the version past it, because Step 2
+   checks the three files agree and will stop the release anyway.
+
+3. Insert the entry into `CHANGELOG.md` directly under the preamble, above the
    previous release. Date it today.
-3. Commit both, and nothing else, **straight to `main`**:
+4. Commit all four, and nothing else, **straight to `main`**:
 
 ```bash
-git add apps/cloud/package.json CHANGELOG.md
+git add apps/cloud/package.json .claude-plugin/plugin.json \
+        .claude-plugin/marketplace.json CHANGELOG.md
 git commit -m "chore(release): crux v<X.Y.Z>"
 git push origin main
 ```
 
 **This is the one change that does not go through a pull request.** The
 [`main` ruleset](../../../docs/runbooks/protect-main.md) grants the repository
-admin role a bypass for exactly this: the release commit is two mechanical files
-carrying no reviewable decision — a version string a tool wrote, and prose you
-already approved a moment ago in Step 1. Routing it through a pull request
-bought a second `Verify` on content `main.yml` was about to check again anyway,
-and paid a merge, a branch delete and a switch for it.
+admin role a bypass for exactly this: the release commit is four mechanical files
+carrying no reviewable decision — a version string a tool wrote, two copies of it
+a script wrote, and prose you already approved a moment ago in Step 1. Routing
+it through a pull request bought a second `Verify` on content `main.yml` was
+about to check again anyway, and paid a merge, a branch delete and a switch for
+it.
 
 **What that does not skip is CI.** Step 2 waits for `main.yml` to go green on
 this exact commit before anything is built or deployed. The deploy is gated on
@@ -166,12 +193,15 @@ Then run the gate locally as well:
 
 ```bash
 bun run scripts/build-docs.ts   # the doc tree is derived, not committed (ADR-0005)
-bun run verify                  # lint, typecheck, docs:check, test
+bun run verify                  # lint, typecheck, docs:check, version:check, test
 ```
 
 `verify` is defined once in `package.json` and is the same sequence
 `pull-request.yml` and `main.yml` run, so the release gate cannot drift behind
-the merge gate. Running it locally on top of the green CI run is not redundant
+the merge gate. It includes `version:check`, which fails when
+`apps/cloud/package.json` and the two plugin manifests disagree — so a Step 1
+where the sync was skipped stops here rather than shipping a plugin nobody's
+Claude Code will update. Running it locally on top of the green CI run is not redundant
 ceremony: it is the last check on the working tree the deploy will actually be
 built from, and `zbc apply` builds from that tree, not from what CI had.
 
