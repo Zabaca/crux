@@ -292,7 +292,11 @@ Production only — there is no preview environment.
 [`/release`](.claude/skills/release/SKILL.md), and nothing under `.github/`
 holds a deploy credential or may ever be given one
 ([ADR-0015](docs/adr/0015-a-release-is-a-command-not-a-merge.md)). The release
-bumps the version, drafts a [`CHANGELOG.md`](CHANGELOG.md) entry for approval,
+bumps the version — in the deployment package and, with it, both
+[plugin manifests](.claude-plugin/), since Claude Code caches an installed
+plugin under its marketplace version string and will not move off one that never
+changes ([ADR-0018](docs/adr/0018-a-skew-is-a-refusal-not-a-bad-argument.md)) —
+drafts a [`CHANGELOG.md`](CHANGELOG.md) entry for approval,
 runs the gate, deploys, asks `/health` what is now serving traffic, and tags
 only once that answers with the version it just built. A tag on `origin` is
 therefore a release that reached production and was checked there — which is a
@@ -437,7 +441,8 @@ succeeded and the deploy did not.
 - [`packages/cli`](packages/cli) — `crux` binary, command dispatch via citty, the HTTP client every command goes through, the Zod schemas its JSON output and its typed arguments are checked against, and the `config.toml` loader.
 - [`packages/infra`](packages/infra) — zbc module instances and encrypted secrets, per environment.
 - [`scripts/`](scripts/) — seeding, the production database rebuild
-  (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, and the favicon
+  (`bun run db:wipe` / `db:restore-identity`), the doc-tree rot check, the
+  plugin-manifest version sync `/release` runs (`bun run version:sync`), and the favicon
   renderer (`bun run favicon`, after editing the mark in
   [`brand.ts`](apps/cloud/src/web/brand.ts) — it needs `rsvg-convert` and
   `magick`, which is why it is not part of `bun run build`).

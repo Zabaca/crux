@@ -16,6 +16,7 @@
     "crux": "bun run packages/cli/src/index.ts",
     "docs:check": "bun run scripts/docs-check.ts",
     "favicon": "bun run scripts/build-favicon.ts",
+    "version:sync": "bun run scripts/sync-plugin-version.ts",
     "test": "bun test packages apps && bun run test:workers",
     "verify": "bun run lint && bun run typecheck && bun run docs:check && bun run test",
     "deploy": "bunx @zabaca/zbc apply production",
