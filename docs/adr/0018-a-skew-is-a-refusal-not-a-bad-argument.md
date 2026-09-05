@@ -70,14 +70,40 @@ the release version is written. `/release` now bumps three files: that one,
 [`plugin.json`](../../.claude-plugin/plugin.json) and
 [`marketplace.json`](../../.claude-plugin/marketplace.json).
 
-The reason is not consistency. Claude Code caches an installed plugin at
-`~/.claude/plugins/cache/<owner>/<plugin>/<version>` — the version string is the
-cache key — and crux's marketplace version has sat at `0.1.0` since it was
-written. If updates are decided on that string, an installed plugin user's
-client never updates at all while the deployment moves under them every release,
-which is the most severe possible instance of the skew this ADR is about. That
-inference is drawn from the cache layout of installed plugins rather than from
-Claude Code's source, and it is worth confirming rather than trusting.
+The reason is not consistency. Claude Code decides an update on the marketplace
+`version` string, and crux's has sat at `0.1.0` since it was written — so an
+installed plugin user's client never moves while the deployment moves under them
+every release, which is the most severe possible instance of the skew this ADR
+is about.
+
+That was an inference when this decision was taken; it has since been observed
+on Claude Code 2.1.261. Against a throwaway marketplace whose content moved
+while its version was held at `0.1.0`, `claude plugin marketplace update`
+fetched the new commit — the clone on disk really did move, new sha and new
+content — and `claude plugin update` then answered *already at the latest
+version (0.1.0)* and copied nothing, leaving the plugin on the content it was
+installed with and the newer content one directory away. A second run that
+carried the same kind of content change *and* a bump to `0.2.0` updated
+instead, into a second cache directory beside the first. A directory source and
+a git source behaved identically, and installing `Zabaca/crux` from GitHub and
+asking it to update reproduced the refusal against the real marketplace.
+
+So a held version is enough to block an update on its own. The install record
+keeps a `gitCommitSha` beside the version, but it is not consulted: it stayed
+pinned at the sha the plugin was installed from while the marketplace clone
+moved past it. The cache path is
+`~/.claude/plugins/cache/<marketplace>/<plugin>/<version>`, keyed by the
+marketplace's name rather than its owner's.
+
+What that pins a user to is the content that existed when they installed — a
+fresh install takes the marketplace's current HEAD and files it under whatever
+version string that HEAD declares — and nothing they would routinely run moves
+them off it afterwards. `claude plugin install` over an existing install is a
+no-op; uninstalling and installing again does refresh the content, overwriting
+that same version-keyed directory, which nobody does on a schedule. Two users
+who installed a release apart are therefore running different clients under the
+same version string: across the 51 commits and two releases for which
+`marketplace.json` has said `0.1.0`, the label distinguished none of them.
 
 The alternative — setting the marketplace version to a git sha, as some plugins
 do, so every merge is an update — was rejected because it ships `main` to users,
