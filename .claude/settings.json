@@ -1,0 +1,14 @@
+{
+  "enabledPlugins": {
+    "mattpocock-skills@mattpocock": true,
+    "crux@zabaca-crux": true
+  },
+  "extraKnownMarketplaces": {
+    "zabaca-crux": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  }
+}

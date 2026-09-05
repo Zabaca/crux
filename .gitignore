@@ -28,6 +28,7 @@ dist/
 .claude/*
 !.claude/skills/
 !.claude/agents/
+!.claude/settings.json
 .view-state.json
 .env
 .fredrin/
